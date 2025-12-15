@@ -187,6 +187,7 @@ def get_db():
 
 def init_db():
     conn = get_db()
+    conn.execute('PRAGMA journal_mode=WAL')
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS team_accounts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
