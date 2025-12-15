@@ -322,12 +322,15 @@
                                 <th>用户名</th>
                                 <th>名称</th>
                                 <th>信任等级</th>
+                                <th>已用邀请</th>
                                 <th>首次登录</th>
                                 <th>最后登录</th>
+                                <th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="userList"></tbody>
                     </table>
+                    <div id="userForm" class="edit-form hidden"></div>
                 </div>
             </div>
         </div>
@@ -622,25 +625,69 @@
         }
 
         // ========== 用户 ==========
+        let users = [];
         async function loadUsers() {
             const { ok, data } = await api('/admin/users');
             const tbody = document.getElementById('userList');
             
             if (!ok || !data.users || data.users.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无用户</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无用户</td></tr>';
                 return;
             }
-            
-            tbody.innerHTML = data.users.map(u => `
+            users = data.users;
+            tbody.innerHTML = users.map(u => `
                 <tr>
                     <td>${u.id}</td>
                     <td><strong>${u.username}</strong></td>
                     <td class="text-muted">${u.name || '-'}</td>
                     <td><span class="badge enabled">TL${u.trust_level}</span></td>
+                    <td>${u.used_invites || 0}</td>
                     <td class="text-muted">${formatTime(u.created_at)}</td>
                     <td class="text-muted">${formatTime(u.updated_at)}</td>
+                    <td><button class="btn btn-ghost btn-sm" onclick="editUser(${u.id})">编辑</button></td>
                 </tr>
             `).join('');
+        }
+
+        function editUser(id) {
+            const u = users.find(x => x.id === id);
+            if (!u) return;
+            const form = document.getElementById('userForm');
+            form.classList.remove('hidden');
+            form.innerHTML = `
+                <h3>编辑用户</h3>
+                <input type="hidden" id="userId" value="${u.id}">
+                <div class="form-row">
+                    <label><span>用户名</span><input type="text" id="userUsername" value="${u.username}" readonly></label>
+                    <label><span>名称</span><input type="text" id="userName" value="${u.name || ''}"></label>
+                    <label><span>信任等级</span><input type="number" id="userTrustLevel" value="${u.trust_level}" min="0" max="4"></label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="hideUserForm()">取消</button>
+                    <button class="btn btn-primary" onclick="saveUser()">保存</button>
+                </div>
+            `;
+        }
+
+        function hideUserForm() {
+            document.getElementById('userForm').classList.add('hidden');
+        }
+
+        async function saveUser() {
+            const id = document.getElementById('userId').value;
+            const name = document.getElementById('userName').value.trim();
+            const trustLevel = parseInt(document.getElementById('userTrustLevel').value) || 0;
+            
+            const res = await api(`/admin/users/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ name, trustLevel })
+            });
+            if (!res.ok) {
+                alert(res.data?.error || '保存失败');
+                return;
+            }
+            hideUserForm();
+            loadUsers();
         }
 
         // 回车登录

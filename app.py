@@ -767,10 +767,30 @@ def delete_code(code_id):
 def list_users():
     conn = get_db()
     rows = conn.execute('''
-        SELECT * FROM users ORDER BY created_at DESC
+        SELECT u.*, COUNT(c.id) as used_invites
+        FROM users u
+        LEFT JOIN invite_codes c ON c.user_id = u.id AND c.used = 1
+        GROUP BY u.id
+        ORDER BY u.created_at DESC
     ''').fetchall()
     conn.close()
     return jsonify({'users': [dict(r) for r in rows]})
+
+@app.route('/api/admin/users/<int:user_id>', methods=['PUT'])
+@admin_required
+def update_user(user_id):
+    data = request.json or {}
+    name = (data.get('name') or '').strip()
+    trust_level = int(data.get('trustLevel', 0))
+    
+    conn = get_db()
+    conn.execute('''
+        UPDATE users SET name = ?, trust_level = ?, updated_at = datetime('now')
+        WHERE id = ?
+    ''', (name, trust_level, user_id))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok'})
 
 # ========== 后台自动同步 ==========
 
