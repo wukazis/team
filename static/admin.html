@@ -17,6 +17,19 @@
             --primary: #2563eb;
             --danger: #dc2626;
             --success: #16a34a;
+            --table-bg: #fafafa;
+            --input-bg: #fff;
+            --hover-bg: #f1f5f9;
+        }
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --table-bg: #1e293b;
+            --input-bg: #334155;
+            --hover-bg: #334155;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: var(--bg); min-height: 100vh; color: var(--text); }
@@ -51,7 +64,7 @@
             cursor: pointer;
             color: var(--muted);
         }
-        .tab:hover { background: #f3f4f6; color: var(--text); }
+        .tab:hover { background: var(--hover-bg); color: var(--text); }
         .tab.active { background: var(--text); color: #fff; }
         
         .section { display: none; }
@@ -86,7 +99,7 @@
             align-items: center;
             padding: 0.75rem 1rem;
             border-bottom: 1px solid var(--border);
-            background: #fafafa;
+            background: var(--table-bg);
             flex-wrap: wrap;
             gap: 0.5rem;
         }
@@ -96,11 +109,11 @@
         th, td {
             padding: 0.6rem 1rem;
             text-align: left;
-            border-bottom: 1px solid #f1f5f9;
+            border-bottom: 1px solid var(--border);
             font-size: 0.9rem;
         }
-        th { background: #fafafa; font-weight: 600; color: var(--muted); font-size: 0.8rem; }
-        tr:hover td { background: #fafafa; }
+        th { background: var(--table-bg); font-weight: 600; color: var(--muted); font-size: 0.8rem; }
+        tr:hover td { background: var(--hover-bg); }
         
         .badge {
             display: inline-block;
@@ -118,7 +131,7 @@
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
             font-weight: 600;
             letter-spacing: 0.05em;
-            background: #f1f5f9;
+            background: var(--hover-bg);
             padding: 0.15rem 0.4rem;
             border-radius: 4px;
         }
@@ -134,7 +147,7 @@
         .btn-primary { background: var(--primary); color: #fff; }
         .btn-primary:hover { background: #1d4ed8; }
         .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-        .btn-ghost:hover { background: #f1f5f9; }
+        .btn-ghost:hover { background: var(--hover-bg); }
         .btn-danger { background: transparent; color: var(--danger); }
         .btn-danger:hover { background: #fef2f2; }
         .btn-success { background: var(--success); color: #fff; }
@@ -145,7 +158,8 @@
             border: 1px solid var(--border);
             border-radius: 6px;
             font-size: 0.9rem;
-            background: #fff;
+            background: var(--input-bg);
+            color: var(--text);
         }
         input:focus, select:focus {
             outline: none;
@@ -174,7 +188,7 @@
         .edit-form {
             margin-top: 1rem;
             padding: 1rem;
-            background: #fafafa;
+            background: var(--table-bg);
             border: 1px solid var(--border);
             border-radius: 8px;
         }
@@ -204,6 +218,7 @@
             <header class="page-header">
                 <h1><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 6px;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>管理后台</h1>
                 <div class="actions">
+                    <button class="btn btn-ghost" onclick="toggleTheme()" id="themeBtn"><i class="bi bi-moon"></i></button>
                     <a href="/" class="btn btn-ghost"><i class="bi bi-house-door"></i></a>
                     <button class="btn btn-ghost" onclick="logout()"><i class="bi bi-box-arrow-right"></i></button>
                 </div>
@@ -293,6 +308,26 @@
 
     <script>
         let accounts = [];
+
+        // 主题切换
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            updateThemeIcon();
+        }
+        function updateThemeIcon() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            const btn = document.getElementById('themeBtn');
+            if (btn) btn.innerHTML = isDark ? '<i class="bi bi-sun"></i>' : '<i class="bi bi-moon"></i>';
+        }
+        // 初始化主题
+        (function() {
+            const saved = localStorage.getItem('theme') || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+            document.documentElement.setAttribute('data-theme', saved);
+            updateThemeIcon();
+        })();
 
         async function api(path, options = {}) {
             const res = await fetch('/api' + path, {
