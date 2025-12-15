@@ -641,7 +641,7 @@
                     <td><strong>${u.username}</strong></td>
                     <td class="text-muted">${u.name || '-'}</td>
                     <td><span class="badge enabled">TL${u.trust_level}</span></td>
-                    <td>${u.used_invites || 0}</td>
+                    <td><span class="badge ${u.has_used ? 'used' : 'available'}">${u.has_used ? '是' : '否'}</span></td>
                     <td class="text-muted">${formatTime(u.created_at)}</td>
                     <td class="text-muted">${formatTime(u.updated_at)}</td>
                     <td>
@@ -661,7 +661,10 @@
                 <h3>编辑用户 - ${u.username}</h3>
                 <input type="hidden" id="userId" value="${u.id}">
                 <div class="form-row">
-                    <label><span>已用邀请数</span><input type="number" id="userUsedInvites" value="${u.used_invites || 0}" min="0"></label>
+                    <label style="flex-direction:row;align-items:center;gap:0.5rem;">
+                        <input type="checkbox" id="userHasUsed" ${u.has_used ? 'checked' : ''} style="width:auto;">
+                        <span>是否已用</span>
+                    </label>
                 </div>
                 <div class="form-actions">
                     <button class="btn btn-ghost" onclick="hideUserForm()">取消</button>
@@ -676,11 +679,11 @@
 
         async function saveUser() {
             const id = document.getElementById('userId').value;
-            const usedInvites = parseInt(document.getElementById('userUsedInvites').value) || 0;
+            const hasUsed = document.getElementById('userHasUsed').checked;
             
             const res = await api(`/admin/users/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ usedInvites })
+                body: JSON.stringify({ hasUsed })
             });
             if (!res.ok) {
                 alert(res.data?.error || '保存失败');

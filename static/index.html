@@ -405,12 +405,18 @@
         function showLoggedInUI() {
             document.getElementById('loginPanel').classList.add('hidden');
             document.getElementById('teamSection').classList.remove('hidden');
-            document.getElementById('inviteSection').classList.remove('hidden');
             const ui = document.getElementById('userInfo');
             ui.innerHTML = `<span>${currentUser.username}</span><a href="#" onclick="logout();return false" class="navbar-link">退出</a>`;
             ui.classList.remove('hidden');
-            if (turnstileSiteKey && window.turnstile) {
-                turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light', size: 'flexible' });
+            
+            // 如果用户已使用过邀请，隐藏邀请表单
+            if (currentUser.hasUsed) {
+                document.getElementById('inviteSection').classList.add('hidden');
+            } else {
+                document.getElementById('inviteSection').classList.remove('hidden');
+                if (turnstileSiteKey && window.turnstile) {
+                    turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light', size: 'flexible' });
+                }
             }
         }
 

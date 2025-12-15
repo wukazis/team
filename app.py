@@ -229,6 +229,11 @@ def init_db():
         conn.execute('ALTER TABLE team_accounts ADD COLUMN active_until TEXT')
     except sqlite3.OperationalError:
         pass  # 列已存在
+    # 添加 has_used 列（如果不存在）
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN has_used INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     conn.commit()
     conn.close()
 
@@ -357,7 +362,8 @@ def user_state():
             'id': user['id'],
             'username': user['username'],
             'name': user['name'],
-            'trustLevel': user['trust_level']
+            'trustLevel': user['trust_level'],
+            'hasUsed': bool(user['has_used'])
         }
     })
 
@@ -488,6 +494,8 @@ def use_invite():
             SET used = 1, used_email = ?, used_at = datetime('now'), team_account_id = ?, user_id = ?
             WHERE code = ?
         ''', (email, final_team_id, user_id, code))
+        # 标记用户已使用邀请
+        conn.execute('UPDATE users SET has_used = 1 WHERE id = ?', (user_id,))
         conn.commit()
         conn.close()
         
@@ -767,11 +775,7 @@ def delete_code(code_id):
 def list_users():
     conn = get_db()
     rows = conn.execute('''
-        SELECT u.*, COUNT(c.id) as used_invites
-        FROM users u
-        LEFT JOIN invite_codes c ON c.user_id = u.id AND c.used = 1
-        GROUP BY u.id
-        ORDER BY u.created_at DESC
+        SELECT * FROM users ORDER BY created_at DESC
     ''').fetchall()
     conn.close()
     return jsonify({'users': [dict(r) for r in rows]})
@@ -780,15 +784,13 @@ def list_users():
 @admin_required
 def update_user(user_id):
     data = request.json or {}
-    used_invites = int(data.get('usedInvites', 0))
+    has_used = 1 if data.get('hasUsed') else 0
     
     conn = get_db()
-    # 更新该用户的已用邀请码数量（通过设置 used 状态）
-    # 这里简化处理：只记录数值，实际邀请码状态不变
     conn.execute('''
-        UPDATE users SET updated_at = datetime('now')
+        UPDATE users SET has_used = ?, updated_at = datetime('now')
         WHERE id = ?
-    ''', (user_id,))
+    ''', (has_used, user_id))
     conn.commit()
     conn.close()
     return jsonify({'status': 'ok'})
