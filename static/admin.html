@@ -357,9 +357,9 @@
         })();
 
         async function api(path, options = {}) {
-            const res = await fetch('/api' + path, {
+            const res = await fetch('/api' + path + (path.includes('?') ? '&' : '?') + '_t=' + Date.now(), {
                 ...options,
-                headers: { 'Content-Type': 'application/json', ...options.headers }
+                headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ...options.headers }
             });
             return { ok: res.ok, data: await res.json() };
         }
@@ -515,16 +515,21 @@
 
             if (!name) { alert('请输入名称'); return; }
 
+            let res;
             if (id) {
-                await api(`/admin/team-accounts/${id}`, {
+                res = await api(`/admin/team-accounts/${id}`, {
                     method: 'PUT',
                     body: JSON.stringify({ name, maxSeats, enabled, authorizationToken, accountId })
                 });
             } else {
-                await api('/admin/team-accounts', {
+                res = await api('/admin/team-accounts', {
                     method: 'POST',
                     body: JSON.stringify({ name, maxSeats, authorizationToken, accountId })
                 });
+            }
+            if (!res.ok) {
+                alert(res.data?.error || '保存失败');
+                return;
             }
             hideAccountForm();
             loadAccounts();
