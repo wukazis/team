@@ -714,9 +714,10 @@ def delete_team_account(account_id):
 def list_codes():
     conn = get_db()
     rows = conn.execute('''
-        SELECT c.*, t.name as team_name
+        SELECT c.*, t.name as team_name, u.username as used_username
         FROM invite_codes c
         LEFT JOIN team_accounts t ON c.team_account_id = t.id
+        LEFT JOIN users u ON c.user_id = u.id
         ORDER BY c.created_at DESC
     ''').fetchall()
     conn.close()
@@ -762,6 +763,16 @@ def delete_code(code_id):
     conn.commit()
     conn.close()
     return jsonify({'status': 'deleted'})
+
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def list_users():
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT * FROM users ORDER BY created_at DESC
+    ''').fetchall()
+    conn.close()
+    return jsonify({'users': [dict(r) for r in rows]})
 
 # ========== 后台自动同步 ==========
 
