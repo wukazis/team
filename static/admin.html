@@ -207,6 +207,7 @@
         <div class="login-container">
             <h2>🔐 管理员登录</h2>
             <input type="password" id="password" placeholder="输入管理密码" autofocus>
+            <input type="text" id="totpCode" class="hidden" placeholder="验证码 (6位数字)" maxlength="6" pattern="[0-9]{6}" inputmode="numeric" autocomplete="one-time-code">
             <button class="btn btn-primary" onclick="login()">登录</button>
             <p id="loginError" class="login-error hidden"></p>
         </div>
@@ -369,9 +370,10 @@
 
         async function login() {
             const password = document.getElementById('password').value;
+            const totpCode = document.getElementById('totpCode').value.trim();
             const { ok, data } = await api('/admin/login', {
                 method: 'POST',
-                body: JSON.stringify({ password })
+                body: JSON.stringify({ password, totpCode })
             });
             if (ok) {
                 document.getElementById('loginSection').classList.add('hidden');
@@ -382,6 +384,16 @@
                 err.textContent = data.error || '登录失败';
                 err.classList.remove('hidden');
             }
+        }
+        
+        // 检查是否需要 TOTP
+        async function checkTotpRequired() {
+            try {
+                const { data } = await api('/admin/totp-required');
+                if (data.required) {
+                    document.getElementById('totpCode').classList.remove('hidden');
+                }
+            } catch {}
         }
 
         async function logout() {
@@ -705,11 +717,22 @@
 
         // 回车登录
         document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const totpInput = document.getElementById('totpCode');
+                if (!totpInput.classList.contains('hidden') && !totpInput.value) {
+                    totpInput.focus();
+                } else {
+                    login();
+                }
+            }
+        });
+        document.getElementById('totpCode').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') login();
         });
 
         // 检查登录状态
         (async () => {
+            checkTotpRequired();
             const { ok } = await api('/admin/stats');
             if (ok) {
                 document.getElementById('loginSection').classList.add('hidden');
