@@ -16,7 +16,11 @@ import requests
 
 load_dotenv()
 
-app = Flask(__name__, static_folder='static', static_url_path='')
+# 获取当前脚本所在目录
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, 'static')
+
+app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
 
 # ========== ChatGPT Team API ==========
 
