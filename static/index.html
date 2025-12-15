@@ -443,7 +443,7 @@
                         <span class="team-stat">${a.seatsInUse}/${a.seatsEntitled} 已用</span>
                         ${a.pendingInvites?`<span class="team-stat">${a.pendingInvites} 待处理</span>`:''}
                         <span class="team-stat ${full?'full':'available'}">${avail} 剩余</span>
-                        ${exp?`<span class="team-stat">${exp}</span>`:''}
+                        ${exp?`<span class="team-stat">到期 ${exp}</span>`:''}
                     </div>
                 </div>`;
             }).join('');
