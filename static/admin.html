@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理后台</title>
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            --bg: #f6f7f9;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --text: #0f172a;
+            --muted: #64748b;
+            --primary: #2563eb;
+            --danger: #dc2626;
+            --success: #16a34a;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); min-height: 100vh; color: var(--text); }
+        
+        .page { max-width: 1000px; margin: 0 auto; padding: 1.5rem; }
+        .page-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        .page-header h1 { font-size: 1.6rem; font-weight: 700; }
+        .page-header .actions { display: flex; gap: 0.5rem; }
+        
+        /* Notion 风格 tabs */
+        .tabs {
+            display: flex;
+            gap: 0.25rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+        .tab {
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-weight: 500;
+            font-size: 0.9rem;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            color: var(--muted);
+        }
+        .tab:hover { background: #f3f4f6; color: var(--text); }
+        .tab.active { background: var(--text); color: #fff; }
+        
+        .section { display: none; }
+        .section.active { display: block; }
+        
+        /* 统计卡片 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 1rem;
+        }
+        .stat-card .label { font-size: 0.85rem; color: var(--muted); }
+        .stat-card .value { font-size: 1.8rem; font-weight: 700; }
+        
+        /* 表格 */
+        .table-container {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border);
+            background: #fafafa;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .table-header .title { font-weight: 600; }
+        .table-actions { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td {
+            padding: 0.6rem 1rem;
+            text-align: left;
+            border-bottom: 1px solid #f1f5f9;
+            font-size: 0.9rem;
+        }
+        th { background: #fafafa; font-weight: 600; color: var(--muted); font-size: 0.8rem; }
+        tr:hover td { background: #fafafa; }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.2rem 0.6rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .badge.available { background: #dcfce7; color: #166534; }
+        .badge.used { background: #fee2e2; color: #991b1b; }
+        .badge.enabled { background: #dbeafe; color: #1e40af; }
+        .badge.disabled { background: #f3f4f6; color: #6b7280; }
+        
+        .code {
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            background: #f1f5f9;
+            padding: 0.15rem 0.4rem;
+            border-radius: 4px;
+        }
+        
+        .btn {
+            padding: 0.4rem 0.8rem;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            font-weight: 500;
+            border: none;
+            cursor: pointer;
+        }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-primary:hover { background: #1d4ed8; }
+        .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
+        .btn-ghost:hover { background: #f1f5f9; }
+        .btn-danger { background: transparent; color: var(--danger); }
+        .btn-danger:hover { background: #fef2f2; }
+        .btn-success { background: var(--success); color: #fff; }
+        .btn-sm { padding: 0.25rem 0.5rem; font-size: 0.8rem; }
+        
+        input, select {
+            padding: 0.4rem 0.6rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.9rem;
+            background: #fff;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+        
+        /* 登录 */
+        .login-container {
+            max-width: 320px;
+            margin: 100px auto;
+            padding: 2rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+        }
+        .login-container h2 { margin-bottom: 1.5rem; text-align: center; }
+        .login-container input { width: 100%; padding: 0.75rem; margin-bottom: 1rem; }
+        .login-container button { width: 100%; padding: 0.75rem; }
+        .login-error { color: var(--danger); font-size: 0.85rem; margin-top: 0.5rem; text-align: center; }
+        
+        .hidden { display: none !important; }
+        .text-muted { color: var(--muted); }
+        .empty-state { text-align: center; padding: 2rem; color: var(--muted); }
+        
+        /* 编辑表单 */
+        .edit-form {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: #fafafa;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .edit-form h3 { margin-bottom: 1rem; font-size: 1rem; }
+        .form-row { display: flex; gap: 0.75rem; margin-bottom: 0.75rem; flex-wrap: wrap; }
+        .form-row label { display: flex; flex-direction: column; gap: 0.25rem; flex: 1; min-width: 150px; }
+        .form-row label span { font-size: 0.85rem; color: var(--muted); }
+        .form-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+        
+        a { color: var(--primary); text-decoration: none; }
+    </style>
+</head>
+<body>
+    <!-- 登录 -->
+    <div id="loginSection">
+        <div class="login-container">
+            <h2>🔐 管理员登录</h2>
+            <input type="password" id="password" placeholder="输入管理密码" autofocus>
+            <button class="btn btn-primary" onclick="login()">登录</button>
+            <p id="loginError" class="login-error hidden"></p>
+        </div>
+    </div>
+
+    <!-- 管理面板 -->
+    <div id="adminSection" class="hidden">
+        <div class="page">
+            <header class="page-header">
+                <h1>📊 管理后台</h1>
+                <div class="actions">
+                    <a href="/" class="btn btn-ghost">← 返回首页</a>
+                    <button class="btn btn-ghost" onclick="logout()">退出</button>
+                </div>
+            </header>
+
+            <!-- Tabs -->
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('accounts')">🚗 车账号</button>
+                <button class="tab" onclick="switchTab('codes')">🎫 邀请码</button>
+            </div>
+
+            <!-- 车账号管理 -->
+            <div id="accountsSection" class="section active">
+                <div class="stats-grid" id="accountStats"></div>
+                
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="title">车账号列表</span>
+                        <div class="table-actions">
+                            <button class="btn btn-primary" onclick="showAddAccount()">+ 添加车账号</button>
+                            <button class="btn btn-success" onclick="syncAllAccounts()">同步全部</button>
+                            <button class="btn btn-ghost" onclick="loadAccounts()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>名称</th>
+                                <th>已用/总席位</th>
+                                <th>待处理</th>
+                                <th>最后同步</th>
+                                <th>状态</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="accountList"></tbody>
+                    </table>
+                    <div id="accountForm" class="edit-form hidden"></div>
+                </div>
+            </div>
+
+            <!-- 邀请码管理 -->
+            <div id="codesSection" class="section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">总邀请码</div>
+                        <div class="value" id="statTotal">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">已使用</div>
+                        <div class="value" id="statUsed">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">可用</div>
+                        <div class="value" id="statAvailable">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="title">邀请码列表</span>
+                        <div class="table-actions">
+                            <input type="number" id="codeCount" value="1" min="1" max="50" style="width: 60px;">
+                            <select id="codeTeamAccount" style="min-width: 120px;">
+                                <option value="">不绑定车位</option>
+                            </select>
+                            <button class="btn btn-primary" onclick="generateCodes()">生成</button>
+                            <button class="btn btn-ghost" onclick="loadCodes()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>邀请码</th>
+                                <th>绑定车位</th>
+                                <th>状态</th>
+                                <th>使用邮箱</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="codeList"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let accounts = [];
+
+        async function api(path, options = {}) {
+            const res = await fetch('/api' + path, {
+                ...options,
+                headers: { 'Content-Type': 'application/json', ...options.headers }
+            });
+            return { ok: res.ok, data: await res.json() };
+        }
+
+        async function login() {
+            const password = document.getElementById('password').value;
+            const { ok, data } = await api('/admin/login', {
+                method: 'POST',
+                body: JSON.stringify({ password })
+            });
+            if (ok) {
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('adminSection').classList.remove('hidden');
+                loadAll();
+            } else {
+                const err = document.getElementById('loginError');
+                err.textContent = data.error || '登录失败';
+                err.classList.remove('hidden');
+            }
+        }
+
+        async function logout() {
+            await api('/admin/logout', { method: 'POST' });
+            location.reload();
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+            document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
+            document.getElementById(tab + 'Section').classList.add('active');
+        }
+
+        async function loadAll() {
+            await loadAccounts();
+            await loadCodes();
+            await loadStats();
+        }
+
+        // ========== 车账号 ==========
+        async function loadAccounts() {
+            const { ok, data } = await api('/admin/team-accounts');
+            if (!ok) return;
+            accounts = data.accounts || [];
+            
+            // 统计
+            const statsHtml = accounts.length > 0 ? accounts.map(acc => `
+                <div class="stat-card">
+                    <div class="label">${acc.name}</div>
+                    <div class="value">${acc.seatsInUse}/${acc.seatsEntitled}</div>
+                </div>
+            `).join('') : '<div class="stat-card"><div class="label">暂无车账号</div></div>';
+            document.getElementById('accountStats').innerHTML = statsHtml;
+            
+            // 表格
+            const tbody = document.getElementById('accountList');
+            if (accounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无车账号</td></tr>';
+                return;
+            }
+            tbody.innerHTML = accounts.map(acc => `
+                <tr>
+                    <td><strong>${acc.name}</strong></td>
+                    <td>${acc.seatsInUse} / ${acc.seatsEntitled}</td>
+                    <td>${acc.pendingInvites}</td>
+                    <td class="text-muted">${acc.lastSync ? formatTime(acc.lastSync) : '-'}</td>
+                    <td><span class="badge ${acc.enabled ? 'enabled' : 'disabled'}">${acc.enabled ? '启用' : '禁用'}</span></td>
+                    <td>
+                        <button class="btn btn-ghost btn-sm" onclick="editAccount(${acc.id})">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteAccount(${acc.id})">删除</button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            // 更新邀请码生成的下拉框
+            updateCodeTeamSelect();
+        }
+
+        function updateCodeTeamSelect() {
+            const select = document.getElementById('codeTeamAccount');
+            select.innerHTML = '<option value="">不绑定车位</option>' + 
+                accounts.filter(a => a.enabled).map(a => 
+                    `<option value="${a.id}">${a.name}</option>`
+                ).join('');
+        }
+
+        function showAddAccount() {
+            const form = document.getElementById('accountForm');
+            form.classList.remove('hidden');
+            form.innerHTML = `
+                <h3>添加车账号</h3>
+                <div class="form-row">
+                    <label><span>名称</span><input type="text" id="accName" placeholder="车位名称"></label>
+                    <label><span>最大席位</span><input type="number" id="accMaxSeats" value="5" min="1"></label>
+                </div>
+                <div class="form-row">
+                    <label><span>Authorization Token</span><input type="text" id="accToken" placeholder="Bearer token"></label>
+                </div>
+                <div class="form-row">
+                    <label><span>Account ID</span><input type="text" id="accAccountId" placeholder="Account ID"></label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="hideAccountForm()">取消</button>
+                    <button class="btn btn-primary" onclick="saveAccount()">保存</button>
+                </div>
+            `;
+        }
+
+        function editAccount(id) {
+            const acc = accounts.find(a => a.id === id);
+            if (!acc) return;
+            const form = document.getElementById('accountForm');
+            form.classList.remove('hidden');
+            form.innerHTML = `
+                <h3>编辑车账号</h3>
+                <input type="hidden" id="accId" value="${acc.id}">
+                <div class="form-row">
+                    <label><span>名称</span><input type="text" id="accName" value="${acc.name}"></label>
+                    <label><span>最大席位</span><input type="number" id="accMaxSeats" value="${acc.maxSeats}" min="1"></label>
+                    <label><span>状态</span>
+                        <select id="accEnabled">
+                            <option value="1" ${acc.enabled ? 'selected' : ''}>启用</option>
+                            <option value="0" ${!acc.enabled ? 'selected' : ''}>禁用</option>
+                        </select>
+                    </label>
+                </div>
+                <div class="form-row">
+                    <label><span>Authorization Token</span><input type="text" id="accToken" value="${acc.authorizationToken || ''}" placeholder="Bearer token"></label>
+                </div>
+                <div class="form-row">
+                    <label><span>Account ID</span><input type="text" id="accAccountId" value="${acc.accountId || ''}" placeholder="Team/Account ID"></label>
+                </div>
+                <div class="form-actions">
+                    <button class="btn btn-ghost" onclick="hideAccountForm()">取消</button>
+                    <button class="btn btn-success" onclick="syncAccount(${acc.id})">同步状态</button>
+                    <button class="btn btn-primary" onclick="saveAccount()">保存</button>
+                </div>
+            `;
+        }
+
+        function hideAccountForm() {
+            document.getElementById('accountForm').classList.add('hidden');
+        }
+
+        async function saveAccount() {
+            const id = document.getElementById('accId')?.value;
+            const name = document.getElementById('accName').value.trim();
+            const maxSeats = parseInt(document.getElementById('accMaxSeats').value) || 5;
+            const enabled = document.getElementById('accEnabled')?.value !== '0';
+            const authorizationToken = document.getElementById('accToken')?.value.trim() || '';
+            const accountId = document.getElementById('accAccountId')?.value.trim() || '';
+
+            if (!name) { alert('请输入名称'); return; }
+
+            if (id) {
+                await api(`/admin/team-accounts/${id}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ name, maxSeats, enabled, authorizationToken, accountId })
+                });
+            } else {
+                await api('/admin/team-accounts', {
+                    method: 'POST',
+                    body: JSON.stringify({ name, maxSeats, authorizationToken, accountId })
+                });
+            }
+            hideAccountForm();
+            loadAccounts();
+        }
+
+        async function syncAccount(id) {
+            const { ok, data } = await api(`/admin/team-accounts/${id}/sync`, { method: 'POST' });
+            if (ok) {
+                alert(`同步成功！已用席位: ${data.seatsInUse}`);
+                loadAccounts();
+            } else {
+                alert(data.error || '同步失败');
+            }
+        }
+
+        async function syncAllAccounts() {
+            const { ok, data } = await api('/admin/team-accounts/sync-all', { method: 'POST' });
+            if (ok) {
+                const msg = data.results.map(r => `${r.name}: ${r.error || r.seatsInUse + '席'}`).join('\n');
+                alert('同步完成:\n' + msg);
+                loadAccounts();
+            } else {
+                alert('同步失败');
+            }
+        }
+
+        async function deleteAccount(id) {
+            if (!confirm('确定删除此车账号？')) return;
+            const { ok, data } = await api(`/admin/team-accounts/${id}`, { method: 'DELETE' });
+            if (!ok) { alert(data.error || '删除失败'); return; }
+            loadAccounts();
+        }
+
+        // ========== 邀请码 ==========
+        async function loadStats() {
+            const { ok, data } = await api('/admin/stats');
+            if (ok) {
+                document.getElementById('statTotal').textContent = data.total;
+                document.getElementById('statUsed').textContent = data.used;
+                document.getElementById('statAvailable').textContent = data.available;
+            }
+        }
+
+        async function loadCodes() {
+            const { ok, data } = await api('/admin/codes');
+            const tbody = document.getElementById('codeList');
+            
+            if (!ok || !data.codes || data.codes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无邀请码</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.codes.map(c => `
+                <tr>
+                    <td><span class="code">${c.code}</span></td>
+                    <td class="text-muted">${c.team_name || '-'}</td>
+                    <td><span class="badge ${c.used ? 'used' : 'available'}">${c.used ? '已使用' : '可用'}</span></td>
+                    <td class="text-muted">${c.used_email || '-'}</td>
+                    <td class="text-muted">${formatTime(c.created_at)}</td>
+                    <td>${!c.used ? `<button class="btn btn-danger btn-sm" onclick="deleteCode(${c.id})">删除</button>` : '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function formatTime(t) {
+            if (!t) return '-';
+            return new Date(t).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+
+        async function generateCodes() {
+            const count = parseInt(document.getElementById('codeCount').value) || 1;
+            const teamAccountId = document.getElementById('codeTeamAccount').value || null;
+            const { ok, data } = await api('/admin/codes', {
+                method: 'POST',
+                body: JSON.stringify({ count, teamAccountId: teamAccountId ? parseInt(teamAccountId) : null })
+            });
+            if (ok) {
+                alert(`已生成 ${data.created} 个邀请码:\n\n${data.codes.join('\n')}`);
+                loadCodes();
+                loadStats();
+            }
+        }
+
+        async function deleteCode(id) {
+            if (!confirm('确定删除此邀请码？')) return;
+            await api(`/admin/codes/${id}`, { method: 'DELETE' });
+            loadCodes();
+            loadStats();
+        }
+
+        // 回车登录
+        document.getElementById('password').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') login();
+        });
+
+        // 检查登录状态
+        (async () => {
+            const { ok } = await api('/admin/stats');
+            if (ok) {
+                document.getElementById('loginSection').classList.add('hidden');
+                document.getElementById('adminSection').classList.remove('hidden');
+                loadAll();
+            }
+        })();
+    </script>
+</body>
+</html>
