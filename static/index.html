@@ -4,119 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>邀请码领取</title>
+    <!-- 引入 Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         :root {
-            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            font-size: 14px;
-            line-height: 1.6;
-            color: #0f172a;
-            --bg: #f6f7f9;
-            --card: #ffffff;
-            --border: #e5e7eb;
-            --text: #0f172a;
-            --muted: #64748b;
             --primary: #2563eb;
             --primary-hover: #1d4ed8;
-            --danger: #dc2626;
-            --success: #16a34a;
-        }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--bg); min-height: 100vh; }
-        .navbar {
-            background: var(--card);
-            border-bottom: 1px solid var(--border);
-            padding: 0.8rem 1.5rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .navbar-brand {
-            font-weight: 600;
-            font-size: 1.1rem;
-            color: var(--text);
-            text-decoration: none;
-        }
-        .navbar-link {
-            color: var(--muted);
-            text-decoration: none;
-            font-size: 0.9rem;
-        }
-        .navbar-link:hover { color: var(--primary); }
-        .page {
-            width: min(900px, 94%);
-            margin: 1.5rem auto;
-            padding-bottom: 3rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 1.5rem;
-            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
-        }
-        .card h2 {
-            font-size: 1.2rem;
-            margin-bottom: 1rem;
+            --bg: #f8f9fa;
         }
         
-        /* 车位状态 - 原版风格 */
-        .team-accounts-dashboard {
-            display: flex;
-            flex-direction: column;
-            gap: 0.75rem;
+        body { 
+            background-color: var(--bg); 
+            font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
         }
-        .dashboard-row {
-            display: flex;
-            align-items: center;
-            gap: 1.5rem;
-            padding: 1rem 1.25rem;
-            border: 2px solid var(--border);
-            border-radius: 12px;
-            background: #fff;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .dashboard-row:hover:not(.full) {
-            border-color: var(--primary);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        }
-        .dashboard-row.selected {
-            border-color: var(--primary);
-            background: #f0f7ff;
-        }
-        .dashboard-row.full {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        .dashboard-name {
-            font-weight: 600;
-            font-size: 1.1rem;
-            min-width: 120px;
-            flex-shrink: 0;
-        }
-        .dashboard-gauges {
-            display: flex;
-            align-items: center;
-            gap: 1.25rem;
-            flex-wrap: wrap;
-        }
+
+        /* 动画与特殊SVG样式保留 (Bootstrap本身没有这些) */
+        
+        /* 仪表盘 SVG 样式 */
         .gauge {
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 0.25rem;
+            width: 50px;
         }
         .gauge svg {
-            width: 50px;
-            height: 50px;
+            width: 48px;
+            height: 48px;
             transform: rotate(-90deg);
         }
         .gauge-bg {
             fill: none;
-            stroke: #e5e7eb;
+            stroke: #e9ecef; /* Bootstrap gray-200 */
             stroke-width: 3;
         }
         .gauge-fill {
@@ -125,156 +44,223 @@
             stroke-linecap: round;
             transition: stroke-dasharray 0.3s;
         }
-        .gauge-fill.used { stroke: #f59e0b; }
-        .gauge-fill.pending { stroke: #8b5cf6; }
-        .gauge-fill.total { stroke: #3b82f6; }
-        .gauge-fill.available { stroke: #10b981; }
-        .gauge-fill.empty { stroke: #ef4444; }
+        .gauge-fill.used { stroke: #ffc107; } /* Bootstrap warning */
+        .gauge-fill.pending { stroke: #6f42c1; } /* Bootstrap purple */
+        .gauge-fill.total { stroke: #0d6efd; } /* Bootstrap primary */
+        .gauge-fill.available { stroke: #198754; } /* Bootstrap success */
+        .gauge-fill.empty { stroke: #dc3545; } /* Bootstrap danger */
         .gauge-text {
-            fill: var(--text);
+            fill: var(--bs-body-color);
             font-size: 10px;
-            font-weight: 600;
+            font-weight: 700;
             text-anchor: middle;
             transform: rotate(90deg);
             transform-origin: center;
         }
         .gauge-label {
             font-size: 0.7rem;
-            color: var(--muted);
+            color: var(--bs-secondary-color);
+            margin-top: 2px;
+            white-space: nowrap;
         }
-        
-        /* 邀请码表单 */
-        .invite-card {
-            max-width: 600px;
-            margin: 0 auto;
-            width: 100%;
+
+        /* 选中状态的边框样式 */
+        .dashboard-row {
+            transition: all 0.2s;
+            border: 2px solid transparent; /* 预留边框位置避免抖动 */
         }
-        .invite-card h1 {
-            font-size: 1.4rem;
-            text-align: center;
-            margin-bottom: 0.5rem;
+        .dashboard-row:hover:not(.full) {
+            transform: translateY(-2px);
+            box-shadow: 0 .5rem 1rem rgba(0,0,0,.15)!important;
         }
-        .invite-card .subtitle {
-            color: var(--muted);
-            text-align: center;
-            margin-bottom: 1.5rem;
-        }
-        .form-group {
-            margin-bottom: 1rem;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 0.4rem;
-            font-weight: 500;
-        }
-        .form-group input, .form-group select {
-            width: 100%;
-            padding: 0.75rem;
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            font-size: 1rem;
-            background: #fff;
-            color: var(--text);
-            transition: border-color 0.15s, box-shadow 0.15s;
-        }
-        .form-group input:focus, .form-group select:focus {
-            outline: none;
+        .dashboard-row.selected {
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            background-color: #f0f7ff;
         }
-        .btn {
-            border-radius: 8px;
-            padding: 0.75rem 1.2rem;
-            font-weight: 600;
-            font-size: 1rem;
+        .dashboard-row.full {
+            opacity: 0.6;
+            cursor: not-allowed;
+            background-color: #e9ecef;
+        }
+
+        /* LinuxDO 按钮自定义颜色 */
+        .btn-linuxdo {
+            background: #f97316;
+            color: #fff;
             border: none;
-            cursor: pointer;
-            transition: background 0.15s;
-            width: 100%;
         }
-        .btn-primary {
-            background: var(--primary);
+        .btn-linuxdo:hover {
+            background: #ea580c;
             color: #fff;
         }
-        .btn-primary:hover:not(:disabled) { background: var(--primary-hover); }
-        .btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
-        .btn-muted {
-            background: #f1f5f9;
-            color: var(--text);
-            border: 1px solid var(--border);
+
+        /* 加载动画全屏层 */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
         }
-        .message {
-            margin-top: 1rem;
-            padding: 1rem;
-            border-radius: 10px;
-            text-align: center;
-            font-weight: 500;
+        .loading-overlay.fade-out {
+            opacity: 0;
+            pointer-events: none;
         }
-        .message.success { background: #f0fdf4; color: var(--success); border: 1px solid #dcfce7; }
-        .message.error { background: #fef2f2; color: var(--danger); border: 1px solid #fecaca; }
-        .success-box {
-            background: #f0fdf4;
-            border: 1px solid #dcfce7;
-            border-radius: 10px;
-            padding: 1.5rem;
-            text-align: center;
+
+        /* 复杂SVG动画保留原样 */
+        .logo-container { width: 80px; height: 80px; }
+        .tech-stroke {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            filter: drop-shadow(0 0 2px var(--primary));
         }
-        .success-box h2 { font-size: 1.1rem; margin-bottom: 0.5rem; color: var(--success); }
-        .success-box .email { font-size: 1.2rem; font-weight: 600; margin-bottom: 1rem; }
-        .muted { color: var(--muted); font-size: 0.9rem; }
+        .ring-group { transform-origin: 50px 50px; animation: continuousSpin 3s linear infinite; }
+        .draw-path { stroke-dasharray: 100; stroke-dashoffset: 100; animation: drawLine 1s ease-out forwards; }
+        .center-circle {
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 0.6s;
+            opacity: 0; transform-origin: 50px 50px; fill: var(--bg); stroke: var(--primary);
+        }
+        @keyframes drawLine { to { stroke-dashoffset: 0; } }
+        @keyframes continuousSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes popIn { 0% { opacity: 0; transform: scale(0); } 100% { opacity: 1; transform: scale(1); } }
+
+        /* 工具类 */
         .hidden { display: none !important; }
-        .loading { text-align: center; padding: 2rem; color: var(--muted); }
+        .user-avatar { width: 32px; height: 32px; object-fit: cover; }
     </style>
 </head>
 <body>
-    <nav class="navbar">
-        <a href="/" class="navbar-brand">🎫 Team Invite</a>
-        <a href="/admin" class="navbar-link">管理后台</a>
+    <!-- 加载动画 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="logo-container">
+            <svg viewBox="0 0 100 100">
+                <defs>
+                    <path id="tech-petal" d="M40,22 L60,22 L62,24 L60,26 L40,26 L38,24 Z" />
+                </defs>
+                <g class="ring-group">
+                    <use href="#tech-petal" class="tech-stroke draw-path" transform="rotate(0, 50, 50)" style="animation-delay: 0s" />
+                    <use href="#tech-petal" class="tech-stroke draw-path" transform="rotate(60, 50, 50)" style="animation-delay: 0.08s" />
+                    <use href="#tech-petal" class="tech-stroke draw-path" transform="rotate(120, 50, 50)" style="animation-delay: 0.16s" />
+                    <use href="#tech-petal" class="tech-stroke draw-path" transform="rotate(180, 50, 50)" style="animation-delay: 0.24s" />
+                    <use href="#tech-petal" class="tech-stroke draw-path" transform="rotate(240, 50, 50)" style="animation-delay: 0.32s" />
+                    <use href="#tech-petal" class="tech-stroke draw-path" transform="rotate(300, 50, 50)" style="animation-delay: 0.4s" />
+                </g>
+                <circle class="center-circle tech-stroke" cx="50" cy="50" r="8" stroke-width="2" />
+            </svg>
+        </div>
+    </div>
+
+    <!-- 导航栏 -->
+    <nav class="navbar navbar-expand navbar-light bg-white border-bottom shadow-sm fixed-top">
+        <div class="container">
+            <a href="/" class="navbar-brand fw-bold text-primary">
+                <span class="fs-4 me-2">🎫</span>Team Invite
+            </a>
+            <div id="userInfo" class="d-flex align-items-center gap-3 hidden">
+                <!-- 用户信息由JS注入 -->
+            </div>
+        </div>
     </nav>
 
-    <main class="page">
-        <!-- 车位状态 -->
-        <section class="card">
-            <h2>🚗 车位状态</h2>
-            <div id="teamAccountsContainer" class="loading">加载中...</div>
-        </section>
+    <!-- 占位符防止内容被固定导航栏遮挡 -->
+    <div style="height: 70px;"></div>
 
-        <!-- 邀请码表单 -->
-        <section class="card invite-card">
-            <h1>邀请码领取</h1>
-            <p class="subtitle">输入邀请码和邮箱完成领取</p>
-            
-            <div id="formSection">
-                <form id="inviteForm">
-                    <div class="form-group">
-                        <label for="code">邀请码</label>
-                        <input type="text" id="code" placeholder="请输入邀请码" required autocomplete="off">
-                    </div>
-                    <div class="form-group">
-                        <label for="email">邮箱地址</label>
-                        <input type="email" id="email" placeholder="you@example.com" required>
-                    </div>
-                    <div class="form-group" id="teamSelectGroup">
-                        <label>选择车位</label>
-                        <select id="teamSelect" required>
-                            <option value="">请选择车位</option>
-                        </select>
-                        <p id="lockedHint" class="muted hidden" style="margin-top: 0.3rem;">该邀请码已绑定车位</p>
-                    </div>
-                    <button type="submit" class="btn btn-primary" id="submitBtn">发送邀请</button>
-                </form>
-                <div id="message" class="message hidden"></div>
-            </div>
-
-            <div id="successSection" class="hidden">
-                <div class="success-box">
-                    <h2>✅ 发送成功</h2>
-                    <p>邀请已发送到</p>
-                    <p class="email" id="successEmail"></p>
-                    <button class="btn btn-muted" onclick="resetForm()">继续领取</button>
+    <main class="container py-4">
+        
+        <!-- 登录卡片 (全屏居中覆盖) -->
+        <div id="loginPanel" class="position-fixed top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center bg-light" style="z-index: 1050;">
+            <div class="card border-0 shadow-lg rounded-4" style="max-width: 400px; width: 90%;">
+                <div class="card-body p-4 p-md-5 text-center">
+                    <h2 class="h3 fw-bold mb-2">欢迎登录</h2>
+                    <p class="text-secondary mb-4">请登录以继续领取邀请码</p>
+                    <button class="btn btn-linuxdo btn-lg w-100 d-flex align-items-center justify-content-center gap-2 py-3 rounded-3" id="loginBtn">
+                        <svg width="24" height="24" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="m7.44,0s.09,0,.13,0c.09,0,.19,0,.28,0,.14,0,.29,0,.43,0,.09,0,.18,0,.27,0q.12,0,.25,0t.26.08c.15.03.29.06.44.08,1.97.38,3.78,1.47,4.95,3.11.04.06.09.12.13.18.67.96,1.15,2.11,1.3,3.28q0,.19.09.26c0,.15,0,.29,0,.44,0,.04,0,.09,0,.13,0,.09,0,.19,0,.28,0,.14,0,.29,0,.43,0,.09,0,.18,0,.27,0,.08,0,.17,0,.25q0,.19-.08.26c-.03.15-.06.29-.08.44-.38,1.97-1.47,3.78-3.11,4.95-.06.04-.12.09-.18.13-.96.67-2.11,1.15-3.28,1.3q-.19,0-.26.09c-.15,0-.29,0-.44,0-.04,0-.09,0-.13,0-.09,0-.19,0-.28,0-.14,0-.29,0-.43,0-.09,0-.18,0-.27,0-.08,0-.17,0-.25,0q-.19,0-.26-.08c-.15-.03-.29-.06-.44-.08-1.97-.38-3.78-1.47-4.95-3.11q-.07-.09-.13-.18c-.67-.96-1.15-2.11-1.3-3.28q0-.19-.09-.26c0-.15,0-.29,0-.44,0-.04,0-.09,0-.13,0-.09,0-.19,0-.28,0-.14,0-.29,0-.43,0-.09,0-.18,0-.27,0-.08,0-.17,0-.25q0-.19.08-.26c.03-.15.06-.29.08-.44.38-1.97,1.47-3.78,3.11-4.95.06-.04.12-.09.18-.13C4.42.73,5.57.26,6.74.1,7,.07,7.15,0,7.44,0Z" fill="#EFEFEF"/>
+                            <path d="m1.27,11.33h13.45c-.94,1.89-2.51,3.21-4.51,3.88-1.99.59-3.96.37-5.8-.57-1.25-.7-2.67-1.9-3.14-3.3Z" fill="#FEB005"/>
+                            <path d="m12.54,1.99c.87.7,1.82,1.59,2.18,2.68H1.27c.87-1.74,2.33-3.13,4.2-3.78,2.44-.79,5-.47,7.07,1.1Z" fill="#1D1D1F"/>
+                        </svg>
+                        <span>使用 LinuxDO 登录</span>
+                    </button>
                 </div>
             </div>
-        </section>
+        </div>
+
+        <div class="row g-4 justify-content-center">
+            
+            <!-- 车位状态 -->
+            <div class="col-lg-8" id="teamDashboardCol">
+                <section id="teamSection" class="card border-0 shadow-sm rounded-4 h-100 hidden">
+                    <div class="card-header bg-white border-bottom-0 pt-4 px-4 pb-0">
+                        <h2 class="h5 fw-bold mb-0 text-primary">🚗 车位状态</h2>
+                        <p class="text-muted small mt-1">请选择一个剩余空位的车队 (点击卡片选择)</p>
+                    </div>
+                    <div class="card-body px-4 pb-4">
+                        <div id="teamAccountsContainer" class="d-flex flex-column gap-3">
+                            <div class="text-center py-5 text-muted">
+                                <div class="spinner-border text-primary mb-2" role="status"></div>
+                                <p>数据加载中...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+            </div>
+
+            <!-- 邀请码表单 -->
+            <div class="col-lg-4">
+                <section id="inviteSection" class="card border-0 shadow-sm rounded-4 hidden sticky-lg-top" style="top: 90px; z-index: 1020;">
+                    <div class="card-body p-4">
+                        <h1 class="h4 text-center fw-bold mb-2">填写邀请信息</h1>
+                        <p class="text-center text-secondary mb-4 small">输入邀请码和邮箱完成领取</p>
+                        
+                        <div id="formSection">
+                            <form id="inviteForm">
+                                <div class="mb-3">
+                                    <label for="code" class="form-label fw-bold small text-secondary">邀请码</label>
+                                    <input type="text" class="form-control form-control-lg bg-light" id="code" placeholder="请输入邀请码" required autocomplete="off">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="email" class="form-label fw-bold small text-secondary">邮箱地址</label>
+                                    <input type="email" class="form-control form-control-lg bg-light" id="email" placeholder="you@example.com" required>
+                                </div>
+                                <div class="mb-3" id="teamSelectGroup">
+                                    <label class="form-label fw-bold small text-secondary">选择车位</label>
+                                    <select id="teamSelect" class="form-select form-select-lg bg-light" required>
+                                        <option value="">请选择车位</option>
+                                    </select>
+                                    <div id="lockedHint" class="form-text text-primary hidden">
+                                        <i class="bi bi-lock-fill"></i> 该邀请码已绑定指定车位
+                                    </div>
+                                </div>
+                                <div id="turnstileContainer" class="d-flex justify-content-center mb-4"></div>
+                                <button type="submit" class="btn btn-primary btn-lg w-100 rounded-3" id="submitBtn">
+                                   发送邀请
+                                </button>
+                            </form>
+                            <div id="message" class="alert mt-3 text-center hidden" role="alert"></div>
+                        </div>
+
+                        <div id="successSection" class="hidden text-center py-3">
+                            <div class="bg-success-subtle border border-success-subtle rounded-3 p-4">
+                                <div class="display-1 text-success mb-3">✅</div>
+                                <h2 class="h5 text-success fw-bold">发送成功</h2>
+                                <p class="text-muted mb-1">邀请已发送到</p>
+                                <p class="fw-bold fs-5 text-dark" id="successEmail"></p>
+                            </div>
+                            <button onclick="window.location.reload()" class="btn btn-outline-secondary mt-3 btn-sm">返回</button>
+                        </div>
+                    </div>
+                </section>
+            </div>
+        </div>
     </main>
 
     <script>
@@ -282,8 +268,126 @@
         let selectedAccountId = null;
         let lockedTeamAccountId = null;
         let checkTimer = null;
+        let currentUser = null;
+        let turnstileSiteKey = null;
+        let turnstileWidgetId = null;
 
-        // 加载车位状态
+        // 获取 token
+        function getToken() {
+            return localStorage.getItem('token');
+        }
+        function setToken(token) {
+            localStorage.setItem('token', token);
+        }
+        function clearToken() {
+            localStorage.removeItem('token');
+        }
+
+        // 初始化
+        async function init() {
+            const params = new URLSearchParams(window.location.search);
+            const urlToken = params.get('token');
+            if (urlToken) {
+                setToken(urlToken);
+                window.history.replaceState({}, '', '/');
+            }
+
+            try {
+                const res = await fetch('/api/turnstile/site-key');
+                const data = await res.json();
+                turnstileSiteKey = data.siteKey;
+            } catch (e) {}
+
+            const token = getToken();
+            if (token) {
+                await loadUserState();
+            } else {
+                showLoginPanel();
+            }
+
+            loadTeamAccounts();
+        }
+
+        async function loadUserState() {
+            const token = getToken();
+            if (!token) {
+                showLoginPanel();
+                return;
+            }
+            try {
+                const res = await fetch('/api/user/state', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) {
+                    clearToken();
+                    showLoginPanel();
+                    return;
+                }
+                const data = await res.json();
+                currentUser = data.user;
+                showLoggedInUI();
+            } catch (e) {
+                clearToken();
+                showLoginPanel();
+            }
+        }
+
+        function showLoginPanel() {
+            document.getElementById('loginPanel').classList.remove('hidden');
+            document.getElementById('teamSection').classList.add('hidden');
+            document.getElementById('inviteSection').classList.add('hidden');
+            document.getElementById('userInfo').classList.add('hidden');
+        }
+
+        function showLoggedInUI() {
+            document.getElementById('loginPanel').classList.add('hidden');
+            document.getElementById('teamSection').classList.remove('hidden');
+            document.getElementById('inviteSection').classList.remove('hidden');
+            
+            const userInfo = document.getElementById('userInfo');
+            // 使用 Bootstrap 样式
+            userInfo.innerHTML = `
+                <div class="d-flex align-items-center text-secondary">
+                    <span class="fw-bold me-2 text-dark">${currentUser.username}</span>
+                    <small class="border-start ps-3 ms-1"><a href="#" onclick="logout(); return false;" class="text-decoration-none text-muted">退出</a></small>
+                </div>
+            `;
+            userInfo.classList.remove('hidden');
+
+            renderTurnstile();
+        }
+
+        function renderTurnstile() {
+            if (!turnstileSiteKey) return;
+            const container = document.getElementById('turnstileContainer');
+            container.innerHTML = '';
+            if (window.turnstile) {
+                turnstileWidgetId = window.turnstile.render(container, {
+                    sitekey: turnstileSiteKey,
+                    callback: function(token) {}
+                });
+            }
+        }
+
+        document.getElementById('loginBtn').addEventListener('click', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch('/api/oauth/login');
+                const data = await res.json();
+                if (data.authUrl) {
+                    window.location.href = data.authUrl;
+                }
+            } catch (e) {
+                alert('登录失败，请重试');
+            }
+        });
+
+        function logout() {
+            clearToken();
+            currentUser = null;
+            showLoginPanel();
+        }
+
         async function loadTeamAccounts() {
             try {
                 const res = await fetch('/api/team-accounts/status');
@@ -292,37 +396,54 @@
                 renderTeamAccounts();
                 updateTeamSelect();
             } catch (e) {
-                document.getElementById('teamAccountsContainer').innerHTML = '<p class="muted">加载失败</p>';
+                document.getElementById('teamAccountsContainer').innerHTML = '<div class="alert alert-danger text-center m-3">数据加载失败</div>';
             }
         }
 
+        // 修改：使用 Bootstrap 类名生成仪表盘
         function renderTeamAccounts() {
             const container = document.getElementById('teamAccountsContainer');
             if (teamAccounts.length === 0) {
-                container.innerHTML = '<p class="muted">暂无可用车位</p>';
+                container.innerHTML = '<div class="alert alert-info text-center m-3">暂无可用车位</div>';
                 return;
             }
 
-            container.innerHTML = '<div class="team-accounts-dashboard">' + teamAccounts.map(acc => {
+            container.innerHTML = teamAccounts.map(acc => {
                 const available = acc.seatsEntitled - acc.seatsInUse - acc.pendingInvites;
-                const isFull = acc.seatsInUse + acc.pendingInvites >= acc.maxSeats;
+                const isFull = acc.seatsInUse + acc.pendingInvites >= 5;
                 const isSelected = selectedAccountId === acc.id;
                 const usedPct = acc.seatsEntitled > 0 ? (acc.seatsInUse / acc.seatsEntitled) * 100 : 0;
                 const pendingPct = acc.seatsEntitled > 0 ? (acc.pendingInvites / acc.seatsEntitled) * 100 : 0;
                 const availPct = acc.seatsEntitled > 0 ? (available / acc.seatsEntitled) * 100 : 0;
+                
+                let expireHtml = '';
+                if (acc.activeUntil) {
+                    const expireDate = new Date(acc.activeUntil).toLocaleDateString();
+                    expireHtml = `
+                        <div class="border-start ps-3 ms-2 d-none d-sm-block">
+                            <div class="text-muted" style="font-size: 0.7rem;">到期时间</div>
+                            <div class="fw-bold small">${expireDate}</div>
+                        </div>`;
+                }
 
+                // 使用 card 风格, 添加 p-3, rounded, shadow-sm, bg-white, cursor-pointer
                 return `
-                <div class="dashboard-row ${isSelected ? 'selected' : ''} ${isFull ? 'full' : ''}" 
+                <div class="dashboard-row card border shadow-sm mb-0 ${isSelected ? 'selected' : ''} ${isFull ? 'full' : ''}" 
+                     style="cursor: ${isFull ? 'not-allowed' : 'pointer'}"
                      onclick="selectAccount(${acc.id}, ${isFull})">
-                    <div class="dashboard-name">${acc.name}</div>
-                    <div class="dashboard-gauges">
-                        ${renderGauge(acc.seatsInUse, usedPct, 'used', '已用')}
-                        ${renderGauge(acc.pendingInvites, pendingPct, 'pending', '待处理')}
-                        ${renderGauge(acc.seatsEntitled, 100, 'total', '总席位')}
-                        ${renderGauge(available, availPct, isFull ? 'empty' : 'available', '剩余')}
+                    <div class="card-body p-3 d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div class="fw-bold fs-5 text-dark" style="min-width: 120px;">${acc.name}</div>
+                        
+                        <div class="d-flex align-items-center gap-3 flex-wrap justify-content-end flex-grow-1">
+                            ${renderGauge(acc.seatsInUse, usedPct, 'used', '已用')}
+                            ${renderGauge(acc.pendingInvites, pendingPct, 'pending', '待处理')}
+                            ${renderGauge(acc.seatsEntitled, 100, 'total', '总席位')}
+                            ${renderGauge(available, availPct, isFull ? 'empty' : 'available', '剩余')}
+                            ${expireHtml}
+                        </div>
                     </div>
                 </div>`;
-            }).join('') + '</div>';
+            }).join('');
         }
 
         function renderGauge(value, pct, type, label) {
@@ -348,16 +469,16 @@
             const select = document.getElementById('teamSelect');
             select.innerHTML = '<option value="">请选择车位</option>' + 
                 teamAccounts.map(acc => {
-                    const busy = acc.seatsInUse + acc.pendingInvites >= acc.maxSeats;
+                    const busy = acc.seatsInUse + acc.pendingInvites >= 5;
                     return `<option value="${acc.id}" ${busy ? 'disabled' : ''}>
-                        ${acc.name} (${acc.seatsInUse + acc.pendingInvites}/${acc.seatsEntitled}) ${busy ? '(已满)' : ''}
+                        ${acc.name} (${acc.seatsInUse + acc.pendingInvites}/${acc.seatsEntitled}) ${busy ? '(不可选)' : ''}
                     </option>`;
                 }).join('');
             
             if (selectedAccountId) {
                 select.value = selectedAccountId;
             } else if (teamAccounts.length > 0) {
-                const available = teamAccounts.find(a => a.seatsInUse + a.pendingInvites < a.maxSeats);
+                const available = teamAccounts.find(a => a.seatsInUse + a.pendingInvites < 5);
                 if (available) {
                     selectedAccountId = available.id;
                     select.value = available.id;
@@ -365,7 +486,6 @@
             }
         }
 
-        // 检查邀请码
         async function checkInviteCode(code) {
             if (!code) {
                 lockedTeamAccountId = null;
@@ -395,7 +515,6 @@
             } catch (e) {}
         }
 
-        // 表单处理
         const form = document.getElementById('inviteForm');
         const codeInput = document.getElementById('code');
         const message = document.getElementById('message');
@@ -415,23 +534,20 @@
 
         function showMessage(text, isError = false) {
             message.textContent = text;
-            message.className = 'message ' + (isError ? 'error' : 'success');
+            // 更新为 Bootstrap alert 类
+            message.className = 'alert ' + (isError ? 'alert-danger' : 'alert-success');
             message.classList.remove('hidden');
-        }
-
-        function resetForm() {
-            document.getElementById('formSection').classList.remove('hidden');
-            document.getElementById('successSection').classList.add('hidden');
-            form.reset();
-            message.classList.add('hidden');
-            lockedTeamAccountId = null;
-            document.getElementById('teamSelect').disabled = false;
-            document.getElementById('lockedHint').classList.add('hidden');
-            loadTeamAccounts();
         }
 
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            const token = getToken();
+            if (!token) {
+                showMessage('请先登录', true);
+                return;
+            }
+
             const code = codeInput.value.trim();
             const email = document.getElementById('email').value.trim();
             const teamAccountId = lockedTeamAccountId || selectedAccountId;
@@ -441,15 +557,27 @@
                 return;
             }
 
+            let turnstileToken = '';
+            if (turnstileSiteKey && window.turnstile && turnstileWidgetId !== null) {
+                turnstileToken = window.turnstile.getResponse(turnstileWidgetId);
+                if (!turnstileToken) {
+                    showMessage('请完成人机验证', true);
+                    return;
+                }
+            }
+
             submitBtn.disabled = true;
-            submitBtn.textContent = '发送中...';
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>发送中...';
             message.classList.add('hidden');
 
             try {
                 const res = await fetch('/api/invite/use', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code, email, teamAccountId })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token
+                    },
+                    body: JSON.stringify({ code, email, teamAccountId, turnstileToken })
                 });
                 const data = await res.json();
 
@@ -460,18 +588,31 @@
                     loadTeamAccounts();
                 } else {
                     showMessage(data.error || '提交失败', true);
+                    if (window.turnstile && turnstileWidgetId !== null) {
+                        window.turnstile.reset(turnstileWidgetId);
+                    }
                 }
             } catch (err) {
                 showMessage('网络错误，请重试', true);
+                if (window.turnstile && turnstileWidgetId !== null) {
+                    window.turnstile.reset(turnstileWidgetId);
+                }
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.textContent = '发送邀请';
             }
         });
 
-        // 初始化 & 定时刷新
-        loadTeamAccounts();
+        function hideLoading() {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.add('fade-out');
+            setTimeout(() => overlay.remove(), 300);
+        }
+
+        // 启动
+        init().then(hideLoading).catch(hideLoading);
         setInterval(loadTeamAccounts, 5000);
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-简化版邀请码系统 - 支持多车账号
+简化版邀请码系统 - 支持多车账号 + LinuxDO OAuth + CF Turnstile
 运行: python app.py
 访问: http://localhost:5000
 """
@@ -10,9 +10,11 @@ import sqlite3
 import secrets
 import threading
 import time
-from datetime import datetime
+import jwt
+from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, request, jsonify, send_from_directory, session
+from urllib.parse import urlencode
+from flask import Flask, request, jsonify, send_from_directory, session, redirect
 from dotenv import load_dotenv
 import requests
 
@@ -20,6 +22,25 @@ load_dotenv()
 
 # 同步间隔（秒）
 SYNC_INTERVAL = int(os.environ.get('SYNC_INTERVAL', 30))
+
+# LinuxDO OAuth 配置
+LINUXDO_CLIENT_ID = os.environ.get('LINUXDO_CLIENT_ID', '')
+LINUXDO_CLIENT_SECRET = os.environ.get('LINUXDO_CLIENT_SECRET', '')
+LINUXDO_REDIRECT_URI = os.environ.get('LINUXDO_REDIRECT_URI', 'http://localhost:5000/api/oauth/callback')
+LINUXDO_AUTHORIZE_URL = 'https://connect.linux.do/oauth2/authorize'
+LINUXDO_TOKEN_URL = 'https://connect.linux.do/oauth2/token'
+LINUXDO_USERINFO_URL = 'https://connect.linux.do/api/user'
+
+# Cloudflare Turnstile 配置
+CF_TURNSTILE_SITE_KEY = os.environ.get('CF_TURNSTILE_SITE_KEY', '')
+CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
+
+# JWT 配置
+JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
+JWT_EXPIRY_HOURS = 24
+
+# OAuth state 存储
+oauth_states = {}
 
 # 获取当前脚本所在目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -87,6 +108,64 @@ app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 DB_PATH = os.environ.get('DB_PATH', 'data.db')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
 ADMIN_TOTP_SECRET = os.environ.get('ADMIN_TOTP_SECRET', '')
+APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
+
+# ========== JWT 工具 ==========
+
+def create_jwt_token(user_id, username):
+    """创建 JWT token"""
+    payload = {
+        'user_id': user_id,
+        'username': username,
+        'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRY_HOURS)
+    }
+    return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
+
+def verify_jwt_token(token):
+    """验证 JWT token"""
+    try:
+        payload = jwt.decode(token, JWT_SECRET, algorithms=['HS256'])
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+
+def jwt_required(f):
+    """JWT 认证装饰器"""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            return jsonify({'error': '请先登录'}), 401
+        token = auth_header[7:]
+        payload = verify_jwt_token(token)
+        if not payload:
+            return jsonify({'error': '登录已过期，请重新登录'}), 401
+        request.user = payload
+        return f(*args, **kwargs)
+    return decorated
+
+# ========== Turnstile 验证 ==========
+
+def verify_turnstile(token, ip=None):
+    """验证 Cloudflare Turnstile"""
+    if not CF_TURNSTILE_SECRET_KEY:
+        return True  # 未配置则跳过验证
+    
+    data = {
+        'secret': CF_TURNSTILE_SECRET_KEY,
+        'response': token
+    }
+    if ip:
+        data['remoteip'] = ip
+    
+    try:
+        resp = requests.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', data=data, timeout=5)
+        result = resp.json()
+        return result.get('success', False)
+    except:
+        return False
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
@@ -105,6 +184,7 @@ def init_db():
             seats_entitled INTEGER DEFAULT 5,
             seats_in_use INTEGER DEFAULT 0,
             enabled INTEGER DEFAULT 1,
+            active_until TEXT,
             last_sync TEXT,
             created_at TEXT DEFAULT (datetime('now'))
         );
@@ -113,12 +193,28 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             code TEXT UNIQUE NOT NULL,
             team_account_id INTEGER REFERENCES team_accounts(id),
+            user_id INTEGER,
             used INTEGER DEFAULT 0,
             used_email TEXT,
             created_at TEXT DEFAULT (datetime('now')),
             used_at TEXT
         );
+        
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY,
+            username TEXT NOT NULL,
+            name TEXT,
+            avatar_template TEXT,
+            trust_level INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            updated_at TEXT DEFAULT (datetime('now'))
+        );
     ''')
+    # 添加 active_until 列（如果不存在）
+    try:
+        conn.execute('ALTER TABLE team_accounts ADD COLUMN active_until TEXT')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     conn.commit()
     conn.close()
 
@@ -143,6 +239,119 @@ def index():
 def admin_page():
     return send_from_directory('static', 'admin.html')
 
+# ========== OAuth API ==========
+
+@app.route('/api/oauth/login')
+def oauth_login():
+    """发起 LinuxDO OAuth 登录"""
+    if not LINUXDO_CLIENT_ID:
+        return jsonify({'error': 'OAuth 未配置'}), 500
+    
+    state = secrets.token_urlsafe(32)
+    oauth_states[state] = time.time() + 600  # 10分钟过期
+    
+    params = {
+        'client_id': LINUXDO_CLIENT_ID,
+        'redirect_uri': LINUXDO_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': 'read',
+        'state': state
+    }
+    auth_url = f"{LINUXDO_AUTHORIZE_URL}?{urlencode(params)}"
+    return jsonify({'authUrl': auth_url, 'state': state})
+
+@app.route('/api/oauth/callback')
+def oauth_callback():
+    """OAuth 回调"""
+    code = request.args.get('code')
+    state = request.args.get('state')
+    
+    if not code or not state:
+        return redirect(f'{APP_BASE_URL}?error=missing_params')
+    
+    # 验证 state
+    expiry = oauth_states.pop(state, None)
+    if not expiry or time.time() > expiry:
+        return redirect(f'{APP_BASE_URL}?error=invalid_state')
+    
+    # 交换 token
+    try:
+        token_resp = requests.post(LINUXDO_TOKEN_URL, data={
+            'client_id': LINUXDO_CLIENT_ID,
+            'client_secret': LINUXDO_CLIENT_SECRET,
+            'redirect_uri': LINUXDO_REDIRECT_URI,
+            'grant_type': 'authorization_code',
+            'code': code
+        }, timeout=10)
+        token_resp.raise_for_status()
+        token_data = token_resp.json()
+        access_token = token_data.get('access_token')
+    except Exception as e:
+        print(f"Token exchange failed: {e}")
+        return redirect(f'{APP_BASE_URL}?error=token_failed')
+    
+    # 获取用户信息
+    try:
+        user_resp = requests.get(LINUXDO_USERINFO_URL, headers={
+            'Authorization': f'Bearer {access_token}'
+        }, timeout=10)
+        user_resp.raise_for_status()
+        user_data = user_resp.json()
+    except Exception as e:
+        print(f"User info fetch failed: {e}")
+        return redirect(f'{APP_BASE_URL}?error=userinfo_failed')
+    
+    # 保存/更新用户
+    user_id = user_data.get('id')
+    username = user_data.get('username', '')
+    name = user_data.get('name', '')
+    avatar_template = user_data.get('avatar_template', '')
+    trust_level = user_data.get('trust_level', 0)
+    
+    conn = get_db()
+    existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+    if existing:
+        conn.execute('''
+            UPDATE users SET username = ?, name = ?, avatar_template = ?, trust_level = ?, updated_at = datetime('now')
+            WHERE id = ?
+        ''', (username, name, avatar_template, trust_level, user_id))
+    else:
+        conn.execute('''
+            INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, username, name, avatar_template, trust_level))
+    conn.commit()
+    conn.close()
+    
+    # 生成 JWT
+    jwt_token = create_jwt_token(user_id, username)
+    return redirect(f'{APP_BASE_URL}?token={jwt_token}')
+
+@app.route('/api/user/state')
+@jwt_required
+def user_state():
+    """获取当前用户状态"""
+    user_id = request.user['user_id']
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    
+    if not user:
+        return jsonify({'error': '用户不存在'}), 404
+    
+    return jsonify({
+        'user': {
+            'id': user['id'],
+            'username': user['username'],
+            'name': user['name'],
+            'trustLevel': user['trust_level']
+        }
+    })
+
+@app.route('/api/turnstile/site-key')
+def turnstile_site_key():
+    """获取 Turnstile site key"""
+    return jsonify({'siteKey': CF_TURNSTILE_SITE_KEY})
+
 # ========== 公开 API ==========
 
 @app.route('/api/health')
@@ -154,7 +363,7 @@ def team_accounts_status():
     """获取所有车位状态（公开）- 使用缓存数据，不实时请求API"""
     conn = get_db()
     accounts = conn.execute('''
-        SELECT id, name, max_seats, seats_entitled, seats_in_use, enabled, last_sync, created_at
+        SELECT id, name, max_seats, seats_entitled, seats_in_use, enabled, active_until, last_sync, created_at
         FROM team_accounts WHERE enabled = 1
         ORDER BY id ASC
     ''').fetchall()
@@ -175,6 +384,7 @@ def team_accounts_status():
             'seatsInUse': acc['seats_in_use'],
             'pendingInvites': local_pending,
             'seatsEntitled': acc['seats_entitled'],
+            'activeUntil': acc['active_until'],
             'lastSync': acc['last_sync'],
             'createdAt': acc['created_at']
         })
@@ -206,17 +416,28 @@ def check_invite():
     })
 
 @app.route('/api/invite/use', methods=['POST'])
+@jwt_required
 def use_invite():
-    """使用邀请码 - 发送真实的 ChatGPT Team 邀请"""
+    """使用邀请码 - 发送真实的 ChatGPT Team 邀请（需要登录）"""
     data = request.json or {}
     code = (data.get('code') or '').strip().upper()
     email = (data.get('email') or '').strip().lower()
     team_account_id = data.get('teamAccountId')
+    turnstile_token = (data.get('turnstileToken') or '').strip()
+    
+    user_id = request.user['user_id']
     
     if not code:
         return jsonify({'error': '请输入邀请码'}), 400
     if not email or '@' not in email:
         return jsonify({'error': '请输入有效邮箱'}), 400
+    
+    # 验证 Turnstile
+    if CF_TURNSTILE_SECRET_KEY:
+        if not turnstile_token:
+            return jsonify({'error': '请完成人机验证'}), 400
+        if not verify_turnstile(turnstile_token, request.remote_addr):
+            return jsonify({'error': '人机验证失败'}), 400
     
     conn = get_db()
     row = conn.execute('SELECT * FROM invite_codes WHERE code = ?', (code,)).fetchone()
@@ -256,9 +477,9 @@ def use_invite():
         # 邀请发送成功，标记邀请码已使用
         conn.execute('''
             UPDATE invite_codes 
-            SET used = 1, used_email = ?, used_at = datetime('now'), team_account_id = ?
+            SET used = 1, used_email = ?, used_at = datetime('now'), team_account_id = ?, user_id = ?
             WHERE code = ?
-        ''', (email, final_team_id, code))
+        ''', (email, final_team_id, user_id, code))
         conn.commit()
         conn.close()
         
@@ -298,7 +519,7 @@ def stats():
 def list_team_accounts():
     conn = get_db()
     accounts = conn.execute('''
-        SELECT id, name, authorization_token, account_id, max_seats, seats_entitled, seats_in_use, enabled, last_sync, created_at
+        SELECT id, name, authorization_token, account_id, max_seats, seats_entitled, seats_in_use, enabled, active_until, last_sync, created_at
         FROM team_accounts ORDER BY id ASC
     ''').fetchall()
     
@@ -319,6 +540,7 @@ def list_team_accounts():
             'seatsInUse': acc['seats_in_use'],
             'pendingInvites': pending,
             'seatsEntitled': acc['seats_entitled'],
+            'activeUntil': acc['active_until'],
             'lastSync': acc['last_sync'],
             'createdAt': acc['created_at']
         })
@@ -334,14 +556,15 @@ def create_team_account():
     authorization_token = (data.get('authorizationToken') or '').strip()
     account_id = (data.get('accountId') or '').strip()
     max_seats = int(data.get('maxSeats', 5))
+    active_until = (data.get('activeUntil') or '').strip() or None
     
     if not name:
         return jsonify({'error': '请输入车位名称'}), 400
     
     conn = get_db()
     cursor = conn.execute(
-        'INSERT INTO team_accounts (name, authorization_token, account_id, max_seats, seats_entitled) VALUES (?, ?, ?, ?, ?)',
-        (name, authorization_token, account_id, max_seats, max_seats)
+        'INSERT INTO team_accounts (name, authorization_token, account_id, max_seats, seats_entitled, active_until) VALUES (?, ?, ?, ?, ?, ?)',
+        (name, authorization_token, account_id, max_seats, max_seats, active_until)
     )
     new_id = cursor.lastrowid
     conn.commit()
@@ -358,12 +581,13 @@ def update_team_account(account_id):
     acc_id = (data.get('accountId') or '').strip()
     max_seats = int(data.get('maxSeats', 5))
     enabled = 1 if data.get('enabled', True) else 0
+    active_until = (data.get('activeUntil') or '').strip() or None
     
     conn = get_db()
     conn.execute('''
-        UPDATE team_accounts SET name = ?, authorization_token = ?, account_id = ?, max_seats = ?, enabled = ?
+        UPDATE team_accounts SET name = ?, authorization_token = ?, account_id = ?, max_seats = ?, enabled = ?, active_until = ?
         WHERE id = ?
-    ''', (name, authorization_token, acc_id, max_seats, enabled, account_id))
+    ''', (name, authorization_token, acc_id, max_seats, enabled, active_until, account_id))
     conn.commit()
     conn.close()
     
