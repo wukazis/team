@@ -637,9 +637,9 @@ def sync_team_account(account_id):
         data = fetch_team_status(acc['account_id'], acc['authorization_token'])
         
         conn.execute('''
-            UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, last_sync = datetime('now')
+            UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
             WHERE id = ?
-        ''', (data['seats_in_use'], data['seats_entitled'], account_id))
+        ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), account_id))
         conn.commit()
         conn.close()
         
@@ -647,7 +647,8 @@ def sync_team_account(account_id):
             'status': 'ok',
             'seatsInUse': data['seats_in_use'],
             'seatsEntitled': data['seats_entitled'],
-            'pendingInvites': data['pending_invites']
+            'pendingInvites': data.get('pending_invites', 0),
+            'activeUntil': data.get('active_until')
         })
     except requests.HTTPError as e:
         conn.close()
@@ -673,15 +674,16 @@ def sync_all_team_accounts():
             data = fetch_team_status(acc['account_id'], acc['authorization_token'])
             
             conn.execute('''
-                UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, last_sync = datetime('now')
+                UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
                 WHERE id = ?
-            ''', (data['seats_in_use'], data['seats_entitled'], acc['id']))
+            ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), acc['id']))
             
             results.append({
                 'id': acc['id'], 
                 'name': acc['name'], 
                 'seatsInUse': data['seats_in_use'],
-                'seatsEntitled': data['seats_entitled']
+                'seatsEntitled': data['seats_entitled'],
+                'activeUntil': data.get('active_until')
             })
         except Exception as e:
             results.append({'id': acc['id'], 'name': acc['name'], 'error': str(e)})
@@ -783,9 +785,9 @@ def background_sync():
                 try:
                     data = fetch_team_status(acc['account_id'], acc['authorization_token'])
                     conn.execute('''
-                        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, last_sync = datetime('now')
+                        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
                         WHERE id = ?
-                    ''', (data['seats_in_use'], data['seats_entitled'], acc['id']))
+                    ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), acc['id']))
                 except Exception as e:
                     print(f"[同步失败] {acc['name']}: {e}")
             
