@@ -376,26 +376,20 @@ def team_accounts_status():
     """获取所有车位状态（公开）- 使用缓存数据，不实时请求API"""
     conn = get_db()
     accounts = conn.execute('''
-        SELECT id, name, max_seats, seats_entitled, seats_in_use, enabled, active_until, last_sync, created_at
+        SELECT id, name, max_seats, seats_entitled, seats_in_use, pending_invites, enabled, active_until, last_sync, created_at
         FROM team_accounts WHERE enabled = 1
         ORDER BY id ASC
     ''').fetchall()
     
     result = []
     for acc in accounts:
-        # 本地邀请码统计（未使用的）
-        local_pending = conn.execute('''
-            SELECT COUNT(*) FROM invite_codes 
-            WHERE team_account_id = ? AND used = 0
-        ''', (acc['id'],)).fetchone()[0]
-        
         result.append({
             'id': acc['id'],
             'name': acc['name'],
             'maxSeats': acc['max_seats'],
             'enabled': bool(acc['enabled']),
             'seatsInUse': acc['seats_in_use'],
-            'pendingInvites': local_pending,
+            'pendingInvites': acc['pending_invites'] or 0,
             'seatsEntitled': acc['seats_entitled'],
             'activeUntil': acc['active_until'],
             'lastSync': acc['last_sync'],
