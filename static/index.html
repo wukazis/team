@@ -58,7 +58,7 @@
             font-size: 0.9rem;
         }
         .page {
-            width: min(600px, 94%);
+            width: min(480px, 94%);
             margin: 1.5rem auto;
             padding-bottom: 3rem;
             display: flex;
@@ -408,7 +408,7 @@
             ui.innerHTML = `<span>${currentUser.username}</span><a href="#" onclick="logout();return false" class="navbar-link">退出</a>`;
             ui.classList.remove('hidden');
             if (turnstileSiteKey && window.turnstile) {
-                turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey });
+                turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light' });
             }
         }
 
