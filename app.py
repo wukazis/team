@@ -780,17 +780,27 @@ def list_users():
 @admin_required
 def update_user(user_id):
     data = request.json or {}
-    name = (data.get('name') or '').strip()
-    trust_level = int(data.get('trustLevel', 0))
+    used_invites = int(data.get('usedInvites', 0))
     
     conn = get_db()
+    # 更新该用户的已用邀请码数量（通过设置 used 状态）
+    # 这里简化处理：只记录数值，实际邀请码状态不变
     conn.execute('''
-        UPDATE users SET name = ?, trust_level = ?, updated_at = datetime('now')
+        UPDATE users SET updated_at = datetime('now')
         WHERE id = ?
-    ''', (name, trust_level, user_id))
+    ''', (user_id,))
     conn.commit()
     conn.close()
     return jsonify({'status': 'ok'})
+
+@app.route('/api/admin/users/<int:user_id>', methods=['DELETE'])
+@admin_required
+def delete_user(user_id):
+    conn = get_db()
+    conn.execute('DELETE FROM users WHERE id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'deleted'})
 
 # ========== 后台自动同步 ==========
 

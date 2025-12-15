@@ -644,7 +644,10 @@
                     <td>${u.used_invites || 0}</td>
                     <td class="text-muted">${formatTime(u.created_at)}</td>
                     <td class="text-muted">${formatTime(u.updated_at)}</td>
-                    <td><button class="btn btn-ghost btn-sm" onclick="editUser(${u.id})">编辑</button></td>
+                    <td>
+                        <button class="btn btn-ghost btn-sm" onclick="editUser(${u.id})">编辑</button>
+                        <button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">删除</button>
+                    </td>
                 </tr>
             `).join('');
         }
@@ -655,12 +658,10 @@
             const form = document.getElementById('userForm');
             form.classList.remove('hidden');
             form.innerHTML = `
-                <h3>编辑用户</h3>
+                <h3>编辑用户 - ${u.username}</h3>
                 <input type="hidden" id="userId" value="${u.id}">
                 <div class="form-row">
-                    <label><span>用户名</span><input type="text" id="userUsername" value="${u.username}" readonly></label>
-                    <label><span>名称</span><input type="text" id="userName" value="${u.name || ''}"></label>
-                    <label><span>信任等级</span><input type="number" id="userTrustLevel" value="${u.trust_level}" min="0" max="4"></label>
+                    <label><span>已用邀请数</span><input type="number" id="userUsedInvites" value="${u.used_invites || 0}" min="0"></label>
                 </div>
                 <div class="form-actions">
                     <button class="btn btn-ghost" onclick="hideUserForm()">取消</button>
@@ -675,18 +676,27 @@
 
         async function saveUser() {
             const id = document.getElementById('userId').value;
-            const name = document.getElementById('userName').value.trim();
-            const trustLevel = parseInt(document.getElementById('userTrustLevel').value) || 0;
+            const usedInvites = parseInt(document.getElementById('userUsedInvites').value) || 0;
             
             const res = await api(`/admin/users/${id}`, {
                 method: 'PUT',
-                body: JSON.stringify({ name, trustLevel })
+                body: JSON.stringify({ usedInvites })
             });
             if (!res.ok) {
                 alert(res.data?.error || '保存失败');
                 return;
             }
             hideUserForm();
+            loadUsers();
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('确定删除此用户？')) return;
+            const res = await api(`/admin/users/${id}`, { method: 'DELETE' });
+            if (!res.ok) {
+                alert(res.data?.error || '删除失败');
+                return;
+            }
             loadUsers();
         }
 
