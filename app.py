@@ -8,6 +8,8 @@
 import os
 import sqlite3
 import secrets
+import threading
+import time
 from datetime import datetime
 from functools import wraps
 from flask import Flask, request, jsonify, send_from_directory, session
@@ -15,6 +17,9 @@ from dotenv import load_dotenv
 import requests
 
 load_dotenv()
+
+# 同步间隔（秒）
+SYNC_INTERVAL = int(os.environ.get('SYNC_INTERVAL', 30))
 
 # 获取当前脚本所在目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -511,12 +516,46 @@ def delete_code(code_id):
     conn.close()
     return jsonify({'status': 'deleted'})
 
+# ========== 后台自动同步 ==========
+
+def background_sync():
+    """后台线程：定时同步所有车账号状态"""
+    while True:
+        time.sleep(SYNC_INTERVAL)
+        try:
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            accounts = conn.execute(
+                'SELECT * FROM team_accounts WHERE enabled = 1 AND authorization_token IS NOT NULL AND account_id IS NOT NULL'
+            ).fetchall()
+            
+            for acc in accounts:
+                try:
+                    data = fetch_team_status(acc['account_id'], acc['authorization_token'])
+                    conn.execute('''
+                        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, last_sync = datetime('now')
+                        WHERE id = ?
+                    ''', (data['seats_in_use'], data['seats_entitled'], acc['id']))
+                except Exception as e:
+                    print(f"[同步失败] {acc['name']}: {e}")
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"[后台同步错误] {e}")
+
 if __name__ == '__main__':
     init_db()
+    
+    # 启动后台同步线程
+    sync_thread = threading.Thread(target=background_sync, daemon=True)
+    sync_thread.start()
+    print(f"✅ 后台同步已启动，每 {SYNC_INTERVAL} 秒更新一次")
+    
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
     print(f"启动服务: http://localhost:{port}")
     print(f"管理后台: http://localhost:{port}/admin")
     if ADMIN_PASSWORD == 'admin123':
         print(f"⚠️  使用默认管理密码，请在 .env 中设置 ADMIN_PASSWORD")
-    app.run(host='0.0.0.0', port=port, debug=debug)
+    app.run(host='0.0.0.0', port=port, debug=debug, use_reloader=False)
