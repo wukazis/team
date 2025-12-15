@@ -61,6 +61,18 @@ def build_chatgpt_headers(account_id: str, auth_token: str) -> dict:
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
     }
 
+def sync_single_account(db_account_id: int, auth_token: str, chatgpt_account_id: str):
+    """同步单个车账号状态到数据库"""
+    data = fetch_team_status(chatgpt_account_id, auth_token)
+    conn = get_db()
+    conn.execute('''
+        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, last_sync = datetime('now')
+        WHERE id = ?
+    ''', (data['seats_in_use'], data['seats_entitled'], data['pending_invites'], db_account_id))
+    conn.commit()
+    conn.close()
+    return data
+
 def fetch_team_status(account_id: str, auth_token: str) -> dict:
     """获取 ChatGPT Team 状态"""
     headers = build_chatgpt_headers(account_id, auth_token)
@@ -483,6 +495,12 @@ def use_invite():
         conn.commit()
         conn.close()
         
+        # 同步车位状态
+        try:
+            sync_single_account(final_team_id, account['authorization_token'], account['account_id'])
+        except:
+            pass
+        
         return jsonify({'status': 'ok', 'message': '邀请已发送，请查收邮件'})
     except Exception as e:
         conn.close()
@@ -569,6 +587,13 @@ def create_team_account():
     new_id = cursor.lastrowid
     conn.commit()
     conn.close()
+    
+    # 如果有 token 和 account_id，自动同步一次状态
+    if authorization_token and account_id:
+        try:
+            sync_single_account(new_id, authorization_token, account_id)
+        except:
+            pass  # 同步失败不影响创建
     
     return jsonify({'id': new_id, 'name': name, 'maxSeats': max_seats})
 

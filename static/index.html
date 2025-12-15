@@ -439,6 +439,7 @@
                     <span class="team-name">${a.name}</span>
                     <div class="team-info">
                         <span class="team-stat">${a.seatsInUse}/${a.seatsEntitled} 已用</span>
+                        ${a.pendingInvites?`<span class="team-stat">${a.pendingInvites} 待处理</span>`:''}
                         <span class="team-stat ${full?'full':'available'}">${avail} 剩余</span>
                         ${exp?`<span class="team-stat">${exp}</span>`:''}
                     </div>
@@ -513,7 +514,7 @@
 
         function hideLoading() { const o = document.getElementById('loadingOverlay'); o.classList.add('fade-out'); setTimeout(() => o.remove(), 300); }
         init().then(hideLoading).catch(hideLoading);
-        setInterval(loadTeamAccounts, 5000);
+        setInterval(loadTeamAccounts, 60000);
     </script>
 </body>
 </html>
