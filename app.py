@@ -588,17 +588,12 @@ def stats():
 def list_team_accounts():
     conn = get_db()
     accounts = conn.execute('''
-        SELECT id, name, authorization_token, account_id, max_seats, seats_entitled, seats_in_use, enabled, active_until, last_sync, created_at
+        SELECT id, name, authorization_token, account_id, max_seats, seats_entitled, seats_in_use, pending_invites, enabled, active_until, last_sync, created_at
         FROM team_accounts ORDER BY id ASC
     ''').fetchall()
     
     result = []
     for acc in accounts:
-        pending = conn.execute('''
-            SELECT COUNT(*) FROM invite_codes 
-            WHERE team_account_id = ? AND used = 0
-        ''', (acc['id'],)).fetchone()[0]
-        
         result.append({
             'id': acc['id'],
             'name': acc['name'],
@@ -607,7 +602,7 @@ def list_team_accounts():
             'maxSeats': acc['max_seats'],
             'enabled': bool(acc['enabled']),
             'seatsInUse': acc['seats_in_use'],
-            'pendingInvites': pending,
+            'pendingInvites': acc['pending_invites'] or 0,
             'seatsEntitled': acc['seats_entitled'],
             'activeUntil': acc['active_until'],
             'lastSync': acc['last_sync'],
