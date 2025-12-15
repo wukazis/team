@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
-"""
-简化版邀请码系统 - 支持多车账号 + LinuxDO OAuth + CF Turnstile
-运行: python app.py
-访问: http://localhost:5000
-"""
 
 import os
 import sqlite3
 import secrets
 import threading
 import time
+import hmac
+import struct
+import hashlib
+import base64
 import jwt
 from datetime import datetime, timedelta
 from functools import wraps
@@ -510,15 +509,58 @@ def use_invite():
         conn.close()
         return jsonify({'error': f'发送邀请失败: {str(e)}'}), 500
 
+# ========== TOTP 验证 ==========
+
+def verify_totp(secret: str, code: str, window: int = 1) -> bool:
+    """验证 TOTP 验证码"""
+    if not secret or not code:
+        return False
+    try:
+        # 解码 base32 密钥
+        key = base64.b32decode(secret.upper().replace(' ', ''), casefold=True)
+        # 当前时间步
+        counter = int(time.time()) // 30
+        # 检查时间窗口内的验证码
+        for i in range(-window, window + 1):
+            # 生成 HMAC-SHA1
+            msg = struct.pack('>Q', counter + i)
+            h = hmac.new(key, msg, hashlib.sha1).digest()
+            # 动态截断
+            offset = h[-1] & 0x0F
+            truncated = struct.unpack('>I', h[offset:offset + 4])[0] & 0x7FFFFFFF
+            otp = str(truncated % 1000000).zfill(6)
+            if hmac.compare_digest(otp, code):
+                return True
+        return False
+    except Exception:
+        return False
+
 # ========== 管理员 API ==========
+
+@app.route('/api/admin/totp-required')
+def admin_totp_required():
+    """检查是否需要 TOTP"""
+    return jsonify({'required': bool(ADMIN_TOTP_SECRET)})
 
 @app.route('/api/admin/login', methods=['POST'])
 def admin_login():
     data = request.json or {}
-    if data.get('password') == ADMIN_PASSWORD:
-        session['is_admin'] = True
-        return jsonify({'status': 'ok'})
-    return jsonify({'error': '密码错误'}), 401
+    password = data.get('password', '')
+    totp_code = data.get('totpCode', '')
+    
+    # 验证密码
+    if password != ADMIN_PASSWORD:
+        return jsonify({'error': '密码错误'}), 401
+    
+    # 如果配置了 TOTP，验证验证码
+    if ADMIN_TOTP_SECRET:
+        if not totp_code:
+            return jsonify({'error': '请输入验证码'}), 401
+        if not verify_totp(ADMIN_TOTP_SECRET, totp_code):
+            return jsonify({'error': '验证码错误'}), 401
+    
+    session['is_admin'] = True
+    return jsonify({'status': 'ok'})
 
 @app.route('/api/admin/logout', methods=['POST'])
 def admin_logout():
