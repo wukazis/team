@@ -408,7 +408,7 @@
             ui.innerHTML = `<span>${currentUser.username}</span><a href="#" onclick="logout();return false" class="navbar-link">退出</a>`;
             ui.classList.remove('hidden');
             if (turnstileSiteKey && window.turnstile) {
-                turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light' });
+                turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light', size: 'flexible' });
             }
         }
 
