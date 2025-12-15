@@ -66,9 +66,9 @@ def sync_single_account(db_account_id: int, auth_token: str, chatgpt_account_id:
     data = fetch_team_status(chatgpt_account_id, auth_token)
     conn = get_db()
     conn.execute('''
-        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, last_sync = datetime('now')
+        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
         WHERE id = ?
-    ''', (data['seats_in_use'], data['seats_entitled'], data['pending_invites'], db_account_id))
+    ''', (data['seats_in_use'], data['seats_entitled'], data['pending_invites'], data.get('active_until'), db_account_id))
     conn.commit()
     conn.close()
     return data
@@ -95,6 +95,7 @@ def fetch_team_status(account_id: str, auth_token: str) -> dict:
         "pending_invites": invites_data.get("total", 0),
         "plan_type": subs_data.get("plan_type"),
         "will_renew": subs_data.get("will_renew"),
+        "active_until": subs_data.get("active_until"),
     }
 
 def send_team_invite(account_id: str, auth_token: str, email: str) -> dict:
