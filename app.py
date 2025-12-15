@@ -584,12 +584,10 @@ def create_team_account():
     conn.commit()
     conn.close()
     
-    # 如果有 token 和 account_id，自动同步一次状态
+    # 如果有 token 和 account_id，异步同步一次状态
     if authorization_token and account_id:
-        try:
-            sync_single_account(new_id, authorization_token, account_id)
-        except:
-            pass  # 同步失败不影响创建
+        import threading
+        threading.Thread(target=lambda: sync_single_account(new_id, authorization_token, account_id), daemon=True).start()
     
     return jsonify({'id': new_id, 'name': name, 'maxSeats': max_seats})
 
