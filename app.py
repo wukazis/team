@@ -233,6 +233,11 @@ def init_db():
         conn.execute('ALTER TABLE users ADD COLUMN has_used INTEGER DEFAULT 0')
     except sqlite3.OperationalError:
         pass  # 列已存在
+    # 添加 pending_invites 列（如果不存在）
+    try:
+        conn.execute('ALTER TABLE team_accounts ADD COLUMN pending_invites INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     conn.commit()
     conn.close()
 
