@@ -323,7 +323,7 @@
             <div id="usersSection" class="section">
                 <div class="table-container">
                     <div class="table-header">
-                        <span class="title">用户列表</span>
+                        <span class="title">用户列表 <span class="text-muted" style="font-weight: normal; font-size: 0.85rem;">(<span id="userTotalCount">0</span> 人)</span></span>
                         <div class="table-actions">
                             <button class="btn btn-danger" onclick="clearAllUsers()">删除所有</button>
                             <button class="btn btn-ghost" onclick="loadUsers()">刷新</button>
@@ -897,9 +897,11 @@
             
             if (!ok || !data.users || data.users.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无用户</td></tr>';
+                document.getElementById('userTotalCount').textContent = '0';
                 return;
             }
             users = data.users;
+            document.getElementById('userTotalCount').textContent = users.length;
             tbody.innerHTML = users.map(u => `
                 <tr>
                     <td>${u.id}</td>
