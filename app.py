@@ -663,19 +663,28 @@ def waiting_list():
     """获取排队队列列表（需要登录）"""
     conn = get_db()
     rows = conn.execute('''
-        SELECT wq.id, wq.user_id, wq.created_at, u.username
+        SELECT wq.id, wq.user_id, wq.created_at, wq.notified, wq.notified_at, u.username
         FROM waiting_queue wq
         LEFT JOIN users u ON wq.user_id = u.id
-        WHERE wq.notified = 0
-        ORDER BY wq.created_at ASC
+        ORDER BY wq.notified ASC, wq.created_at ASC
     ''').fetchall()
     conn.close()
     
     result = []
-    for i, row in enumerate(rows):
+    position = 0
+    for row in rows:
+        # 只有未通知的用户才有排队位置
+        if row['notified'] == 0:
+            position += 1
+            pos = position
+        else:
+            pos = None  # 已通知的用户不显示位置
+        
         result.append({
-            'position': i + 1,
-            'username': row['username'] or '未知用户'
+            'position': pos,
+            'username': row['username'] or '未知用户',
+            'notified': row['notified'],
+            'notifiedAt': row['notified_at']
         })
     
     return jsonify({'queue': result})
