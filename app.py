@@ -46,6 +46,10 @@ TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 # 发车模式：auto=自动发车, manual=手动确认发车
 DISPATCH_MODE = os.environ.get('DISPATCH_MODE', 'auto')  # 默认自动模式
 
+# 候车室设置
+WAITING_ROOM_ENABLED = True  # 候车室是否开放
+WAITING_ROOM_MAX_QUEUE = 0   # 排队人数上限，0表示不限制
+
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_EXPIRY_HOURS = 24
@@ -580,11 +584,22 @@ def join_waiting_queue():
     email = (data.get('email') or '').strip().lower()
     user_id = request.user['user_id']
     
+    # 检查候车室是否开放
+    if not WAITING_ROOM_ENABLED:
+        return jsonify({'error': '候车室已关闭，暂不接受排队'}), 403
+    
     # 邮箱必填验证
     if not email or '@' not in email:
         return jsonify({'error': '请输入有效的邮箱地址'}), 400
     
     conn = get_db()
+    
+    # 检查排队人数上限
+    if WAITING_ROOM_MAX_QUEUE > 0:
+        queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue').fetchone()[0]
+        if queue_count >= WAITING_ROOM_MAX_QUEUE:
+            conn.close()
+            return jsonify({'error': f'排队人数已达上限（{WAITING_ROOM_MAX_QUEUE}人），请稍后再试'}), 403
     
     # 检查用户状态
     user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
@@ -1509,6 +1524,39 @@ def set_dispatch_mode():
         return jsonify({'error': '无效的模式'}), 400
     DISPATCH_MODE = mode
     return jsonify({'status': 'ok', 'mode': DISPATCH_MODE})
+
+# ========== 候车室设置 API ==========
+
+@app.route('/api/admin/waiting-room-settings', methods=['GET'])
+@admin_required
+def get_waiting_room_settings():
+    """获取候车室设置"""
+    conn = get_db()
+    queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue').fetchone()[0]
+    conn.close()
+    return jsonify({
+        'enabled': WAITING_ROOM_ENABLED,
+        'maxQueue': WAITING_ROOM_MAX_QUEUE,
+        'currentQueue': queue_count
+    })
+
+@app.route('/api/admin/waiting-room-settings', methods=['POST'])
+@admin_required
+def set_waiting_room_settings():
+    """设置候车室"""
+    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE
+    data = request.json or {}
+    
+    if 'enabled' in data:
+        WAITING_ROOM_ENABLED = bool(data['enabled'])
+    if 'maxQueue' in data:
+        WAITING_ROOM_MAX_QUEUE = max(0, int(data['maxQueue']))
+    
+    return jsonify({
+        'status': 'ok',
+        'enabled': WAITING_ROOM_ENABLED,
+        'maxQueue': WAITING_ROOM_MAX_QUEUE
+    })
 
 # ========== 后台自动同步 ==========
 
