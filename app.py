@@ -1301,40 +1301,115 @@ def list_cooldown_users():
 
 # ========== 后台自动同步 ==========
 
-def background_sync():
-    """后台线程：定时同步所有车账号状态"""
-    while True:
-        time.sleep(SYNC_INTERVAL)
+# 邀请码有效期（秒）
+INVITE_CODE_EXPIRE = int(os.environ.get('INVITE_CODE_EXPIRE', 1800))  # 默认30分钟
+# 轮询等待时间（秒）
+POLL_WAIT_TIME = int(os.environ.get('POLL_WAIT_TIME', 60))  # 默认1分钟
+
+def sync_team_accounts():
+    """同步所有车账号状态，返回总空位数"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    accounts = conn.execute(
+        'SELECT * FROM team_accounts WHERE enabled = 1 AND authorization_token IS NOT NULL AND account_id IS NOT NULL'
+    ).fetchall()
+    
+    total_available = 0
+    for acc in accounts:
         try:
-            conn = sqlite3.connect(DB_PATH)
-            conn.row_factory = sqlite3.Row
-            accounts = conn.execute(
-                'SELECT * FROM team_accounts WHERE enabled = 1 AND authorization_token IS NOT NULL AND account_id IS NOT NULL'
-            ).fetchall()
+            data = fetch_team_status(acc['account_id'], acc['authorization_token'])
+            conn.execute('''
+                UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
+                WHERE id = ?
+            ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), acc['id']))
+            available = data['seats_entitled'] - data['seats_in_use'] - data.get('pending_invites', 0)
+            if available > 0:
+                total_available += available
+        except Exception as e:
+            print(f"[同步失败] {acc['name']}: {e}")
+    
+    conn.commit()
+    conn.close()
+    return total_available
+
+def get_pending_invite_codes_count():
+    """获取已发出但未使用的邀请码数量"""
+    conn = sqlite3.connect(DB_PATH)
+    count = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0').fetchone()[0]
+    conn.close()
+    return count
+
+def cleanup_expired_invite_codes():
+    """清理过期的邀请码（超过有效期未使用的）"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    
+    # 查找过期的邀请码（创建时间超过有效期且未使用）
+    expired = conn.execute(f'''
+        SELECT ic.*, wq.id as queue_id FROM invite_codes ic
+        LEFT JOIN waiting_queue wq ON ic.user_id = wq.user_id
+        WHERE ic.used = 0 AND datetime(ic.created_at, '+{INVITE_CODE_EXPIRE} seconds') < datetime('now')
+    ''').fetchall()
+    
+    if expired:
+        print(f"[清理] 发现 {len(expired)} 个过期邀请码")
+        for code in expired:
+            # 删除邀请码
+            conn.execute('DELETE FROM invite_codes WHERE id = ?', (code['id'],))
+            # 重置用户的 notified 状态，让他们可以重新收到邀请码
+            if code['user_id']:
+                conn.execute('UPDATE waiting_queue SET notified = 0, notified_at = NULL WHERE user_id = ?', (code['user_id'],))
+            print(f"[清理] 已删除过期邀请码 {code['code']}")
+        conn.commit()
+    
+    conn.close()
+    return len(expired) if expired else 0
+
+def background_sync():
+    """后台线程：智能轮询发码"""
+    last_batch_time = None  # 上一批邀请码发送时间
+    
+    while True:
+        try:
+            # 1. 同步车位状态
+            total_available = sync_team_accounts()
             
-            total_available = 0
-            for acc in accounts:
-                try:
-                    data = fetch_team_status(acc['account_id'], acc['authorization_token'])
-                    conn.execute('''
-                        UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
-                        WHERE id = ?
-                    ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), acc['id']))
-                    # 计算可用空位
-                    available = data['seats_entitled'] - data['seats_in_use'] - data.get('pending_invites', 0)
-                    if available > 0:
-                        total_available += available
-                except Exception as e:
-                    print(f"[同步失败] {acc['name']}: {e}")
+            # 2. 检查是否有未使用的邀请码
+            pending_codes = get_pending_invite_codes_count()
             
-            conn.commit()
-            conn.close()
+            if pending_codes > 0:
+                # 有未使用的邀请码，检查是否过期
+                expired_count = cleanup_expired_invite_codes()
+                
+                if expired_count == 0:
+                    # 没有过期的，继续等待
+                    print(f"[轮询] 等待 {pending_codes} 个邀请码被使用...")
+                    time.sleep(SYNC_INTERVAL)
+                    continue
+                else:
+                    # 有过期的被清理了，等待1分钟后继续
+                    print(f"[轮询] 已清理 {expired_count} 个过期邀请码，等待 {POLL_WAIT_TIME} 秒后继续")
+                    time.sleep(POLL_WAIT_TIME)
+                    continue
             
-            # 有空位时通知排队用户
+            # 3. 没有未使用的邀请码，检查是否需要发新的
             if total_available > 0:
+                # 如果刚发完一批，等待1分钟
+                if last_batch_time and (time.time() - last_batch_time) < POLL_WAIT_TIME:
+                    wait_time = POLL_WAIT_TIME - (time.time() - last_batch_time)
+                    print(f"[轮询] 上批邀请码已用完，等待 {int(wait_time)} 秒后发送下一批")
+                    time.sleep(wait_time)
+                    continue
+                
+                # 发送新一批邀请码
                 notify_waiting_users(total_available)
+                last_batch_time = time.time()
+            
+            time.sleep(SYNC_INTERVAL)
+            
         except Exception as e:
             print(f"[后台同步错误] {e}")
+            time.sleep(SYNC_INTERVAL)
 
 if __name__ == '__main__':
     init_db()
