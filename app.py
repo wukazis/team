@@ -433,6 +433,50 @@ def user_state():
         }
     })
 
+@app.route('/api/user/cooldown')
+@jwt_required
+def user_cooldown():
+    """检测当前用户冷却状态"""
+    user_id = request.user['user_id']
+    conn = get_db()
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    
+    if not user:
+        conn.close()
+        return jsonify({'inCooldown': False})
+    
+    # 检查是否已使用过邀请（28天冷却期）
+    if user['has_used']:
+        from datetime import datetime
+        now = datetime.utcnow()
+        
+        # 查找最后使用邀请码的时间
+        last_used = conn.execute('''
+            SELECT used_at FROM invite_codes WHERE user_id = ? ORDER BY used_at DESC LIMIT 1
+        ''', (user_id,)).fetchone()
+        
+        cooldown_start = None
+        if last_used and last_used['used_at']:
+            cooldown_start = datetime.fromisoformat(last_used['used_at'].replace('Z', '+00:00').replace(' ', 'T'))
+        elif user['updated_at']:
+            cooldown_start = datetime.fromisoformat(user['updated_at'].replace('Z', '+00:00').replace(' ', 'T'))
+        
+        conn.close()
+        
+        if cooldown_start:
+            cooldown_end = cooldown_start + timedelta(days=28)
+            if now < cooldown_end:
+                days_left = (cooldown_end - now).days + 1
+                cooldown_end_str = cooldown_end.strftime('%Y-%m-%d')
+                return jsonify({
+                    'inCooldown': True,
+                    'daysLeft': days_left,
+                    'cooldownEnd': cooldown_end_str
+                })
+    
+    conn.close()
+    return jsonify({'inCooldown': False})
+
 @app.route('/api/turnstile/site-key')
 def turnstile_site_key():
     """获取 Turnstile site key"""

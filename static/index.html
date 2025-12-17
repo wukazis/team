@@ -453,27 +453,18 @@
         }
         
         async function checkCooldownStatus() {
-            if (!currentUser || !currentUser.hasUsed) {
-                // 未使用过邀请，显示正常状态
-                document.getElementById('waitingNormal').classList.remove('hidden');
-                document.getElementById('waitingCooldown').classList.add('hidden');
-                return;
-            }
-            
-            // 尝试加入排队来检测冷却状态
+            // 调用专门的冷却检测 API
             try {
-                const res = await fetch('/api/waiting/join', {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': 'Bearer ' + getToken()
-                    },
-                    body: JSON.stringify({ email: null })
+                const res = await fetch('/api/user/cooldown', {
+                    headers: { 'Authorization': 'Bearer ' + getToken() }
                 });
                 
-                if (res.status === 403) {
+                if (!res.ok) return;
+                
+                const data = await res.json();
+                
+                if (data.inCooldown) {
                     // 在冷却期
-                    const data = await res.json();
                     document.getElementById('waitingNormal').classList.add('hidden');
                     document.getElementById('waitingCooldown').classList.remove('hidden');
                     document.getElementById('cooldownDaysLeft').textContent = data.daysLeft || '?';
