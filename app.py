@@ -270,7 +270,7 @@ def generate_code():
 # ========== SendGrid 邮件 ==========
 
 def send_notification_email(to_email: str, available_seats: int) -> bool:
-    """发送空位通知邮件"""
+    """发送空位通知邮件（旧版，仅通知）"""
     if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
         print("SendGrid 未配置")
         return False
@@ -300,6 +300,45 @@ def send_notification_email(to_email: str, available_seats: int) -> bool:
         return response.status_code in [200, 201, 202]
     except Exception as e:
         print(f"发送邮件失败: {e}")
+        return False
+
+def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> bool:
+    """发送带邀请码的邮件"""
+    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
+        print("SendGrid 未配置")
+        return False
+    
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+        
+        message = Mail(
+            from_email=SENDGRID_FROM_EMAIL,
+            to_emails=to_email,
+            subject='🎫 您的专属邀请码已送达！',
+            html_content=f'''
+            <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2563eb;">🎉 恭喜！轮到您上车了</h2>
+                <p>您好！</p>
+                <p>您在候车室排队等待的车位现已空出，这是您的专属邀请码：</p>
+                <div style="background: #f0f9ff; border: 2px dashed #2563eb; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+                    <p style="color: #64748b; font-size: 14px; margin: 0 0 8px 0;">邀请码</p>
+                    <p style="font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 3px; margin: 0;">{invite_code}</p>
+                    <p style="color: #64748b; font-size: 13px; margin: 12px 0 0 0;">绑定车位: {team_name}</p>
+                </div>
+                <p>请前往首页填写邀请码和您的上车邮箱完成领取：</p>
+                <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">立即上车</a></p>
+                <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">⚠️ 此邀请码仅限您本人使用，请勿分享给他人。</p>
+                <p style="color: #64748b; font-size: 13px;">邀请码有效期内未使用将自动作废。</p>
+            </div>
+            '''
+        )
+        
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        return response.status_code in [200, 201, 202]
+    except Exception as e:
+        print(f"发送邀请码邮件失败: {e}")
         return False
 
 def admin_required(f):
@@ -641,23 +680,71 @@ def get_queue_position_by_user(user_id: int) -> int:
     return row['position'] if row else 0
 
 def notify_waiting_users(available_seats: int):
-    """通知排队用户有空位"""
-    if available_seats <= 0 or not SENDGRID_API_KEY:
+    """自动给排队用户发送邀请码（按空位数量和车位分配）"""
+    if not SENDGRID_API_KEY:
+        print("SendGrid 未配置，跳过自动发码")
         return
     
     conn = get_db()
-    # 获取未通知的排队用户（按排队顺序，最多通知空位数的2倍）
-    users = conn.execute('''
-        SELECT * FROM waiting_queue WHERE notified = 0 
-        ORDER BY created_at ASC LIMIT ?
-    ''', (available_seats * 2,)).fetchall()
     
-    for user in users:
-        if send_notification_email(user['email'], available_seats):
+    # 1. 获取各车位的空位数量
+    accounts = conn.execute('''
+        SELECT id, name, seats_entitled, seats_in_use, pending_invites
+        FROM team_accounts WHERE enabled = 1
+    ''').fetchall()
+    
+    # 计算每个车位的可用空位（空位数 = 总席位 - 已用 - 待处理）
+    available_slots = []
+    for acc in accounts:
+        avail = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0)
+        if avail > 0:
+            for _ in range(avail):
+                available_slots.append({'team_id': acc['id'], 'team_name': acc['name']})
+    
+    if not available_slots:
+        conn.close()
+        return
+    
+    # 2. 获取未通知的排队用户（按排队顺序，数量等于空位数）
+    users = conn.execute('''
+        SELECT wq.*, u.username FROM waiting_queue wq
+        LEFT JOIN users u ON wq.user_id = u.id
+        WHERE wq.notified = 0 AND wq.email IS NOT NULL AND wq.email != ''
+        ORDER BY wq.created_at ASC LIMIT ?
+    ''', (len(available_slots),)).fetchall()
+    
+    if not users:
+        conn.close()
+        return
+    
+    # 3. 为每个用户生成邀请码并发送
+    for i, user in enumerate(users):
+        if i >= len(available_slots):
+            break
+        
+        slot = available_slots[i]
+        
+        # 生成邀请码
+        code = generate_code()
+        
+        # 插入邀请码（绑定车位和用户）
+        conn.execute('''
+            INSERT INTO invite_codes (code, team_account_id, user_id) VALUES (?, ?, ?)
+        ''', (code, slot['team_id'], user['user_id']))
+        
+        # 发送邮件
+        if send_invite_code_email(user['email'], code, slot['team_name']):
+            # 标记已通知
             conn.execute('''
                 UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ?
             ''', (user['id'],))
             conn.commit()
+            print(f"已发送邀请码 {code} 到 {user['email']} (车位: {slot['team_name']})")
+        else:
+            # 发送失败，删除刚生成的邀请码
+            conn.execute('DELETE FROM invite_codes WHERE code = ?', (code,))
+            conn.commit()
+            print(f"发送邀请码到 {user['email']} 失败")
     
     conn.close()
 
@@ -961,6 +1048,7 @@ def sync_all_team_accounts():
     accounts = conn.execute('SELECT * FROM team_accounts WHERE enabled = 1').fetchall()
     
     results = []
+    total_available = 0
     for acc in accounts:
         if not acc['authorization_token'] or not acc['account_id']:
             results.append({'id': acc['id'], 'name': acc['name'], 'error': '未配置凭证'})
@@ -974,6 +1062,10 @@ def sync_all_team_accounts():
                 WHERE id = ?
             ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), acc['id']))
             
+            avail = data['seats_entitled'] - data['seats_in_use'] - data.get('pending_invites', 0)
+            if avail > 0:
+                total_available += avail
+            
             results.append({
                 'id': acc['id'], 
                 'name': acc['name'], 
@@ -986,7 +1078,25 @@ def sync_all_team_accounts():
     
     conn.commit()
     conn.close()
+    
+    # 同步后自动触发发码（如果有空位）
+    if total_available > 0:
+        try:
+            notify_waiting_users(total_available)
+        except Exception as e:
+            print(f"自动发码失败: {e}")
+    
     return jsonify({'results': results})
+
+@app.route('/api/admin/send-invite-codes', methods=['POST'])
+@admin_required
+def admin_send_invite_codes():
+    """手动触发给排队用户发送邀请码"""
+    try:
+        notify_waiting_users(999)  # 传入大数，函数内部会按实际空位计算
+        return jsonify({'status': 'ok', 'message': '已触发自动发码'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/team-accounts/<int:account_id>', methods=['DELETE'])
 @admin_required
