@@ -395,11 +395,7 @@
                 </svg>
                 空位提醒
             </h2>
-            <!-- 未登录状态 -->
-            <div id="queueLoginRequired" class="hidden" style="text-align: center; padding: 1rem 0;">
-                <p class="muted" style="margin-bottom: 1rem;">登录后可加入排队，有空位时通知您</p>
-                <button onclick="goLogin()" class="btn btn-primary">登录后排队</button>
-            </div>
+
             <!-- 冷却期状态 -->
             <div id="queueCooldown" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <p style="color: var(--warning); font-weight: 500;">⏳ 冷却期中</p>
@@ -564,14 +560,35 @@
             setTimeout(() => icon.classList.remove('spinning'), 500);
         }
 
-        // ========== 排队功能 ==========
-        let jwtToken = localStorage.getItem('jwt_token') || '';
+        // ========== 登录检查 ==========
+        let jwtToken = localStorage.getItem('token') || '';
 
-        function goLogin() {
-            // 跳转到首页登录
-            window.location.href = '/?redirect=waiting';
+        async function checkLogin() {
+            if (!jwtToken) {
+                // 未登录，跳转到首页
+                window.location.href = '/';
+                return false;
+            }
+            
+            try {
+                const res = await fetch('/api/user/state', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                
+                if (!res.ok) {
+                    // token 无效，跳转到首页
+                    localStorage.removeItem('token');
+                    window.location.href = '/';
+                    return false;
+                }
+                return true;
+            } catch (err) {
+                window.location.href = '/';
+                return false;
+            }
         }
 
+        // ========== 排队功能 ==========
         async function joinQueue() {
             const email = document.getElementById('queueEmail').value.trim();
 
@@ -612,21 +629,13 @@
         }
 
         async function checkQueueStatus() {
-            if (!jwtToken) {
-                showLoginRequired();
-                return;
-            }
-            
             try {
                 const res = await fetch('/api/waiting/status', {
                     headers: { 'Authorization': `Bearer ${jwtToken}` }
                 });
                 
                 if (res.status === 401) {
-                    // token 过期
-                    localStorage.removeItem('jwt_token');
-                    jwtToken = '';
-                    showLoginRequired();
+                    window.location.href = '/';
                     return;
                 }
                 
@@ -640,7 +649,7 @@
                 }
             } catch (err) {
                 console.error('检查排队状态失败:', err);
-                showLoginRequired();
+                showQueueForm();
             }
         }
 
@@ -651,15 +660,14 @@
                 });
                 
                 if (!res.ok) {
-                    showLoginRequired();
+                    window.location.href = '/';
                     return;
                 }
                 
                 const data = await res.json();
                 
                 if (data.user.hasUsed) {
-                    // 需要检查冷却期，这里简化处理，让后端在 join 时返回具体天数
-                    // 先尝试加入，如果返回冷却期错误则显示
+                    // 尝试加入，如果返回冷却期错误则显示
                     const joinRes = await fetch('/api/waiting/join', {
                         method: 'POST',
                         headers: { 
@@ -671,7 +679,6 @@
                     const joinData = await joinRes.json();
                     
                     if (joinRes.status === 403 && joinData.error) {
-                        // 提取天数
                         const match = joinData.error.match(/(\d+)\s*天/);
                         const days = match ? match[1] : '?';
                         showCooldown(days);
@@ -689,15 +696,7 @@
             }
         }
 
-        function showLoginRequired() {
-            document.getElementById('queueLoginRequired').classList.remove('hidden');
-            document.getElementById('queueCooldown').classList.add('hidden');
-            document.getElementById('queueForm').classList.add('hidden');
-            document.getElementById('queueSuccess').classList.add('hidden');
-        }
-
         function showCooldown(days) {
-            document.getElementById('queueLoginRequired').classList.add('hidden');
             document.getElementById('queueCooldown').classList.remove('hidden');
             document.getElementById('queueForm').classList.add('hidden');
             document.getElementById('queueSuccess').classList.add('hidden');
@@ -705,7 +704,6 @@
         }
 
         function showQueueSuccess(position) {
-            document.getElementById('queueLoginRequired').classList.add('hidden');
             document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('queueForm').classList.add('hidden');
             document.getElementById('queueSuccess').classList.remove('hidden');
@@ -713,7 +711,6 @@
         }
 
         function showQueueForm() {
-            document.getElementById('queueLoginRequired').classList.add('hidden');
             document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('queueForm').classList.remove('hidden');
             document.getElementById('queueSuccess').classList.add('hidden');
@@ -721,12 +718,16 @@
             document.getElementById('queueStatus').textContent = '';
         }
 
-        // 初始化
-        loadTeamStatus();
-        checkQueueStatus();
-        
-        // 每 30 秒自动刷新
-        refreshTimer = setInterval(loadTeamStatus, 30000);
+        // 初始化：先检查登录状态
+        (async () => {
+            const loggedIn = await checkLogin();
+            if (loggedIn) {
+                loadTeamStatus();
+                checkQueueStatus();
+                // 每 30 秒自动刷新
+                refreshTimer = setInterval(loadTeamStatus, 30000);
+            }
+        })();
     </script>
 </body>
 </html>

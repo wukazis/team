@@ -369,6 +369,24 @@
                 </div>
             </div>
         </section>
+
+        <!-- 候车室入口 -->
+        <section id="waitingEntry" class="card hidden" style="text-align: center;">
+            <h2 style="justify-content: center;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                候车室
+            </h2>
+            <p class="muted" style="margin-bottom: 1rem;">查看车位状态，排队等待空位通知</p>
+            <a href="/waiting" class="btn btn-primary" style="display: inline-flex; width: auto;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                进入候车室
+            </a>
+        </section>
     </main>
 
     <script>
@@ -419,6 +437,8 @@
                     turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light', size: 'flexible' });
                 }
             }
+            // 显示候车室入口
+            document.getElementById('waitingEntry').classList.remove('hidden');
         }
 
         document.getElementById('loginBtn').onclick = async e => {
