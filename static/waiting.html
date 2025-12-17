@@ -415,15 +415,14 @@
                 <p style="color: var(--success); font-weight: 500;">✓ 已加入排队</p>
                 <p class="muted" style="margin-top: 0.5rem;">排队位置: 第 <span id="queuePosition">-</span> 位</p>
                 <div style="margin-top: 1rem; position: relative; display: inline-block;">
-                    <button onclick="toggleQueueMenu()" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 0.3rem;">
-                        操作
-                        <svg id="queueMenuArrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;">
-                            <polyline points="6 9 12 15 18 9"></polyline>
+                    <button onclick="toggleQueueMenu()" style="width: 36px; height: 36px; border-radius: 50%; background: var(--text); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: transform 0.2s;">
+                        <svg id="queueMenuArrow" width="14" height="14" viewBox="0 0 24 24" fill="white" style="transition: transform 0.2s;">
+                            <polygon points="12,16 6,8 18,8"></polygon>
                         </svg>
                     </button>
-                    <div id="queueMenu" class="hidden" style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0.5rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; min-width: 140px; z-index: 10;">
-                        <button onclick="viewQueueList()" style="width: 100%; padding: 0.6rem 1rem; border: none; background: none; cursor: pointer; text-align: left; font-size: 0.9rem; color: var(--text);" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='none'">查看排队队列</button>
-                        <button onclick="confirmLeaveQueue()" style="width: 100%; padding: 0.6rem 1rem; border: none; background: none; cursor: pointer; text-align: left; font-size: 0.9rem; color: var(--danger);" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='none'">退出排队</button>
+                    <div id="queueMenu" class="hidden" style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0.5rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); overflow: hidden; min-width: 140px; z-index: 10;">
+                        <button onclick="viewQueueList()" style="width: 100%; padding: 0.7rem 1rem; border: none; background: none; cursor: pointer; text-align: left; font-size: 0.9rem; color: var(--text);" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='none'">查看排队队列</button>
+                        <button onclick="confirmLeaveQueue()" style="width: 100%; padding: 0.7rem 1rem; border: none; background: none; cursor: pointer; text-align: left; font-size: 0.9rem; color: var(--danger);" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='none'">退出排队</button>
                     </div>
                 </div>
             </div>
