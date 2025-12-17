@@ -372,6 +372,7 @@
                         <thead>
                             <tr>
                                 <th>ID</th>
+                                <th>用户</th>
                                 <th>邮箱</th>
                                 <th>状态</th>
                                 <th>排队时间</th>
@@ -777,14 +778,15 @@
             
             const tbody = document.getElementById('queueList');
             if (!data.queue || data.queue.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无排队</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无排队</td></tr>';
                 return;
             }
             
             tbody.innerHTML = data.queue.map(q => `
                 <tr>
                     <td>${q.id}</td>
-                    <td><strong>${q.email || '-'}</strong></td>
+                    <td><strong>${q.username || '-'}</strong>${q.user_name ? `<br><span class="text-muted">${q.user_name}</span>` : ''}</td>
+                    <td>${q.email || '-'}</td>
                     <td><span class="badge ${q.notified ? 'used' : 'available'}">${q.notified ? '已通知' : '排队中'}</span></td>
                     <td class="text-muted">${formatTime(q.created_at)}</td>
                     <td class="text-muted">${q.notified_at ? formatTime(q.notified_at) : '-'}</td>

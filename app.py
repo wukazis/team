@@ -247,12 +247,20 @@ def init_db():
     conn.execute('''
         CREATE TABLE IF NOT EXISTS waiting_queue (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            email TEXT NOT NULL,
+            user_id INTEGER REFERENCES users(id),
+            email TEXT,
             notified INTEGER DEFAULT 0,
             created_at TEXT DEFAULT (datetime('now')),
             notified_at TEXT
         )
     ''')
+    # 添加 user_id 列（如果不存在）
+    try:
+        conn.execute('ALTER TABLE waiting_queue ADD COLUMN user_id INTEGER REFERENCES users(id)')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
+    # 修改 email 为可空
+    # SQLite 不支持直接修改列，但新记录可以为空
     conn.commit()
     conn.close()
 
@@ -467,66 +475,90 @@ def team_accounts_status():
 # ========== 排队通知 API ==========
 
 @app.route('/api/waiting/join', methods=['POST'])
+@jwt_required
 def join_waiting_queue():
-    """加入排队队列"""
+    """加入排队队列（需要登录）"""
     data = request.json or {}
     email = (data.get('email') or '').strip().lower()
-    
-    if not email or '@' not in email:
-        return jsonify({'error': '请输入有效邮箱'}), 400
+    user_id = request.user['user_id']
     
     conn = get_db()
+    
+    # 检查用户状态
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if not user:
+        conn.close()
+        return jsonify({'error': '用户不存在'}), 404
+    
+    # 检查是否已使用过邀请（30天冷却期）
+    if user['has_used']:
+        # 查找最后使用邀请码的时间
+        last_used = conn.execute('''
+            SELECT used_at FROM invite_codes WHERE user_id = ? ORDER BY used_at DESC LIMIT 1
+        ''', (user_id,)).fetchone()
+        
+        if last_used and last_used['used_at']:
+            from datetime import datetime
+            used_time = datetime.fromisoformat(last_used['used_at'].replace('Z', '+00:00').replace(' ', 'T'))
+            cooldown_end = used_time + timedelta(days=30)
+            now = datetime.utcnow()
+            
+            if now < cooldown_end:
+                days_left = (cooldown_end - now).days + 1
+                conn.close()
+                return jsonify({'error': f'您已使用过邀请，需等待 {days_left} 天后才能排队'}), 403
+    
     # 检查是否已在队列中
-    existing = conn.execute('SELECT * FROM waiting_queue WHERE email = ?', (email,)).fetchone()
+    existing = conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
     if existing:
         conn.close()
-        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position(email)})
+        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id)})
     
-    conn.execute('INSERT INTO waiting_queue (email) VALUES (?)', (email,))
+    conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
     conn.commit()
-    position = get_queue_position(email)
+    position = get_queue_position_by_user(user_id)
     conn.close()
     
     return jsonify({'message': '排队成功！有空位时会通知您', 'position': position})
 
 @app.route('/api/waiting/status')
+@jwt_required
 def waiting_status():
-    """获取排队状态"""
-    email = request.args.get('email', '').strip().lower()
+    """获取排队状态（需要登录）"""
+    user_id = request.user['user_id']
     
     conn = get_db()
     queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
     
+    # 检查当前用户是否在队列中
+    existing = conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
     position = None
-    if email:
-        position = get_queue_position(email)
+    if existing:
+        position = get_queue_position_by_user(user_id)
     
     conn.close()
-    return jsonify({'queueCount': queue_count, 'position': position})
+    return jsonify({'queueCount': queue_count, 'position': position, 'inQueue': existing is not None})
 
 @app.route('/api/waiting/leave', methods=['POST'])
+@jwt_required
 def leave_waiting_queue():
-    """离开排队队列"""
-    data = request.json or {}
-    email = (data.get('email') or '').strip().lower()
-    
-    if not email:
-        return jsonify({'error': '请输入邮箱'}), 400
+    """离开排队队列（需要登录）"""
+    user_id = request.user['user_id']
     
     conn = get_db()
-    conn.execute('DELETE FROM waiting_queue WHERE email = ?', (email,))
+    conn.execute('DELETE FROM waiting_queue WHERE user_id = ?', (user_id,))
     conn.commit()
     conn.close()
     
     return jsonify({'message': '已退出排队'})
 
-def get_queue_position(email: str) -> int:
-    """获取排队位置"""
+def get_queue_position_by_user(user_id: int) -> int:
+    """根据用户ID获取排队位置"""
     conn = get_db()
     row = conn.execute('''
         SELECT COUNT(*) + 1 as position FROM waiting_queue 
-        WHERE notified = 0 AND created_at < (SELECT created_at FROM waiting_queue WHERE email = ?)
-    ''', (email,)).fetchone()
+        WHERE notified = 0 AND created_at < (SELECT created_at FROM waiting_queue WHERE user_id = ?)
+    ''', (user_id,)).fetchone()
     conn.close()
     return row['position'] if row else 0
 
@@ -993,7 +1025,12 @@ def delete_user(user_id):
 @admin_required
 def list_queue():
     conn = get_db()
-    rows = conn.execute('SELECT * FROM waiting_queue ORDER BY created_at ASC').fetchall()
+    rows = conn.execute('''
+        SELECT q.*, u.username, u.name as user_name
+        FROM waiting_queue q
+        LEFT JOIN users u ON q.user_id = u.id
+        ORDER BY q.created_at ASC
+    ''').fetchall()
     waiting = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
     notified = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 1').fetchone()[0]
     conn.close()

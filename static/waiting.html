@@ -395,14 +395,26 @@
                 </svg>
                 空位提醒
             </h2>
-            <p class="muted" style="margin-bottom: 1rem;">留下邮箱，有空位时自动通知您</p>
-            <div id="queueForm">
+            <!-- 未登录状态 -->
+            <div id="queueLoginRequired" class="hidden" style="text-align: center; padding: 1rem 0;">
+                <p class="muted" style="margin-bottom: 1rem;">登录后可加入排队，有空位时通知您</p>
+                <button onclick="goLogin()" class="btn btn-primary">登录后排队</button>
+            </div>
+            <!-- 冷却期状态 -->
+            <div id="queueCooldown" class="hidden" style="text-align: center; padding: 1rem 0;">
+                <p style="color: var(--warning); font-weight: 500;">⏳ 冷却期中</p>
+                <p class="muted" style="margin-top: 0.5rem;">您已使用过邀请，需等待 <span id="cooldownDays">-</span> 天后才能排队</p>
+            </div>
+            <!-- 排队表单 -->
+            <div id="queueForm" class="hidden">
+                <p class="muted" style="margin-bottom: 1rem;">留下邮箱（可选），有空位时自动通知您</p>
                 <div style="display: flex; gap: 0.75rem;">
-                    <input type="email" id="queueEmail" placeholder="请输入邮箱" style="flex: 1; padding: 0.7rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem;">
+                    <input type="email" id="queueEmail" placeholder="请输入邮箱（可选）" style="flex: 1; padding: 0.7rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem;">
                     <button onclick="joinQueue()" class="btn btn-primary">排队</button>
                 </div>
                 <p id="queueStatus" class="muted" style="margin-top: 0.75rem; font-size: 0.85rem;"></p>
             </div>
+            <!-- 已排队状态 -->
             <div id="queueSuccess" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <p style="color: var(--success); font-weight: 500;">✓ 已加入排队</p>
                 <p class="muted" style="margin-top: 0.5rem;">排队位置: 第 <span id="queuePosition">-</span> 位</p>
@@ -553,26 +565,28 @@
         }
 
         // ========== 排队功能 ==========
-        let queueEmail = localStorage.getItem('queueEmail') || '';
+        let jwtToken = localStorage.getItem('jwt_token') || '';
+
+        function goLogin() {
+            // 跳转到首页登录
+            window.location.href = '/?redirect=waiting';
+        }
 
         async function joinQueue() {
             const email = document.getElementById('queueEmail').value.trim();
-            if (!email || !email.includes('@')) {
-                document.getElementById('queueStatus').textContent = '请输入有效邮箱';
-                return;
-            }
 
             try {
                 const res = await fetch('/api/waiting/join', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwtToken}`
+                    },
+                    body: JSON.stringify({ email: email || null })
                 });
                 const data = await res.json();
                 
                 if (res.ok) {
-                    localStorage.setItem('queueEmail', email);
-                    queueEmail = email;
                     showQueueSuccess(data.position);
                 } else {
                     document.getElementById('queueStatus').textContent = data.error || '排队失败';
@@ -583,49 +597,124 @@
         }
 
         async function leaveQueue() {
-            if (!queueEmail) return;
-            
             try {
                 await fetch('/api/waiting/leave', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email: queueEmail })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${jwtToken}`
+                    }
                 });
-                localStorage.removeItem('queueEmail');
-                queueEmail = '';
-                showQueueForm();
+                checkQueueStatus();
             } catch (err) {
                 console.error('退出排队失败:', err);
             }
         }
 
         async function checkQueueStatus() {
-            if (!queueEmail) return;
+            if (!jwtToken) {
+                showLoginRequired();
+                return;
+            }
             
             try {
-                const res = await fetch(`/api/waiting/status?email=${encodeURIComponent(queueEmail)}`);
+                const res = await fetch('/api/waiting/status', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                
+                if (res.status === 401) {
+                    // token 过期
+                    localStorage.removeItem('jwt_token');
+                    jwtToken = '';
+                    showLoginRequired();
+                    return;
+                }
+                
                 const data = await res.json();
                 
-                if (data.position) {
+                if (data.inQueue && data.position) {
                     showQueueSuccess(data.position);
                 } else {
-                    // 邮箱不在队列中，可能已被通知
-                    localStorage.removeItem('queueEmail');
-                    queueEmail = '';
-                    showQueueForm();
+                    // 检查用户是否在冷却期
+                    await checkUserCooldown();
                 }
             } catch (err) {
                 console.error('检查排队状态失败:', err);
+                showLoginRequired();
             }
         }
 
+        async function checkUserCooldown() {
+            try {
+                const res = await fetch('/api/user/state', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                
+                if (!res.ok) {
+                    showLoginRequired();
+                    return;
+                }
+                
+                const data = await res.json();
+                
+                if (data.user.hasUsed) {
+                    // 需要检查冷却期，这里简化处理，让后端在 join 时返回具体天数
+                    // 先尝试加入，如果返回冷却期错误则显示
+                    const joinRes = await fetch('/api/waiting/join', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${jwtToken}`
+                        },
+                        body: JSON.stringify({ email: null })
+                    });
+                    const joinData = await joinRes.json();
+                    
+                    if (joinRes.status === 403 && joinData.error) {
+                        // 提取天数
+                        const match = joinData.error.match(/(\d+)\s*天/);
+                        const days = match ? match[1] : '?';
+                        showCooldown(days);
+                    } else if (joinRes.ok) {
+                        showQueueSuccess(joinData.position);
+                    } else {
+                        showQueueForm();
+                    }
+                } else {
+                    showQueueForm();
+                }
+            } catch (err) {
+                console.error('检查用户状态失败:', err);
+                showQueueForm();
+            }
+        }
+
+        function showLoginRequired() {
+            document.getElementById('queueLoginRequired').classList.remove('hidden');
+            document.getElementById('queueCooldown').classList.add('hidden');
+            document.getElementById('queueForm').classList.add('hidden');
+            document.getElementById('queueSuccess').classList.add('hidden');
+        }
+
+        function showCooldown(days) {
+            document.getElementById('queueLoginRequired').classList.add('hidden');
+            document.getElementById('queueCooldown').classList.remove('hidden');
+            document.getElementById('queueForm').classList.add('hidden');
+            document.getElementById('queueSuccess').classList.add('hidden');
+            document.getElementById('cooldownDays').textContent = days;
+        }
+
         function showQueueSuccess(position) {
+            document.getElementById('queueLoginRequired').classList.add('hidden');
+            document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('queueForm').classList.add('hidden');
             document.getElementById('queueSuccess').classList.remove('hidden');
             document.getElementById('queuePosition').textContent = position || '-';
         }
 
         function showQueueForm() {
+            document.getElementById('queueLoginRequired').classList.add('hidden');
+            document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('queueForm').classList.remove('hidden');
             document.getElementById('queueSuccess').classList.add('hidden');
             document.getElementById('queueEmail').value = '';
@@ -634,12 +723,7 @@
 
         // 初始化
         loadTeamStatus();
-        
-        // 检查是否已排队
-        if (queueEmail) {
-            document.getElementById('queueEmail').value = queueEmail;
-            checkQueueStatus();
-        }
+        checkQueueStatus();
         
         // 每 30 秒自动刷新
         refreshTimer = setInterval(loadTeamStatus, 30000);
