@@ -1386,6 +1386,17 @@ def list_cooldown_users():
         'count': len(rows)
     })
 
+@app.route('/api/admin/cooldown-users/clear-all', methods=['POST'])
+@admin_required
+def clear_all_cooldown():
+    """清除所有用户的冷却状态（重置 has_used 为 0）"""
+    conn = get_db()
+    cursor = conn.execute('UPDATE users SET has_used = 0')
+    updated = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok', 'updated': updated})
+
 # ========== 发车监控 API ==========
 
 @app.route('/api/admin/monitor')

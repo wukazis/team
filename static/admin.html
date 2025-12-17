@@ -403,6 +403,7 @@
                     <div class="table-header">
                         <span class="title">冷却用户列表</span>
                         <div class="table-actions">
+                            <button class="btn btn-danger" onclick="clearAllCooldown()">清除所有冷却</button>
                             <button class="btn btn-ghost" onclick="loadCooldownUsers()">刷新</button>
                         </div>
                     </div>
@@ -1010,6 +1011,17 @@
                     <td><span class="badge used">${u.days_left} 天</span></td>
                 </tr>
             `).join('');
+        }
+
+        async function clearAllCooldown() {
+            if (!confirm('⚠️ 确定清除所有用户的冷却状态？他们将可以重新排队。')) return;
+            const res = await api('/admin/cooldown-users/clear-all', { method: 'POST' });
+            if (!res.ok) {
+                alert(res.data?.error || '清除失败');
+                return;
+            }
+            alert(`已清除 ${res.data.updated} 个用户的冷却状态`);
+            loadCooldownUsers();
         }
 
         // ========== 发车监控 ==========
