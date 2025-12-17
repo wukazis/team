@@ -239,6 +239,7 @@
                 <button class="tab" onclick="switchTab('users')"><i class="bi bi-people" style="margin-right: 2px;"></i> 用户</button>
                 <button class="tab" onclick="switchTab('queue')"><i class="bi bi-hourglass-split" style="margin-right: 2px;"></i> 队列</button>
                 <button class="tab" onclick="switchTab('cooldown')"><i class="bi bi-clock-history" style="margin-right: 2px;"></i> 冷却</button>
+                <button class="tab" onclick="switchTab('monitor')"><i class="bi bi-speedometer2" style="margin-right: 2px;"></i> 监控</button>
             </div>
 
             <!-- 车账号管理 -->
@@ -417,6 +418,88 @@
                     </table>
                 </div>
             </div>
+
+            <!-- 发车监控 -->
+            <div id="monitorSection" class="section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">排队人数</div>
+                        <div class="value" id="monQueueCount">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">可用空位</div>
+                        <div class="value" id="monAvailableSlots">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">待用邀请码</div>
+                        <div class="value" id="monPendingCodes">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">发车状态</div>
+                        <div class="value" id="monStatus" style="font-size: 1rem;">-</div>
+                    </div>
+                </div>
+
+                <!-- 状态面板 -->
+                <div class="table-container" style="margin-bottom: 1rem;">
+                    <div class="table-header">
+                        <span class="title"><i class="bi bi-activity" style="margin-right: 4px;"></i> 实时状态</span>
+                        <div class="table-actions">
+                            <span class="text-muted" id="monTestMode"></span>
+                            <button class="btn btn-ghost" onclick="loadMonitor()"><i class="bi bi-arrow-clockwise"></i></button>
+                        </div>
+                    </div>
+                    <div style="padding: 1rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem;">
+                            <div>
+                                <div class="text-muted" style="font-size: 0.8rem;">发车条件</div>
+                                <div id="monCondition" style="font-weight: 600;">-</div>
+                            </div>
+                            <div>
+                                <div class="text-muted" style="font-size: 0.8rem;">邀请码过期倒计时</div>
+                                <div id="monExpireCountdown" style="font-weight: 600; color: var(--warning);">-</div>
+                            </div>
+                            <div>
+                                <div class="text-muted" style="font-size: 0.8rem;">轮询间隔</div>
+                                <div id="monSyncInterval" style="font-weight: 600;">-</div>
+                            </div>
+                            <div>
+                                <div class="text-muted" style="font-size: 0.8rem;">批次冷却时间</div>
+                                <div id="monPollWait" style="font-weight: 600;">-</div>
+                            </div>
+                            <div>
+                                <div class="text-muted" style="font-size: 0.8rem;">最后同步</div>
+                                <div id="monLastSync" style="font-weight: 600;">-</div>
+                            </div>
+                            <div>
+                                <div class="text-muted" style="font-size: 0.8rem;">最后发车</div>
+                                <div id="monLastBatch" style="font-weight: 600;">-</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 车位状态 -->
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="title"><i class="bi bi-car-front" style="margin-right: 4px;"></i> 车位状态</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>车位</th>
+                                <th>总席位</th>
+                                <th>已用</th>
+                                <th>待处理</th>
+                                <th>待用码</th>
+                                <th>可用</th>
+                                <th>最后同步</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monTeamList"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -484,11 +567,23 @@
             location.reload();
         }
 
+        let monitorAutoRefresh = null;
+        
         function switchTab(tab) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
             document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
             document.getElementById(tab + 'Section').classList.add('active');
+            
+            // 监控页自动刷新
+            if (monitorAutoRefresh) {
+                clearInterval(monitorAutoRefresh);
+                monitorAutoRefresh = null;
+            }
+            if (tab === 'monitor') {
+                loadMonitor();
+                monitorAutoRefresh = setInterval(loadMonitor, 5000);
+            }
         }
 
         async function loadAll() {
@@ -498,6 +593,8 @@
             await loadUsers();
             await loadQueue();
             await loadCooldownUsers();
+            await loadMonitor();
+            startMonitorTimer();
         }
 
         // ========== 车账号 ==========
@@ -875,6 +972,106 @@
                     <td><span class="badge used">${u.days_left} 天</span></td>
                 </tr>
             `).join('');
+        }
+
+        // ========== 发车监控 ==========
+        let monitorTimer = null;
+        let monitorData = null;
+        
+        async function loadMonitor() {
+            const { ok, data } = await api('/admin/monitor');
+            if (!ok) return;
+            monitorData = data;
+            
+            // 更新统计卡片
+            document.getElementById('monQueueCount').textContent = data.queueCount;
+            document.getElementById('monAvailableSlots').textContent = data.availableSlots;
+            document.getElementById('monPendingCodes').textContent = data.pendingCodes;
+            
+            // 状态显示
+            const statusEl = document.getElementById('monStatus');
+            let statusColor = 'var(--muted)';
+            if (data.status === 'ready') statusColor = 'var(--success)';
+            else if (data.status === 'waiting') statusColor = 'var(--warning)';
+            else if (data.status === 'sending') statusColor = 'var(--primary)';
+            else if (data.status === 'error') statusColor = 'var(--danger)';
+            statusEl.innerHTML = `<span style="color: ${statusColor}">${data.statusText}</span>`;
+            
+            // 测试模式标识
+            document.getElementById('monTestMode').innerHTML = data.testMode 
+                ? '<span class="badge used">测试模式</span>' 
+                : '<span class="badge available">正式模式</span>';
+            
+            // 发车条件
+            const condEl = document.getElementById('monCondition');
+            if (data.queueCount >= data.availableSlots && data.availableSlots > 0) {
+                condEl.innerHTML = `<span style="color: var(--success)">✓ 人满发车 (${data.queueCount} ≥ ${data.availableSlots})</span>`;
+            } else if (data.availableSlots > 0) {
+                condEl.innerHTML = `<span style="color: var(--warning)">等待人满 (${data.queueCount} < ${data.availableSlots})</span>`;
+            } else {
+                condEl.innerHTML = `<span style="color: var(--muted)">无空位</span>`;
+            }
+            
+            // 过期倒计时
+            updateExpireCountdown();
+            
+            // 配置信息
+            document.getElementById('monSyncInterval').textContent = `${data.syncInterval} 秒`;
+            document.getElementById('monPollWait').textContent = `${data.pollWaitTime} 秒`;
+            
+            // 时间信息
+            document.getElementById('monLastSync').textContent = data.lastSyncTime ? formatTime(data.lastSyncTime) : '-';
+            document.getElementById('monLastBatch').textContent = data.lastBatchTime ? formatTime(data.lastBatchTime) : '-';
+            
+            // 车位列表
+            const tbody = document.getElementById('monTeamList');
+            if (!data.teams || data.teams.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无车位</td></tr>';
+            } else {
+                tbody.innerHTML = data.teams.map(t => `
+                    <tr>
+                        <td><strong>${t.name}</strong></td>
+                        <td>${t.total}</td>
+                        <td>${t.inUse}</td>
+                        <td>${t.pendingInvites}</td>
+                        <td>${t.pendingCodes}</td>
+                        <td><span class="badge ${t.available > 0 ? 'available' : 'used'}">${t.available}</span></td>
+                        <td class="text-muted">${t.lastSync ? formatTime(t.lastSync) : '-'}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+        
+        function updateExpireCountdown() {
+            const el = document.getElementById('monExpireCountdown');
+            if (!monitorData || !monitorData.expireCountdown) {
+                el.textContent = '-';
+                el.style.color = 'var(--muted)';
+                return;
+            }
+            
+            const remaining = monitorData.expireCountdown;
+            const minutes = Math.floor(remaining / 60);
+            const seconds = remaining % 60;
+            el.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (remaining < 300) {
+                el.style.color = 'var(--danger)';
+            } else if (remaining < 600) {
+                el.style.color = 'var(--warning)';
+            } else {
+                el.style.color = 'var(--success)';
+            }
+        }
+        
+        function startMonitorTimer() {
+            if (monitorTimer) clearInterval(monitorTimer);
+            monitorTimer = setInterval(() => {
+                if (monitorData && monitorData.expireCountdown > 0) {
+                    monitorData.expireCountdown--;
+                    updateExpireCountdown();
+                }
+            }, 1000);
         }
 
         // 回车登录

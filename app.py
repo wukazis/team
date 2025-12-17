@@ -1320,12 +1320,121 @@ def list_cooldown_users():
         'count': len(rows)
     })
 
+# ========== 发车监控 API ==========
+
+@app.route('/api/admin/monitor')
+@admin_required
+def get_monitor_status():
+    """获取发车监控状态"""
+    conn = get_db()
+    
+    # 获取排队人数（未通知的）
+    queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
+    
+    # 获取已通知但未使用的人数
+    notified_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 1').fetchone()[0]
+    
+    # 获取待使用邀请码数
+    pending_codes = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0').fetchone()[0]
+    
+    # 获取各车位空位
+    accounts = conn.execute('''
+        SELECT id, name, seats_entitled, seats_in_use, pending_invites, last_sync
+        FROM team_accounts WHERE enabled = 1
+    ''').fetchall()
+    
+    available_slots = 0
+    team_status = []
+    for acc in accounts:
+        # 查询该车位已发出但未使用的邀请码数量
+        acc_pending_codes = conn.execute('''
+            SELECT COUNT(*) FROM invite_codes 
+            WHERE team_account_id = ? AND used = 0
+        ''', (acc['id'],)).fetchone()[0]
+        
+        avail = max(0, (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0) - acc_pending_codes)
+        available_slots += avail
+        team_status.append({
+            'id': acc['id'],
+            'name': acc['name'],
+            'available': avail,
+            'total': acc['seats_entitled'] or 0,
+            'inUse': acc['seats_in_use'] or 0,
+            'pendingInvites': acc['pending_invites'] or 0,
+            'pendingCodes': acc_pending_codes,
+            'lastSync': acc['last_sync']
+        })
+    
+    # 获取最早的未使用邀请码创建时间（用于计算过期倒计时）
+    oldest_code = conn.execute('''
+        SELECT created_at FROM invite_codes WHERE used = 0 ORDER BY created_at ASC LIMIT 1
+    ''').fetchone()
+    
+    conn.close()
+    
+    # 计算状态
+    status = 'idle'
+    status_text = '空闲'
+    expire_countdown = None
+    
+    if pending_codes > 0:
+        status = 'waiting'
+        status_text = f'等待 {pending_codes} 个邀请码被使用'
+        if oldest_code:
+            from datetime import datetime
+            created = datetime.fromisoformat(oldest_code['created_at'].replace(' ', 'T'))
+            expire_time = created + timedelta(seconds=INVITE_CODE_EXPIRE)
+            remaining = (expire_time - datetime.utcnow()).total_seconds()
+            expire_countdown = max(0, int(remaining))
+    elif queue_count > 0 and available_slots > 0:
+        if queue_count >= available_slots:
+            status = 'ready'
+            status_text = f'人满发车就绪 ({queue_count}人/{available_slots}位)'
+        else:
+            status = 'waiting_queue'
+            status_text = f'等待人满 ({queue_count}人/{available_slots}位)'
+    elif queue_count > 0:
+        status = 'no_slots'
+        status_text = f'无空位 ({queue_count}人排队)'
+    elif available_slots > 0:
+        status = 'no_queue'
+        status_text = f'无排队 ({available_slots}空位)'
+    
+    return jsonify({
+        'queueCount': queue_count,
+        'notifiedCount': notified_count,
+        'pendingCodes': pending_codes,
+        'availableSlots': available_slots,
+        'status': status,
+        'statusText': status_text,
+        'expireCountdown': expire_countdown,
+        'inviteCodeExpire': INVITE_CODE_EXPIRE,
+        'pollWaitTime': POLL_WAIT_TIME,
+        'syncInterval': SYNC_INTERVAL,
+        'testMode': TEST_MODE,
+        'teams': team_status,
+        'lastSyncTime': monitor_state.get('last_sync_time'),
+        'lastBatchTime': monitor_state.get('last_batch_time')
+    })
+
 # ========== 后台自动同步 ==========
 
 # 邀请码有效期（秒）
 INVITE_CODE_EXPIRE = int(os.environ.get('INVITE_CODE_EXPIRE', 1800))  # 默认30分钟
 # 轮询等待时间（秒）
 POLL_WAIT_TIME = int(os.environ.get('POLL_WAIT_TIME', 60))  # 默认1分钟
+
+# 发车监控状态（全局变量）
+monitor_state = {
+    'last_sync_time': None,       # 最后同步时间
+    'last_batch_time': None,      # 最后发车时间
+    'pending_codes': 0,           # 待使用邀请码数
+    'queue_count': 0,             # 排队人数
+    'available_slots': 0,         # 可用空位
+    'status': 'idle',             # 状态: idle/waiting/sending/cooldown
+    'status_text': '空闲',        # 状态文字
+    'next_action_time': None,     # 下次操作时间
+}
 
 def sync_team_accounts():
     """同步所有车账号状态，返回总空位数"""
@@ -1388,17 +1497,24 @@ def cleanup_expired_invite_codes():
 
 def background_sync():
     """后台线程：智能轮询发码"""
+    global monitor_state
     last_batch_time = None  # 上一批邀请码发送时间
     
     while True:
         try:
             # 1. 同步车位状态
             total_available = sync_team_accounts()
+            monitor_state['last_sync_time'] = datetime.utcnow().isoformat() + 'Z'
+            monitor_state['available_slots'] = total_available
             
             # 2. 检查是否有未使用的邀请码
             pending_codes = get_pending_invite_codes_count()
+            monitor_state['pending_codes'] = pending_codes
             
             if pending_codes > 0:
+                monitor_state['status'] = 'waiting'
+                monitor_state['status_text'] = f'等待 {pending_codes} 个邀请码被使用'
+                
                 # 有未使用的邀请码，检查是否过期
                 expired_count = cleanup_expired_invite_codes()
                 
@@ -1409,6 +1525,9 @@ def background_sync():
                     continue
                 else:
                     # 有过期的被清理了，等待1分钟后继续
+                    monitor_state['status'] = 'cooldown'
+                    monitor_state['status_text'] = f'已清理 {expired_count} 个过期码，冷却中'
+                    monitor_state['next_action_time'] = (datetime.utcnow() + timedelta(seconds=POLL_WAIT_TIME)).isoformat() + 'Z'
                     print(f"[轮询] 已清理 {expired_count} 个过期邀请码，等待 {POLL_WAIT_TIME} 秒后继续")
                     time.sleep(POLL_WAIT_TIME)
                     continue
@@ -1418,17 +1537,28 @@ def background_sync():
                 # 如果刚发完一批，等待1分钟
                 if last_batch_time and (time.time() - last_batch_time) < POLL_WAIT_TIME:
                     wait_time = POLL_WAIT_TIME - (time.time() - last_batch_time)
+                    monitor_state['status'] = 'cooldown'
+                    monitor_state['status_text'] = f'批次冷却中，{int(wait_time)}秒后继续'
+                    monitor_state['next_action_time'] = (datetime.utcnow() + timedelta(seconds=wait_time)).isoformat() + 'Z'
                     print(f"[轮询] 上批邀请码已用完，等待 {int(wait_time)} 秒后发送下一批")
                     time.sleep(wait_time)
                     continue
                 
                 # 发送新一批邀请码
+                monitor_state['status'] = 'sending'
+                monitor_state['status_text'] = '正在发送邀请码...'
                 notify_waiting_users(total_available)
                 last_batch_time = time.time()
+                monitor_state['last_batch_time'] = datetime.utcnow().isoformat() + 'Z'
+            else:
+                monitor_state['status'] = 'idle'
+                monitor_state['status_text'] = '无空位'
             
             time.sleep(SYNC_INTERVAL)
             
         except Exception as e:
+            monitor_state['status'] = 'error'
+            monitor_state['status_text'] = f'错误: {str(e)}'
             print(f"[后台同步错误] {e}")
             time.sleep(SYNC_INTERVAL)
 
