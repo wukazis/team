@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>候车室 - Team Invite</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%232563eb' stroke='%231d4ed8' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>W</text></svg>">
+    <style>
+        :root {
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #0f172a;
+            --bg: #f1f5f9;
+            --card: #ffffff;
+            --border: #e5e7eb;
+            --text: #0f172a;
+            --muted: #64748b;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --warning: #f59e0b;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: var(--bg); min-height: 100vh; }
+        .navbar {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 0.8rem 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .navbar-brand {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--text);
+            text-decoration: none;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .navbar-link {
+            color: var(--muted);
+            text-decoration: none;
+            font-size: 0.9rem;
+        }
+        .navbar-link:hover { color: var(--primary); }
+        .page {
+            width: min(600px, 94%);
+            margin: 1.5rem auto;
+            padding-bottom: 3rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+        }
+        .card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .hero {
+            text-align: center;
+            padding: 2rem 1rem;
+        }
+        .hero-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 1rem;
+            background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hero-icon svg {
+            width: 40px;
+            height: 40px;
+            color: var(--primary);
+        }
+        .hero h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+            color: var(--text);
+        }
+        .hero p {
+            color: var(--muted);
+            font-size: 0.95rem;
+        }
+        
+        /* 状态概览 */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .stat-item {
+            text-align: center;
+            padding: 1rem;
+            background: var(--bg);
+            border-radius: 10px;
+        }
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .stat-value.success { color: var(--success); }
+        .stat-value.warning { color: var(--warning); }
+        .stat-value.danger { color: var(--danger); }
+        .stat-label {
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-top: 0.25rem;
+        }
+        
+        /* 车位列表 */
+        .team-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        .team-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.25rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: #fff;
+            transition: all 0.15s;
+        }
+        .team-item:hover {
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.1);
+        }
+        .team-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .team-status {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+        .team-status.available { background: var(--success); box-shadow: 0 0 8px rgba(22, 163, 74, 0.4); }
+        .team-status.limited { background: var(--warning); box-shadow: 0 0 8px rgba(245, 158, 11, 0.4); }
+        .team-status.full { background: var(--danger); }
+        .team-name {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .team-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+        .team-seats {
+            text-align: right;
+        }
+        .team-seats-main {
+            font-size: 1.1rem;
+            font-weight: 600;
+        }
+        .team-seats-sub {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+        .team-badge {
+            padding: 0.3rem 0.8rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+        .team-badge.available { background: #dcfce7; color: #166534; }
+        .team-badge.limited { background: #fef3c7; color: #92400e; }
+        .team-badge.full { background: #fee2e2; color: #991b1b; }
+        
+        /* 进度条 */
+        .progress-bar {
+            width: 100px;
+            height: 6px;
+            background: var(--border);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+        .progress-fill.low { background: var(--success); }
+        .progress-fill.medium { background: var(--warning); }
+        .progress-fill.high { background: var(--danger); }
+        
+        /* 提示信息 */
+        .info-box {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+            padding: 1rem;
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 10px;
+            font-size: 0.9rem;
+            color: #0369a1;
+        }
+        .info-box svg {
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            border-radius: 8px;
+            padding: 0.7rem 1.2rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+            border: none;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.15s;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: #fff;
+        }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-outline {
+            background: transparent;
+            color: var(--primary);
+            border: 1px solid var(--primary);
+        }
+        .btn-outline:hover { background: #f0f7ff; }
+        
+        .actions {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            margin-top: 1rem;
+        }
+        
+        .muted { color: var(--muted); }
+        .text-center { text-align: center; }
+        .hidden { display: none !important; }
+        
+        /* 刷新动画 */
+        .refresh-icon {
+            transition: transform 0.3s;
+        }
+        .refresh-icon.spinning {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 最后更新时间 */
+        .last-update {
+            text-align: center;
+            font-size: 0.85rem;
+            color: var(--muted);
+            margin-top: 0.5rem;
+        }
+        
+        /* 响应式 */
+        @media (max-width: 480px) {
+            .stats-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 0.5rem;
+            }
+            .stat-item { padding: 0.75rem 0.5rem; }
+            .stat-value { font-size: 1.4rem; }
+            .team-right { gap: 0.75rem; }
+            .progress-bar { width: 60px; }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <a href="/" class="navbar-brand">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2zm10.03 4.97a.75.75 0 0 1 .011 1.05l-3.992 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.75.75 0 0 1 1.08-.022z"/>
+            </svg>
+            Team Invite
+        </a>
+        <div class="navbar-right">
+            <a href="/" class="navbar-link">首页</a>
+            <a href="/waiting" class="navbar-link" style="color: var(--primary); font-weight: 500;">候车室</a>
+        </div>
+    </nav>
+
+    <main class="page">
+        <!-- 欢迎区域 -->
+        <section class="card hero">
+            <div class="hero-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+            </div>
+            <h1>候车室</h1>
+            <p>实时查看各车位状态，等待空位开放</p>
+        </section>
+
+        <!-- 状态概览 -->
+        <section class="card">
+            <h2>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21.21 15.89A10 10 0 1 1 8 2.83"></path>
+                    <path d="M22 12A10 10 0 0 0 12 2v10z"></path>
+                </svg>
+                状态概览
+            </h2>
+            <div class="stats-grid">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalSeats">-</div>
+                    <div class="stat-label">总席位</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value warning" id="usedSeats">-</div>
+                    <div class="stat-label">已占用</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value success" id="availableSeats">-</div>
+                    <div class="stat-label">可用</div>
+                </div>
+            </div>
+            <div class="last-update">
+                <span>最后更新: </span>
+                <span id="lastUpdate">-</span>
+                <button onclick="refreshData()" style="background: none; border: none; cursor: pointer; color: var(--primary); margin-left: 0.5rem;">
+                    <svg id="refreshIcon" class="refresh-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                </button>
+            </div>
+        </section>
+
+        <!-- 车位列表 -->
+        <section class="card">
+            <h2>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729z"/>
+                </svg>
+                车位详情
+            </h2>
+            <div id="teamList" class="team-list">
+                <p class="muted text-center" style="padding: 2rem;">加载中...</p>
+            </div>
+        </section>
+
+        <!-- 提示信息 -->
+        <section class="card">
+            <div class="info-box">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <line x1="12" y1="16" x2="12" y2="12"></line>
+                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                </svg>
+                <div>
+                    <strong>温馨提示</strong>
+                    <p style="margin-top: 0.25rem;">页面每 30 秒自动刷新一次。当有空位时，请前往首页使用邀请码领取席位。</p>
+                </div>
+            </div>
+            <div class="actions">
+                <a href="/" class="btn btn-primary">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    前往首页
+                </a>
+                <button onclick="refreshData()" class="btn btn-outline">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 4v6h-6"></path>
+                        <path d="M1 20v-6h6"></path>
+                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                    </svg>
+                    刷新数据
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        let refreshTimer = null;
+
+        async function loadTeamStatus() {
+            try {
+                const res = await fetch('/api/team-accounts/status');
+                const data = await res.json();
+                const accounts = data.accounts || [];
+                
+                renderStats(accounts);
+                renderTeamList(accounts);
+                updateLastTime();
+            } catch (err) {
+                console.error('加载失败:', err);
+                document.getElementById('teamList').innerHTML = 
+                    '<p class="muted text-center" style="padding: 2rem;">加载失败，请刷新重试</p>';
+            }
+        }
+
+        function renderStats(accounts) {
+            let totalSeats = 0, usedSeats = 0;
+            accounts.forEach(acc => {
+                totalSeats += acc.seatsEntitled || 0;
+                usedSeats += (acc.seatsInUse || 0) + (acc.pendingInvites || 0);
+            });
+            const available = totalSeats - usedSeats;
+            
+            document.getElementById('totalSeats').textContent = totalSeats;
+            document.getElementById('usedSeats').textContent = usedSeats;
+            document.getElementById('availableSeats').textContent = available;
+            
+            // 根据可用数量调整颜色
+            const availEl = document.getElementById('availableSeats');
+            availEl.className = 'stat-value ' + (available > 3 ? 'success' : available > 0 ? 'warning' : 'danger');
+        }
+
+        function renderTeamList(accounts) {
+            const container = document.getElementById('teamList');
+            
+            if (!accounts.length) {
+                container.innerHTML = '<p class="muted text-center" style="padding: 2rem;">暂无可用车位</p>';
+                return;
+            }
+            
+            container.innerHTML = accounts.map(acc => {
+                const used = (acc.seatsInUse || 0) + (acc.pendingInvites || 0);
+                const total = acc.seatsEntitled || 0;
+                const available = total - used;
+                const percent = total > 0 ? (used / total) * 100 : 0;
+                
+                let statusClass, badgeClass, badgeText;
+                if (available <= 0) {
+                    statusClass = 'full';
+                    badgeClass = 'full';
+                    badgeText = '已满';
+                } else if (available <= 2) {
+                    statusClass = 'limited';
+                    badgeClass = 'limited';
+                    badgeText = '紧张';
+                } else {
+                    statusClass = 'available';
+                    badgeClass = 'available';
+                    badgeText = '可用';
+                }
+                
+                let progressClass = 'low';
+                if (percent >= 80) progressClass = 'high';
+                else if (percent >= 50) progressClass = 'medium';
+                
+                const expiry = acc.activeUntil ? new Date(acc.activeUntil).toLocaleDateString() : '';
+                
+                return `
+                    <div class="team-item">
+                        <div class="team-left">
+                            <div class="team-status ${statusClass}"></div>
+                            <div>
+                                <div class="team-name">${acc.name}</div>
+                                ${expiry ? `<div class="muted" style="font-size: 0.8rem;">到期: ${expiry}</div>` : ''}
+                            </div>
+                        </div>
+                        <div class="team-right">
+                            <div class="team-seats">
+                                <div class="team-seats-main">${available} 空位</div>
+                                <div class="team-seats-sub">${used}/${total} 已用</div>
+                            </div>
+                            <div class="progress-bar">
+                                <div class="progress-fill ${progressClass}" style="width: ${percent}%"></div>
+                            </div>
+                            <span class="team-badge ${badgeClass}">${badgeText}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function updateLastTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+            document.getElementById('lastUpdate').textContent = timeStr;
+        }
+
+        async function refreshData() {
+            const icon = document.getElementById('refreshIcon');
+            icon.classList.add('spinning');
+            await loadTeamStatus();
+            setTimeout(() => icon.classList.remove('spinning'), 500);
+        }
+
+        // 初始化
+        loadTeamStatus();
+        
+        // 每 30 秒自动刷新
+        refreshTimer = setInterval(loadTeamStatus, 30000);
+    </script>
+</body>
+</html>

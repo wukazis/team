@@ -262,6 +262,10 @@ def index():
 def admin_page():
     return send_from_directory('static', 'admin.html')
 
+@app.route('/waiting')
+def waiting_page():
+    return send_from_directory('static', 'waiting.html')
+
 # ========== OAuth API ==========
 
 @app.route('/api/oauth/login')
