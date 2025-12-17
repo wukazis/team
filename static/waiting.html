@@ -597,8 +597,11 @@
                     });
                     
                     if (joinRes.status === 403) {
-                        // 在冷却期，跳转到首页
-                        alert('您在冷却期内，暂时无法访问候车室');
+                        // 在冷却期，显示冷却结束日期后跳转到首页
+                        const joinData = await joinRes.json();
+                        const cooldownEnd = joinData.cooldownEnd || '未知';
+                        const daysLeft = joinData.daysLeft || '?';
+                        alert(`您在冷却期内，暂时无法访问候车室\n\n剩余 ${daysLeft} 天\n预计 ${cooldownEnd} 后可再进入`);
                         window.location.href = '/';
                         return false;
                     }

@@ -511,8 +511,13 @@ def join_waiting_queue():
             cooldown_end = cooldown_start + timedelta(days=28)
             if now < cooldown_end:
                 days_left = (cooldown_end - now).days + 1
+                cooldown_end_str = cooldown_end.strftime('%Y-%m-%d')
                 conn.close()
-                return jsonify({'error': f'您已使用过邀请，需等待 {days_left} 天后才能排队'}), 403
+                return jsonify({
+                    'error': f'您已使用过邀请，需等待 {days_left} 天后才能排队',
+                    'cooldownEnd': cooldown_end_str,
+                    'daysLeft': days_left
+                }), 403
     
     # 检查是否已在队列中
     existing = conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
