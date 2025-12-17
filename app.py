@@ -1326,6 +1326,39 @@ def clear_notified_queue():
     conn.close()
     return jsonify({'status': 'ok', 'deleted': deleted})
 
+@app.route('/api/admin/queue/clear-all', methods=['POST'])
+@admin_required
+def clear_all_queue():
+    """删除所有排队记录"""
+    conn = get_db()
+    cursor = conn.execute('DELETE FROM waiting_queue')
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
+@app.route('/api/admin/users/clear-all', methods=['POST'])
+@admin_required
+def clear_all_users():
+    """删除所有用户"""
+    conn = get_db()
+    cursor = conn.execute('DELETE FROM users')
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
+@app.route('/api/admin/codes/clear-all', methods=['POST'])
+@admin_required
+def clear_all_codes():
+    """删除所有邀请码"""
+    conn = get_db()
+    cursor = conn.execute('DELETE FROM invite_codes')
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
 # ========== 冷却用户管理 ==========
 
 @app.route('/api/admin/cooldown-users', methods=['GET'])

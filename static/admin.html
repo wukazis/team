@@ -297,6 +297,7 @@
                                 <option value="">不绑定车位</option>
                             </select>
                             <button class="btn btn-primary" onclick="generateCodes()">生成</button>
+                            <button class="btn btn-danger" onclick="clearAllCodes()">删除所有</button>
                             <button class="btn btn-ghost" onclick="loadCodes()">刷新</button>
                         </div>
                     </div>
@@ -323,6 +324,7 @@
                     <div class="table-header">
                         <span class="title">用户列表</span>
                         <div class="table-actions">
+                            <button class="btn btn-danger" onclick="clearAllUsers()">删除所有</button>
                             <button class="btn btn-ghost" onclick="loadUsers()">刷新</button>
                         </div>
                     </div>
@@ -366,6 +368,7 @@
                     <div class="table-header">
                         <span class="title">排队列表</span>
                         <div class="table-actions">
+                            <button class="btn btn-danger" onclick="clearAllQueue()">删除所有</button>
                             <button class="btn btn-danger" onclick="clearNotifiedQueue()">清除已通知</button>
                             <button class="btn btn-ghost" onclick="loadQueue()">刷新</button>
                         </div>
@@ -948,6 +951,40 @@
             }
             alert(`已清除 ${res.data.deleted} 条记录`);
             loadQueue();
+        }
+
+        async function clearAllQueue() {
+            if (!confirm('⚠️ 确定删除所有排队记录？此操作不可恢复！')) return;
+            const res = await api('/admin/queue/clear-all', { method: 'POST' });
+            if (!res.ok) {
+                alert(res.data?.error || '删除失败');
+                return;
+            }
+            alert(`已删除 ${res.data.deleted} 条记录`);
+            loadQueue();
+        }
+
+        async function clearAllUsers() {
+            if (!confirm('⚠️ 确定删除所有用户？此操作不可恢复！')) return;
+            const res = await api('/admin/users/clear-all', { method: 'POST' });
+            if (!res.ok) {
+                alert(res.data?.error || '删除失败');
+                return;
+            }
+            alert(`已删除 ${res.data.deleted} 个用户`);
+            loadUsers();
+        }
+
+        async function clearAllCodes() {
+            if (!confirm('⚠️ 确定删除所有邀请码？此操作不可恢复！')) return;
+            const res = await api('/admin/codes/clear-all', { method: 'POST' });
+            if (!res.ok) {
+                alert(res.data?.error || '删除失败');
+                return;
+            }
+            alert(`已删除 ${res.data.deleted} 个邀请码`);
+            loadCodes();
+            loadStats();
         }
 
         // ========== 冷却用户 ==========
