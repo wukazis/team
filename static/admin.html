@@ -689,19 +689,25 @@
                 tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无车账号</td></tr>';
                 return;
             }
-            tbody.innerHTML = accounts.map(acc => `
+            tbody.innerHTML = accounts.map(acc => {
+                const available = (acc.seatsEntitled || 0) - (acc.seatsInUse || 0) - (acc.pendingInvites || 0);
+                const isFull = available <= 0;
+                return `
                 <tr>
                     <td><strong>${acc.name}</strong></td>
                     <td>${acc.seatsInUse} / ${acc.seatsEntitled}</td>
                     <td>${acc.pendingInvites}</td>
                     <td class="text-muted">${acc.lastSync ? formatTime(acc.lastSync) : '-'}</td>
-                    <td><span class="badge ${acc.enabled ? 'enabled' : 'disabled'}">${acc.enabled ? '启用' : '禁用'}</span></td>
+                    <td>
+                        <span class="badge ${acc.enabled ? 'enabled' : 'disabled'}">${acc.enabled ? '启用' : '禁用'}</span>
+                        ${isFull ? '<span class="badge used" style="margin-left: 4px;">已满</span>' : ''}
+                    </td>
                     <td>
                         <button class="btn btn-ghost btn-sm" onclick="editAccount(${acc.id})">编辑</button>
                         <button class="btn btn-danger btn-sm" onclick="deleteAccount(${acc.id})">删除</button>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
             
             // 更新邀请码生成的下拉框
             updateCodeTeamSelect();
