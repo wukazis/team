@@ -772,8 +772,19 @@ def notify_waiting_users(available_seats: int):
             INSERT INTO invite_codes (code, team_account_id, user_id) VALUES (?, ?, ?)
         ''', (code, slot['team_id'], user['user_id']))
         
-        # 发送邮件
-        if send_invite_code_email(user['email'], code, slot['team_name']):
+        # 发送邮件（最多重试3次）
+        max_retries = 3
+        send_success = False
+        for retry in range(max_retries):
+            if send_invite_code_email(user['email'], code, slot['team_name']):
+                send_success = True
+                break
+            else:
+                if retry < max_retries - 1:
+                    print(f"发送邮件到 {user['email']} 失败，第 {retry + 1} 次重试...")
+                    time.sleep(2)  # 等待2秒后重试
+        
+        if send_success:
             # 标记已通知
             conn.execute('''
                 UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ?
@@ -784,7 +795,7 @@ def notify_waiting_users(available_seats: int):
             # 发送失败，删除刚生成的邀请码
             conn.execute('DELETE FROM invite_codes WHERE code = ?', (code,))
             conn.commit()
-            print(f"发送邀请码到 {user['email']} 失败")
+            print(f"发送邀请码到 {user['email']} 失败（已重试 {max_retries} 次）")
     
     conn.close()
 
