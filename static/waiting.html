@@ -414,7 +414,18 @@
             <div id="queueSuccess" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <p style="color: var(--success); font-weight: 500;">✓ 已加入排队</p>
                 <p class="muted" style="margin-top: 0.5rem;">排队位置: 第 <span id="queuePosition">-</span> 位</p>
-                <button onclick="leaveQueue()" class="btn btn-outline" style="margin-top: 1rem;">退出排队</button>
+                <div style="margin-top: 1rem; position: relative; display: inline-block;">
+                    <button onclick="toggleQueueMenu()" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 0.3rem;">
+                        操作
+                        <svg id="queueMenuArrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition: transform 0.2s;">
+                            <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                    </button>
+                    <div id="queueMenu" class="hidden" style="position: absolute; top: 100%; left: 50%; transform: translateX(-50%); margin-top: 0.5rem; background: var(--card); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); overflow: hidden; min-width: 140px; z-index: 10;">
+                        <button onclick="viewQueueList()" style="width: 100%; padding: 0.6rem 1rem; border: none; background: none; cursor: pointer; text-align: left; font-size: 0.9rem; color: var(--text);" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='none'">查看排队队列</button>
+                        <button onclick="confirmLeaveQueue()" style="width: 100%; padding: 0.6rem 1rem; border: none; background: none; cursor: pointer; text-align: left; font-size: 0.9rem; color: var(--danger);" onmouseover="this.style.background='var(--hover-bg)'" onmouseout="this.style.background='none'">退出排队</button>
+                    </div>
+                </div>
             </div>
         </section>
 
@@ -650,9 +661,45 @@
                         'Authorization': `Bearer ${jwtToken}`
                     }
                 });
+                hideQueueMenu();
                 checkQueueStatus();
             } catch (err) {
                 console.error('退出排队失败:', err);
+            }
+        }
+
+        let queueMenuOpen = false;
+        function toggleQueueMenu() {
+            queueMenuOpen = !queueMenuOpen;
+            const menu = document.getElementById('queueMenu');
+            const arrow = document.getElementById('queueMenuArrow');
+            if (queueMenuOpen) {
+                menu.classList.remove('hidden');
+                arrow.style.transform = 'rotate(180deg)';
+            } else {
+                menu.classList.add('hidden');
+                arrow.style.transform = 'rotate(0deg)';
+            }
+        }
+
+        function hideQueueMenu() {
+            queueMenuOpen = false;
+            document.getElementById('queueMenu').classList.add('hidden');
+            document.getElementById('queueMenuArrow').style.transform = 'rotate(0deg)';
+        }
+
+        function viewQueueList() {
+            hideQueueMenu();
+            const position = document.getElementById('queuePosition').textContent;
+            alert(`当前排队队列\n\n您的位置: 第 ${position} 位\n前面还有 ${Math.max(0, parseInt(position) - 1)} 人`);
+        }
+
+        function confirmLeaveQueue() {
+            hideQueueMenu();
+            const position = document.getElementById('queuePosition').textContent;
+            const ahead = Math.max(0, parseInt(position) - 1);
+            if (confirm(`前面还有 ${ahead} 人，确定要退出排队吗？`)) {
+                leaveQueue();
             }
         }
 
