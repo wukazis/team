@@ -472,12 +472,14 @@
         }
 
         function renderStats(accounts) {
-            let totalSeats = 0, usedSeats = 0;
+            let totalSeats = 0, usedSeats = 0, available = 0;
             accounts.forEach(acc => {
                 totalSeats += acc.seatsEntitled || 0;
                 usedSeats += (acc.seatsInUse || 0) + (acc.pendingInvites || 0);
+                // 每个车位剩余小于0则计为0
+                const accAvail = (acc.seatsEntitled || 0) - (acc.seatsInUse || 0) - (acc.pendingInvites || 0);
+                available += Math.max(0, accAvail);
             });
-            const available = totalSeats - usedSeats;
             
             document.getElementById('totalSeats').textContent = totalSeats;
             document.getElementById('usedSeats').textContent = usedSeats;
