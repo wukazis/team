@@ -490,19 +490,25 @@ def join_waiting_queue():
         conn.close()
         return jsonify({'error': '用户不存在'}), 404
     
-    # 检查是否已使用过邀请（30天冷却期）
+    # 检查是否已使用过邀请（28天冷却期）
     if user['has_used']:
+        from datetime import datetime
+        now = datetime.utcnow()
+        
         # 查找最后使用邀请码的时间
         last_used = conn.execute('''
             SELECT used_at FROM invite_codes WHERE user_id = ? ORDER BY used_at DESC LIMIT 1
         ''', (user_id,)).fetchone()
         
+        cooldown_start = None
         if last_used and last_used['used_at']:
-            from datetime import datetime
-            used_time = datetime.fromisoformat(last_used['used_at'].replace('Z', '+00:00').replace(' ', 'T'))
-            cooldown_end = used_time + timedelta(days=30)
-            now = datetime.utcnow()
-            
+            cooldown_start = datetime.fromisoformat(last_used['used_at'].replace('Z', '+00:00').replace(' ', 'T'))
+        elif user['updated_at']:
+            # 没有邀请码记录，用用户更新时间作为冷却起点
+            cooldown_start = datetime.fromisoformat(user['updated_at'].replace('Z', '+00:00').replace(' ', 'T'))
+        
+        if cooldown_start:
+            cooldown_end = cooldown_start + timedelta(days=28)
             if now < cooldown_end:
                 days_left = (cooldown_end - now).days + 1
                 conn.close()
@@ -1068,15 +1074,17 @@ def list_cooldown_users():
     """获取冷却中的用户列表（用过邀请码或has_used=1的用户）"""
     conn = get_db()
     rows = conn.execute('''
-        SELECT u.id, u.username, u.name, c.used_email, c.used_at, t.name as team_name,
-               datetime(c.used_at, '+30 days') as cooldown_end,
-               MAX(0, CAST(julianday(datetime(c.used_at, '+30 days')) - julianday('now') AS INTEGER)) as days_left
+        SELECT u.id, u.username, u.name, c.used_email, 
+               COALESCE(c.used_at, u.updated_at) as used_at, 
+               t.name as team_name,
+               datetime(COALESCE(c.used_at, u.updated_at), '+28 days') as cooldown_end,
+               MAX(0, CAST(julianday(datetime(COALESCE(c.used_at, u.updated_at), '+28 days')) - julianday('now') AS INTEGER)) as days_left
         FROM users u
         LEFT JOIN invite_codes c ON u.id = c.user_id AND c.used = 1
         LEFT JOIN team_accounts t ON c.team_account_id = t.id
         WHERE u.has_used = 1 OR c.user_id IS NOT NULL
         GROUP BY u.id
-        ORDER BY c.used_at DESC
+        ORDER BY used_at DESC
     ''').fetchall()
     conn.close()
     
