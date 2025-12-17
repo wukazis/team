@@ -415,6 +415,7 @@
             <div id="queueSuccess" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <p style="color: var(--success); font-weight: 500;">✓ 已加入队列</p>
                 <p class="muted" style="margin-top: 0.5rem;">当前位置: 第 <span id="queuePosition">-</span> 位</p>
+                <p class="muted" style="margin-top: 0.25rem; font-size: 0.85rem;">通知邮箱: <span id="queueEmail2">-</span></p>
                 <div style="margin-top: 1rem; position: relative; display: inline-block;">
                     <button onclick="toggleQueueMenu()" style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                         <svg id="queueMenuArrow" width="12" height="12" viewBox="0 0 24 24" fill="white" style="transition: transform 0.2s;">
@@ -465,7 +466,8 @@
 
                 <div>
                     <strong>温馨提示</strong>
-                    <p style="margin-top: 0.25rem;">页面每 30 秒自动刷新一次。当有空位时，请前往首页使用邀请码领取席位。</p>
+                    <p style="margin-top: 0.25rem;">页面每 30 秒自动刷新一次。当有空位时，会向您的联系邮箱中发送邀请码。</p>
+                    <p style="margin-top: 0.25rem;">请注意，邀请码有效期为邮件发出起后的半小时，逾期未用将自动作废。</p>
                 </div>
             </div>
             <div class="actions">
@@ -679,7 +681,7 @@
                 const data = await res.json();
                 
                 if (res.ok) {
-                    showQueueSuccess(data.position);
+                    showQueueSuccess(data.position, email);
                 } else {
                     document.getElementById('queueStatus').textContent = data.error || '排队失败';
                 }
@@ -843,7 +845,7 @@
                 const data = await res.json();
                 
                 if (data.inQueue && data.position) {
-                    showQueueSuccess(data.position);
+                    showQueueSuccess(data.position, data.email);
                 } else {
                     // 检查用户是否在冷却期
                     await checkUserCooldown();
@@ -884,7 +886,7 @@
                         const days = match ? match[1] : '?';
                         showCooldown(days);
                     } else if (joinRes.ok) {
-                        showQueueSuccess(joinData.position);
+                        showQueueSuccess(joinData.position, joinData.email);
                     } else {
                         showQueueForm();
                     }
@@ -904,11 +906,12 @@
             document.getElementById('cooldownDays').textContent = days;
         }
 
-        function showQueueSuccess(position) {
+        function showQueueSuccess(position, email) {
             document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('queueForm').classList.add('hidden');
             document.getElementById('queueSuccess').classList.remove('hidden');
             document.getElementById('queuePosition').textContent = position || '-';
+            document.getElementById('queueEmail2').textContent = email || '-';
         }
 
         function showQueueForm() {

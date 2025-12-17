@@ -329,10 +329,10 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
 
 def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> bool:
     """发送带邀请码的邮件"""
-    subject = '您的 Team 邀请码'
+    subject = '您的 Team 邀请码（这只是一个测试，邀请码可用，但并非真实上车）'
     html_content = f'''
     <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2563eb;">🎉 Team 上车</h2>
+        <h2 style="color: #2563eb;">🎉 Team 上车（测试）</h2>
         <p>您好！</p>
         <p>您在候车室排队等待的车位现已空出，这是您的专属邀请码：</p>
         <div style="background: #f0f9ff; border: 2px dashed #2563eb; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
@@ -340,10 +340,10 @@ def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> b
             <p style="font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 3px; margin: 0;">{invite_code}</p>
             <p style="color: #64748b; font-size: 13px; margin: 12px 0 0 0;">绑定车位: {team_name}</p>
         </div>
-        <p>请前往首页填写邀请码和您的上车邮箱完成领取：</p>
+        <p>请前往首页填写邀请码和您的上车邮箱完成领取（这只是一个测试，点击发送邀请后会显示成功，仅用作候车系统测试）：</p>
         <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">立即上车</a></p>
         <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">⚠️ 此邀请码仅限您本人使用，请勿分享给他人。</p>
-        <p style="color: #64748b; font-size: 13px;">邀请码有效期为 24 小时，逾期未使用将自动作废。</p>
+        <p style="color: #64748b; font-size: 13px;">邀请码有效期为邮件发出后的半小时，逾期未用将自动作废。</p>
     </div>
     '''
     return send_email(to_email, subject, html_content)
@@ -617,14 +617,14 @@ def join_waiting_queue():
     existing = conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
     if existing:
         conn.close()
-        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id)})
+        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': existing['email']})
     
     conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
     conn.commit()
     position = get_queue_position_by_user(user_id)
     conn.close()
     
-    return jsonify({'message': '排队成功！有空位时会通知您', 'position': position})
+    return jsonify({'message': '排队成功！有空位时会通知您', 'position': position, 'email': email})
 
 @app.route('/api/waiting/status')
 @jwt_required
@@ -638,11 +638,13 @@ def waiting_status():
     # 检查当前用户是否在队列中
     existing = conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
     position = None
+    email = None
     if existing:
         position = get_queue_position_by_user(user_id)
+        email = existing['email']
     
     conn.close()
-    return jsonify({'queueCount': queue_count, 'position': position, 'inQueue': existing is not None})
+    return jsonify({'queueCount': queue_count, 'position': position, 'inQueue': existing is not None, 'email': email})
 
 @app.route('/api/waiting/leave', methods=['POST'])
 @jwt_required
