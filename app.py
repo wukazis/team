@@ -46,9 +46,9 @@ TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 # 发车模式：auto=自动发车, manual=手动确认发车
 DISPATCH_MODE = os.environ.get('DISPATCH_MODE', 'auto')  # 默认自动模式
 
-# 候车室设置
-WAITING_ROOM_ENABLED = True  # 候车室是否开放
-WAITING_ROOM_MAX_QUEUE = 0   # 排队人数上限，0表示不限制
+# 候车室设置（从数据库加载，默认关闭）
+WAITING_ROOM_ENABLED = False  # 候车室是否开放（默认关闭）
+WAITING_ROOM_MAX_QUEUE = 0    # 排队人数上限，0表示不限制
 
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
@@ -278,6 +278,59 @@ def init_db():
         pass  # 索引已存在
     # 修改 email 为可空
     # SQLite 不支持直接修改列，但新记录可以为空
+    
+    # 创建系统设置表
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
+    
+    # 初始化默认设置（如果不存在）
+    conn.execute('''
+        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false')
+    ''')
+    conn.execute('''
+        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_max_queue', '0')
+    ''')
+    conn.execute('''
+        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto')
+    ''')
+    
+    conn.commit()
+    conn.close()
+    
+    # 加载设置到全局变量
+    load_settings()
+
+def load_settings():
+    """从数据库加载设置到全局变量"""
+    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        conn.row_factory = sqlite3.Row
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
+        if row:
+            WAITING_ROOM_ENABLED = row['value'] == 'true'
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
+        if row:
+            WAITING_ROOM_MAX_QUEUE = int(row['value'])
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'").fetchone()
+        if row:
+            DISPATCH_MODE = row['value']
+        
+        conn.close()
+    except Exception as e:
+        print(f"加载设置失败: {e}")
+
+def save_setting(key: str, value: str):
+    """保存设置到数据库"""
+    conn = sqlite3.connect(DB_PATH)
+    conn.execute('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', (key, value))
     conn.commit()
     conn.close()
 
@@ -1523,6 +1576,7 @@ def set_dispatch_mode():
     if mode not in ('auto', 'manual'):
         return jsonify({'error': '无效的模式'}), 400
     DISPATCH_MODE = mode
+    save_setting('dispatch_mode', mode)
     return jsonify({'status': 'ok', 'mode': DISPATCH_MODE})
 
 # ========== 候车室设置 API ==========
@@ -1549,8 +1603,10 @@ def set_waiting_room_settings():
     
     if 'enabled' in data:
         WAITING_ROOM_ENABLED = bool(data['enabled'])
+        save_setting('waiting_room_enabled', 'true' if WAITING_ROOM_ENABLED else 'false')
     if 'maxQueue' in data:
         WAITING_ROOM_MAX_QUEUE = max(0, int(data['maxQueue']))
+        save_setting('waiting_room_max_queue', str(WAITING_ROOM_MAX_QUEUE))
     
     return jsonify({
         'status': 'ok',
