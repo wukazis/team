@@ -692,8 +692,8 @@ def get_queue_position_by_user(user_id: int) -> int:
 
 def notify_waiting_users(available_seats: int):
     """自动给排队用户发送邀请码（按空位数量和车位分配）"""
-    if not SENDGRID_API_KEY:
-        print("SendGrid 未配置，跳过自动发码")
+    if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
+        print("Microsoft Graph API 邮件未配置，跳过自动发码")
         return
     
     conn = get_db()
@@ -704,10 +704,16 @@ def notify_waiting_users(available_seats: int):
         FROM team_accounts WHERE enabled = 1
     ''').fetchall()
     
-    # 计算每个车位的可用空位（空位数 = 总席位 - 已用 - 待处理）
+    # 计算每个车位的可用空位（空位数 = 总席位 - 已用 - 待处理 - 已发出未使用的邀请码）
     available_slots = []
     for acc in accounts:
-        avail = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0)
+        # 查询该车位已发出但未使用的邀请码数量
+        pending_codes = conn.execute('''
+            SELECT COUNT(*) FROM invite_codes 
+            WHERE team_account_id = ? AND used = 0
+        ''', (acc['id'],)).fetchone()[0]
+        
+        avail = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0) - pending_codes
         if avail > 0:
             for _ in range(avail):
                 available_slots.append({'team_id': acc['id'], 'team_name': acc['name']})
