@@ -281,12 +281,11 @@
         @keyframes draw { to { stroke-dashoffset: 0; } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pop { to { opacity: 1; } }
-        .hourglass-spin { animation: hourglass-flip 2s ease-in-out infinite; }
+        .hourglass-spin { animation: hourglass-flip 3s ease-in-out infinite; }
         @keyframes hourglass-flip { 
-            0%, 50% { transform: rotate(0deg); }
-            25% { transform: rotate(180deg); }
-            75% { transform: rotate(180deg); }
-            100% { transform: rotate(360deg); }
+            0% { transform: rotate(0deg); }
+            66.67% { transform: rotate(180deg); }
+            100% { transform: rotate(180deg); }
         }
     </style>
 </head>
