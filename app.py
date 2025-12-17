@@ -264,6 +264,11 @@ def init_db():
         conn.execute('ALTER TABLE waiting_queue ADD COLUMN user_id INTEGER REFERENCES users(id)')
     except sqlite3.OperationalError:
         pass  # 列已存在
+    # 添加 user_id 唯一索引（防止并发重复插入）
+    try:
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_waiting_queue_user_id ON waiting_queue(user_id)')
+    except sqlite3.OperationalError:
+        pass  # 索引已存在
     # 修改 email 为可空
     # SQLite 不支持直接修改列，但新记录可以为空
     conn.commit()
@@ -619,8 +624,15 @@ def join_waiting_queue():
         conn.close()
         return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': existing['email']})
     
-    conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
-    conn.commit()
+    # 使用事务和唯一约束防止并发重复插入
+    try:
+        conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
+        conn.commit()
+    except sqlite3.IntegrityError:
+        # 并发插入导致唯一约束冲突，说明用户已在队列中
+        conn.close()
+        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': email})
+    
     position = get_queue_position_by_user(user_id)
     conn.close()
     
