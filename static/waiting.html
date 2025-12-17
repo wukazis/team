@@ -218,6 +218,8 @@
             align-items: flex-start;
             gap: 0.75rem;
             padding: 1rem;
+            margin-left: -1rem;
+            margin-right: -1rem;
             background: #f0f9ff;
             border: 1px solid #bae6fd;
             border-radius: 10px;
@@ -276,6 +278,11 @@
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+        }
+        
+        /* React logo 旋转动画 */
+        .react-logo {
+            animation: spin 20s linear infinite;
         }
         
         /* 最后更新时间 */
@@ -365,8 +372,13 @@
         <!-- 车位列表 -->
         <section class="card">
             <h2>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729z"/>
+                <svg class="react-logo" width="18" height="18" viewBox="-11.5 -10.23174 23 20.46348" fill="none">
+                    <circle cx="0" cy="0" r="2.05" fill="currentColor"/>
+                    <g stroke="currentColor" stroke-width="1" fill="none">
+                        <ellipse rx="11" ry="4.2" transform="rotate(0)"/>
+                        <ellipse rx="11" ry="4.2" transform="rotate(60)"/>
+                        <ellipse rx="11" ry="4.2" transform="rotate(120)"/>
+                    </g>
                 </svg>
                 车位详情
             </h2>
@@ -378,11 +390,12 @@
         <!-- 提示信息 -->
         <section class="card">
             <div class="info-box">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <circle cx="12" cy="12" r="10"></circle>
-                    <line x1="12" y1="16" x2="12" y2="12"></line>
-                    <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                    <path d="M12 16v-4"></path>
+                    <path d="M12 8h.01"></path>
                 </svg>
+
                 <div>
                     <strong>温馨提示</strong>
                     <p style="margin-top: 0.25rem;">页面每 30 秒自动刷新一次。当有空位时，请前往首页使用邀请码领取席位。</p>
