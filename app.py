@@ -40,6 +40,9 @@ MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
 MS_CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '')
 MS_MAIL_FROM = os.environ.get('MS_MAIL_FROM', '')  # 发件人邮箱
 
+# 测试模式（跳过真实发送 ChatGPT 邀请）
+TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
+
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_EXPIRY_HOURS = 24
@@ -825,42 +828,47 @@ def use_invite():
         conn.close()
         return jsonify({'error': '车位不可用'}), 400
     
-    # 检查车位是否配置了凭证
-    if not account['authorization_token'] or not account['account_id']:
+    # 检查车位是否配置了凭证（测试模式跳过）
+    if not TEST_MODE and (not account['authorization_token'] or not account['account_id']):
         conn.close()
         return jsonify({'error': '车位未配置凭证，无法发送邀请'}), 400
     
-    # 调用 ChatGPT Team API 发送邀请
-    try:
-        result = send_team_invite(account['account_id'], account['authorization_token'], email)
-        
-        if not result['ok']:
+    # 测试模式：跳过真实发送，直接成功
+    if TEST_MODE:
+        print(f"[测试模式] 跳过发送邀请到 {email}，邀请码: {code}")
+    else:
+        # 调用 ChatGPT Team API 发送邀请
+        try:
+            result = send_team_invite(account['account_id'], account['authorization_token'], email)
+            
+            if not result['ok']:
+                conn.close()
+                return jsonify({'error': f'发送邀请失败: {result["body"]}'}), 400
+        except Exception as e:
             conn.close()
-            return jsonify({'error': f'发送邀请失败: {result["body"]}'}), 400
-        
-        # 邀请发送成功，标记邀请码已使用
-        conn.execute('''
-            UPDATE invite_codes 
-            SET used = 1, used_email = ?, used_at = datetime('now'), team_account_id = ?, user_id = ?
-            WHERE code = ?
-        ''', (email, final_team_id, user_id, code))
-        # 标记用户已使用邀请
-        conn.execute('UPDATE users SET has_used = 1 WHERE id = ?', (user_id,))
-        # 从排队队列中移除该用户
-        conn.execute('DELETE FROM waiting_queue WHERE user_id = ?', (user_id,))
-        conn.commit()
-        conn.close()
-        
-        # 同步车位状态
+            return jsonify({'error': f'发送邀请失败: {str(e)}'}), 500
+    
+    # 邀请发送成功（或测试模式），标记邀请码已使用
+    conn.execute('''
+        UPDATE invite_codes 
+        SET used = 1, used_email = ?, used_at = datetime('now'), team_account_id = ?, user_id = ?
+        WHERE code = ?
+    ''', (email, final_team_id, user_id, code))
+    # 标记用户已使用邀请
+    conn.execute('UPDATE users SET has_used = 1 WHERE id = ?', (user_id,))
+    # 从排队队列中移除该用户
+    conn.execute('DELETE FROM waiting_queue WHERE user_id = ?', (user_id,))
+    conn.commit()
+    conn.close()
+    
+    # 同步车位状态（测试模式跳过）
+    if not TEST_MODE:
         try:
             sync_single_account(final_team_id, account['authorization_token'], account['account_id'])
         except:
             pass
-        
-        return jsonify({'status': 'ok', 'message': '邀请已发送，请查收邮件'})
-    except Exception as e:
-        conn.close()
-        return jsonify({'error': f'发送邀请失败: {str(e)}'}), 500
+    
+    return jsonify({'status': 'ok', 'message': '邀请已发送，请查收邮件'})
 
 # ========== TOTP 验证 ==========
 
