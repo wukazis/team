@@ -722,7 +722,19 @@ def notify_waiting_users(available_seats: int):
         conn.close()
         return
     
-    # 2. 获取未通知的排队用户（按排队顺序，数量等于空位数）
+    # 2. 获取未通知的排队用户数量
+    queue_count = conn.execute('''
+        SELECT COUNT(*) FROM waiting_queue 
+        WHERE notified = 0 AND email IS NOT NULL AND email != ''
+    ''').fetchone()[0]
+    
+    # 人满发车：只有排队人数 >= 空位数才发车
+    if queue_count < len(available_slots):
+        print(f"[轮询] 排队 {queue_count} 人，空位 {len(available_slots)} 个，等待人满发车...")
+        conn.close()
+        return
+    
+    # 3. 获取未通知的排队用户（按排队顺序，数量等于空位数）
     users = conn.execute('''
         SELECT wq.*, u.username FROM waiting_queue wq
         LEFT JOIN users u ON wq.user_id = u.id
