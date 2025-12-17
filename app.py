@@ -751,6 +751,8 @@ def use_invite():
         ''', (email, final_team_id, user_id, code))
         # 标记用户已使用邀请
         conn.execute('UPDATE users SET has_used = 1 WHERE id = ?', (user_id,))
+        # 从排队队列中移除该用户
+        conn.execute('DELETE FROM waiting_queue WHERE user_id = ?', (user_id,))
         conn.commit()
         conn.close()
         
