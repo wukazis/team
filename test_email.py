@@ -1,36 +1,42 @@
 #!/usr/bin/env python3
-"""测试 SMTP 邮件发送"""
+"""测试 Microsoft Graph API 邮件发送"""
 
 import os
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.header import Header
+import requests
 from dotenv import load_dotenv
 
 load_dotenv()
 
-SMTP_HOST = os.environ.get('SMTP_HOST', '')
-SMTP_PORT = int(os.environ.get('SMTP_PORT', 465))
-SMTP_USER = os.environ.get('SMTP_USER', '')
-SMTP_PASS = os.environ.get('SMTP_PASS', '')
-SMTP_FROM = os.environ.get('SMTP_FROM', '')
-SMTP_SSL = os.environ.get('SMTP_SSL', 'true').lower() == 'true'
+MS_TENANT_ID = os.environ.get('MS_TENANT_ID', '')
+MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
+MS_CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '')
+MS_MAIL_FROM = os.environ.get('MS_MAIL_FROM', '')
 APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
+
+def get_access_token() -> str:
+    """获取访问令牌"""
+    url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
+    data = {
+        'client_id': MS_CLIENT_ID,
+        'client_secret': MS_CLIENT_SECRET,
+        'scope': 'https://graph.microsoft.com/.default',
+        'grant_type': 'client_credentials'
+    }
+    resp = requests.post(url, data=data, timeout=10)
+    resp.raise_for_status()
+    return resp.json()['access_token']
 
 def send_test_email(to_email: str) -> bool:
     """发送测试邮件"""
-    print("📧 SMTP 配置检查:")
-    print(f"   SMTP_HOST: {SMTP_HOST or '❌ 未设置'}")
-    print(f"   SMTP_PORT: {SMTP_PORT}")
-    print(f"   SMTP_USER: {SMTP_USER or '❌ 未设置'}")
-    print(f"   SMTP_PASS: {'✅ 已设置' if SMTP_PASS else '❌ 未设置'}")
-    print(f"   SMTP_FROM: {SMTP_FROM or SMTP_USER}")
-    print(f"   SMTP_SSL: {SMTP_SSL}")
+    print("📧 Microsoft Graph API 配置检查:")
+    print(f"   MS_TENANT_ID: {MS_TENANT_ID[:8]}... " if MS_TENANT_ID else "   MS_TENANT_ID: ❌ 未设置")
+    print(f"   MS_CLIENT_ID: {MS_CLIENT_ID[:8]}... " if MS_CLIENT_ID else "   MS_CLIENT_ID: ❌ 未设置")
+    print(f"   MS_CLIENT_SECRET: {'✅ 已设置' if MS_CLIENT_SECRET else '❌ 未设置'}")
+    print(f"   MS_MAIL_FROM: {MS_MAIL_FROM or '❌ 未设置'}")
     print()
     
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        print("❌ SMTP 未完整配置，请检查 .env 文件")
+    if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
+        print("❌ Microsoft Graph API 未完整配置，请检查 .env 文件")
         return False
     
     try:
@@ -58,31 +64,41 @@ def send_test_email(to_email: str) -> bool:
         </div>
         '''
         
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = Header(subject, 'utf-8')
-        msg['From'] = SMTP_FROM or SMTP_USER
-        msg['To'] = to_email
-        
-        html_part = MIMEText(html_content, 'html', 'utf-8')
-        msg.attach(html_part)
-        
-        print(f"📤 正在连接 {SMTP_HOST}:{SMTP_PORT}...")
-        
-        if SMTP_SSL:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
-        else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-            server.starttls()
-        
-        print("🔐 正在登录...")
-        server.login(SMTP_USER, SMTP_PASS)
+        print("🔐 正在获取访问令牌...")
+        token = get_access_token()
+        print("✅ 令牌获取成功")
         
         print(f"📧 正在发送邮件到 {to_email}...")
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
-        server.quit()
         
-        print(f"✅ 发送成功！请检查 {to_email} 的收件箱")
-        return True
+        url = f"https://graph.microsoft.com/v1.0/users/{MS_MAIL_FROM}/sendMail"
+        payload = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "HTML",
+                    "content": html_content
+                },
+                "toRecipients": [
+                    {"emailAddress": {"address": to_email}}
+                ]
+            },
+            "saveToSentItems": "false"
+        }
+        
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        
+        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        
+        if resp.status_code == 202:
+            print(f"✅ 发送成功！请检查 {to_email} 的收件箱")
+            return True
+        else:
+            print(f"❌ 发送失败: {resp.status_code}")
+            print(f"   {resp.text}")
+            return False
             
     except Exception as e:
         print(f"❌ 发送失败: {e}")

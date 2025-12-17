@@ -34,13 +34,11 @@ LINUXDO_USERINFO_URL = 'https://connect.linux.do/api/user'
 CF_TURNSTILE_SITE_KEY = os.environ.get('CF_TURNSTILE_SITE_KEY', '')
 CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 
-# SMTP 邮件配置
-SMTP_HOST = os.environ.get('SMTP_HOST', '')
-SMTP_PORT = int(os.environ.get('SMTP_PORT', 465))
-SMTP_USER = os.environ.get('SMTP_USER', '')
-SMTP_PASS = os.environ.get('SMTP_PASS', '')
-SMTP_FROM = os.environ.get('SMTP_FROM', '')  # 发件人显示名称和邮箱，如 "Team Invite <noreply@example.com>"
-SMTP_SSL = os.environ.get('SMTP_SSL', 'true').lower() == 'true'
+# Microsoft Graph API 邮件配置
+MS_TENANT_ID = os.environ.get('MS_TENANT_ID', '')
+MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
+MS_CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '')
+MS_MAIL_FROM = os.environ.get('MS_MAIL_FROM', '')  # 发件人邮箱
 
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
@@ -271,38 +269,57 @@ def init_db():
 def generate_code():
     return secrets.token_urlsafe(8).upper()[:12]
 
-# ========== SMTP 邮件 ==========
+# ========== Microsoft Graph API 邮件 ==========
+
+def get_ms_access_token() -> str:
+    """获取 Microsoft Graph API 访问令牌"""
+    url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
+    data = {
+        'client_id': MS_CLIENT_ID,
+        'client_secret': MS_CLIENT_SECRET,
+        'scope': 'https://graph.microsoft.com/.default',
+        'grant_type': 'client_credentials'
+    }
+    resp = requests.post(url, data=data, timeout=10)
+    resp.raise_for_status()
+    return resp.json()['access_token']
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    """通过 SMTP 发送邮件"""
-    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
-        print("SMTP 未配置")
+    """通过 Microsoft Graph API 发送邮件"""
+    if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
+        print("Microsoft Graph API 未配置")
         return False
     
     try:
-        import smtplib
-        from email.mime.text import MIMEText
-        from email.mime.multipart import MIMEMultipart
-        from email.header import Header
+        token = get_ms_access_token()
+        url = f"https://graph.microsoft.com/v1.0/users/{MS_MAIL_FROM}/sendMail"
         
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = Header(subject, 'utf-8')
-        msg['From'] = SMTP_FROM or SMTP_USER
-        msg['To'] = to_email
+        payload = {
+            "message": {
+                "subject": subject,
+                "body": {
+                    "contentType": "HTML",
+                    "content": html_content
+                },
+                "toRecipients": [
+                    {"emailAddress": {"address": to_email}}
+                ]
+            },
+            "saveToSentItems": "false"
+        }
         
-        html_part = MIMEText(html_content, 'html', 'utf-8')
-        msg.attach(html_part)
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
         
-        if SMTP_SSL:
-            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        resp = requests.post(url, json=payload, headers=headers, timeout=15)
+        
+        if resp.status_code == 202:
+            return True
         else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-            server.starttls()
-        
-        server.login(SMTP_USER, SMTP_PASS)
-        server.sendmail(SMTP_USER, to_email, msg.as_string())
-        server.quit()
-        return True
+            print(f"发送邮件失败: {resp.status_code} {resp.text}")
+            return False
     except Exception as e:
         print(f"发送邮件失败: {e}")
         return False
