@@ -34,9 +34,13 @@ LINUXDO_USERINFO_URL = 'https://connect.linux.do/api/user'
 CF_TURNSTILE_SITE_KEY = os.environ.get('CF_TURNSTILE_SITE_KEY', '')
 CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 
-# SendGrid 邮件配置
-SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
-SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', '')
+# SMTP 邮件配置
+SMTP_HOST = os.environ.get('SMTP_HOST', '')
+SMTP_PORT = int(os.environ.get('SMTP_PORT', 465))
+SMTP_USER = os.environ.get('SMTP_USER', '')
+SMTP_PASS = os.environ.get('SMTP_PASS', '')
+SMTP_FROM = os.environ.get('SMTP_FROM', '')  # 发件人显示名称和邮箱，如 "Team Invite <noreply@example.com>"
+SMTP_SSL = os.environ.get('SMTP_SSL', 'true').lower() == 'true'
 
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
@@ -267,79 +271,62 @@ def init_db():
 def generate_code():
     return secrets.token_urlsafe(8).upper()[:12]
 
-# ========== SendGrid 邮件 ==========
+# ========== SMTP 邮件 ==========
 
-def send_notification_email(to_email: str, available_seats: int) -> bool:
-    """发送空位通知邮件（旧版，仅通知）"""
-    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
-        print("SendGrid 未配置")
+def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    """通过 SMTP 发送邮件"""
+    if not SMTP_HOST or not SMTP_USER or not SMTP_PASS:
+        print("SMTP 未配置")
         return False
     
     try:
-        from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import Mail
+        import smtplib
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        from email.header import Header
         
-        message = Mail(
-            from_email=SENDGRID_FROM_EMAIL,
-            to_emails=to_email,
-            subject='🎉 候车室有空位啦！',
-            html_content=f'''
-            <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #2563eb;">候车室通知</h2>
-                <p>您好！</p>
-                <p>您排队等待的车位现在有 <strong style="color: #16a34a;">{available_seats}</strong> 个空位可用。</p>
-                <p>请尽快前往候车室使用邀请码领取席位：</p>
-                <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">前往领取</a></p>
-                <p style="color: #64748b; font-size: 14px; margin-top: 20px;">如果您已经领取或不再需要，请忽略此邮件。</p>
-            </div>
-            '''
-        )
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = Header(subject, 'utf-8')
+        msg['From'] = SMTP_FROM or SMTP_USER
+        msg['To'] = to_email
         
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        return response.status_code in [200, 201, 202]
+        html_part = MIMEText(html_content, 'html', 'utf-8')
+        msg.attach(html_part)
+        
+        if SMTP_SSL:
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT)
+        else:
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+            server.starttls()
+        
+        server.login(SMTP_USER, SMTP_PASS)
+        server.sendmail(SMTP_USER, to_email, msg.as_string())
+        server.quit()
+        return True
     except Exception as e:
         print(f"发送邮件失败: {e}")
         return False
 
 def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> bool:
     """发送带邀请码的邮件"""
-    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
-        print("SendGrid 未配置")
-        return False
-    
-    try:
-        from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import Mail
-        
-        message = Mail(
-            from_email=SENDGRID_FROM_EMAIL,
-            to_emails=to_email,
-            subject='您的team邀请码',
-            html_content=f'''
-            <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #2563eb;">🎉 team上车</h2>
-                <p>您好！</p>
-                <p>您在候车室排队等待的车位现已空出，这是您的专属邀请码：</p>
-                <div style="background: #f0f9ff; border: 2px dashed #2563eb; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
-                    <p style="color: #64748b; font-size: 14px; margin: 0 0 8px 0;">邀请码</p>
-                    <p style="font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 3px; margin: 0;">{invite_code}</p>
-                    <p style="color: #64748b; font-size: 13px; margin: 12px 0 0 0;">绑定车位: {team_name}</p>
-                </div>
-                <p>请前往首页填写邀请码和您的上车邮箱完成领取：</p>
-                <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">立即上车</a></p>
-                <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">⚠️ 此邀请码仅限您本人使用，请勿分享给他人。</p>
-                <p style="color: #64748b; font-size: 13px;">邀请码有效期为 24 小时，逾期未使用将自动作废。</p>
-            </div>
-            '''
-        )
-        
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        response = sg.send(message)
-        return response.status_code in [200, 201, 202]
-    except Exception as e:
-        print(f"发送邀请码邮件失败: {e}")
-        return False
+    subject = '您的 Team 邀请码'
+    html_content = f'''
+    <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+        <h2 style="color: #2563eb;">🎉 Team 上车</h2>
+        <p>您好！</p>
+        <p>您在候车室排队等待的车位现已空出，这是您的专属邀请码：</p>
+        <div style="background: #f0f9ff; border: 2px dashed #2563eb; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
+            <p style="color: #64748b; font-size: 14px; margin: 0 0 8px 0;">邀请码</p>
+            <p style="font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 3px; margin: 0;">{invite_code}</p>
+            <p style="color: #64748b; font-size: 13px; margin: 12px 0 0 0;">绑定车位: {team_name}</p>
+        </div>
+        <p>请前往首页填写邀请码和您的上车邮箱完成领取：</p>
+        <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">立即上车</a></p>
+        <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">⚠️ 此邀请码仅限您本人使用，请勿分享给他人。</p>
+        <p style="color: #64748b; font-size: 13px;">邀请码有效期为 24 小时，逾期未使用将自动作废。</p>
+    </div>
+    '''
+    return send_email(to_email, subject, html_content)
 
 def admin_required(f):
     @wraps(f)
