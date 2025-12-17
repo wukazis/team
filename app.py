@@ -987,6 +987,42 @@ def delete_user(user_id):
     conn.close()
     return jsonify({'status': 'deleted'})
 
+# ========== 排队队列管理 ==========
+
+@app.route('/api/admin/queue', methods=['GET'])
+@admin_required
+def list_queue():
+    conn = get_db()
+    rows = conn.execute('SELECT * FROM waiting_queue ORDER BY created_at ASC').fetchall()
+    waiting = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
+    notified = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 1').fetchone()[0]
+    conn.close()
+    return jsonify({
+        'queue': [dict(r) for r in rows],
+        'waiting': waiting,
+        'notified': notified,
+        'total': waiting + notified
+    })
+
+@app.route('/api/admin/queue/<int:queue_id>', methods=['DELETE'])
+@admin_required
+def delete_queue_item(queue_id):
+    conn = get_db()
+    conn.execute('DELETE FROM waiting_queue WHERE id = ?', (queue_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'deleted'})
+
+@app.route('/api/admin/queue/clear-notified', methods=['POST'])
+@admin_required
+def clear_notified_queue():
+    conn = get_db()
+    cursor = conn.execute('DELETE FROM waiting_queue WHERE notified = 1')
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
 # ========== 后台自动同步 ==========
 
 def background_sync():
