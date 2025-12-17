@@ -413,7 +413,7 @@
             <!-- 已排队状态 -->
             <div id="queueSuccess" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <p style="color: var(--success); font-weight: 500;">✓ 已加入队列</p>
-                <p class="muted" style="margin-top: 0.5rem;">排队位置: 第 <span id="queuePosition">-</span> 位</p>
+                <p class="muted" style="margin-top: 0.5rem;">当前位置: 第 <span id="queuePosition">-</span> 位</p>
                 <div style="margin-top: 1rem; position: relative; display: inline-block;">
                     <button onclick="toggleQueueMenu()" style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
                         <svg id="queueMenuArrow" width="12" height="12" viewBox="0 0 24 24" fill="white" style="transition: transform 0.2s;">
@@ -511,7 +511,7 @@
             container.innerHTML = accounts.map(acc => {
                 const used = (acc.seatsInUse || 0) + (acc.pendingInvites || 0);
                 const total = acc.seatsEntitled || 0;
-                const available = total - used;
+                const available = Math.max(0, total - used);
                 const percent = total > 0 ? (used / total) * 100 : 0;
                 
                 let statusClass, badgeClass, badgeText;
