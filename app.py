@@ -1060,6 +1060,31 @@ def clear_notified_queue():
     conn.close()
     return jsonify({'status': 'ok', 'deleted': deleted})
 
+# ========== 冷却用户管理 ==========
+
+@app.route('/api/admin/cooldown-users', methods=['GET'])
+@admin_required
+def list_cooldown_users():
+    """获取冷却中的用户列表（30天内使用过邀请码的用户）"""
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT u.id, u.username, u.name, c.used_email, c.used_at, t.name as team_name,
+               datetime(c.used_at, '+30 days') as cooldown_end,
+               CAST(julianday(datetime(c.used_at, '+30 days')) - julianday('now') AS INTEGER) as days_left
+        FROM users u
+        JOIN invite_codes c ON u.id = c.user_id
+        LEFT JOIN team_accounts t ON c.team_account_id = t.id
+        WHERE u.has_used = 1 
+          AND datetime(c.used_at, '+30 days') > datetime('now')
+        ORDER BY c.used_at DESC
+    ''').fetchall()
+    conn.close()
+    
+    return jsonify({
+        'users': [dict(r) for r in rows],
+        'count': len(rows)
+    })
+
 # ========== 后台自动同步 ==========
 
 def background_sync():

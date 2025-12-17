@@ -238,6 +238,7 @@
                 <button class="tab" onclick="switchTab('codes')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 2px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> 邀请码</button>
                 <button class="tab" onclick="switchTab('users')"><i class="bi bi-people" style="margin-right: 2px;"></i> 用户</button>
                 <button class="tab" onclick="switchTab('queue')"><i class="bi bi-hourglass-split" style="margin-right: 2px;"></i> 队列</button>
+                <button class="tab" onclick="switchTab('cooldown')"><i class="bi bi-clock-history" style="margin-right: 2px;"></i> 冷却</button>
             </div>
 
             <!-- 车账号管理 -->
@@ -384,6 +385,38 @@
                     </table>
                 </div>
             </div>
+
+            <!-- 冷却用户 -->
+            <div id="cooldownSection" class="section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">冷却中</div>
+                        <div class="value" id="statCooldownCount">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="title">冷却用户列表</span>
+                        <div class="table-actions">
+                            <button class="btn btn-ghost" onclick="loadCooldownUsers()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>使用邮箱</th>
+                                <th>使用车位</th>
+                                <th>使用时间</th>
+                                <th>冷却结束</th>
+                                <th>剩余天数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="cooldownList"></tbody>
+                    </table>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -464,6 +497,7 @@
             await loadStats();
             await loadUsers();
             await loadQueue();
+            await loadCooldownUsers();
         }
 
         // ========== 车账号 ==========
@@ -816,6 +850,31 @@
             }
             alert(`已清除 ${res.data.deleted} 条记录`);
             loadQueue();
+        }
+
+        // ========== 冷却用户 ==========
+        async function loadCooldownUsers() {
+            const { ok, data } = await api('/admin/cooldown-users');
+            if (!ok) return;
+            
+            document.getElementById('statCooldownCount').textContent = data.count || 0;
+            
+            const tbody = document.getElementById('cooldownList');
+            if (!data.users || data.users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">暂无冷却用户</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.users.map(u => `
+                <tr>
+                    <td><strong>${u.username}</strong>${u.name ? `<br><span class="text-muted">${u.name}</span>` : ''}</td>
+                    <td class="text-muted">${u.used_email || '-'}</td>
+                    <td class="text-muted">${u.team_name || '-'}</td>
+                    <td class="text-muted">${formatTime(u.used_at)}</td>
+                    <td class="text-muted">${formatTime(u.cooldown_end)}</td>
+                    <td><span class="badge used">${u.days_left} 天</span></td>
+                </tr>
+            `).join('');
         }
 
         // 回车登录
