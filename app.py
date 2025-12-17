@@ -34,6 +34,10 @@ LINUXDO_USERINFO_URL = 'https://connect.linux.do/api/user'
 CF_TURNSTILE_SITE_KEY = os.environ.get('CF_TURNSTILE_SITE_KEY', '')
 CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 
+# SendGrid 邮件配置
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY', '')
+SENDGRID_FROM_EMAIL = os.environ.get('SENDGRID_FROM_EMAIL', '')
+
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_EXPIRY_HOURS = 24
@@ -238,11 +242,57 @@ def init_db():
         conn.execute('ALTER TABLE team_accounts ADD COLUMN pending_invites INTEGER DEFAULT 0')
     except sqlite3.OperationalError:
         pass  # 列已存在
+    
+    # 创建排队表
+    conn.execute('''
+        CREATE TABLE IF NOT EXISTS waiting_queue (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT NOT NULL,
+            notified INTEGER DEFAULT 0,
+            created_at TEXT DEFAULT (datetime('now')),
+            notified_at TEXT
+        )
+    ''')
     conn.commit()
     conn.close()
 
 def generate_code():
     return secrets.token_urlsafe(8).upper()[:12]
+
+# ========== SendGrid 邮件 ==========
+
+def send_notification_email(to_email: str, available_seats: int) -> bool:
+    """发送空位通知邮件"""
+    if not SENDGRID_API_KEY or not SENDGRID_FROM_EMAIL:
+        print("SendGrid 未配置")
+        return False
+    
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+        
+        message = Mail(
+            from_email=SENDGRID_FROM_EMAIL,
+            to_emails=to_email,
+            subject='🎉 候车室有空位啦！',
+            html_content=f'''
+            <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
+                <h2 style="color: #2563eb;">候车室通知</h2>
+                <p>您好！</p>
+                <p>您排队等待的车位现在有 <strong style="color: #16a34a;">{available_seats}</strong> 个空位可用。</p>
+                <p>请尽快前往候车室使用邀请码领取席位：</p>
+                <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">前往领取</a></p>
+                <p style="color: #64748b; font-size: 14px; margin-top: 20px;">如果您已经领取或不再需要，请忽略此邮件。</p>
+            </div>
+            '''
+        )
+        
+        sg = SendGridAPIClient(SENDGRID_API_KEY)
+        response = sg.send(message)
+        return response.status_code in [200, 201, 202]
+    except Exception as e:
+        print(f"发送邮件失败: {e}")
+        return False
 
 def admin_required(f):
     @wraps(f)
@@ -413,6 +463,93 @@ def team_accounts_status():
     
     conn.close()
     return jsonify({'accounts': result})
+
+# ========== 排队通知 API ==========
+
+@app.route('/api/waiting/join', methods=['POST'])
+def join_waiting_queue():
+    """加入排队队列"""
+    data = request.json or {}
+    email = (data.get('email') or '').strip().lower()
+    
+    if not email or '@' not in email:
+        return jsonify({'error': '请输入有效邮箱'}), 400
+    
+    conn = get_db()
+    # 检查是否已在队列中
+    existing = conn.execute('SELECT * FROM waiting_queue WHERE email = ?', (email,)).fetchone()
+    if existing:
+        conn.close()
+        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position(email)})
+    
+    conn.execute('INSERT INTO waiting_queue (email) VALUES (?)', (email,))
+    conn.commit()
+    position = get_queue_position(email)
+    conn.close()
+    
+    return jsonify({'message': '排队成功！有空位时会通知您', 'position': position})
+
+@app.route('/api/waiting/status')
+def waiting_status():
+    """获取排队状态"""
+    email = request.args.get('email', '').strip().lower()
+    
+    conn = get_db()
+    queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
+    
+    position = None
+    if email:
+        position = get_queue_position(email)
+    
+    conn.close()
+    return jsonify({'queueCount': queue_count, 'position': position})
+
+@app.route('/api/waiting/leave', methods=['POST'])
+def leave_waiting_queue():
+    """离开排队队列"""
+    data = request.json or {}
+    email = (data.get('email') or '').strip().lower()
+    
+    if not email:
+        return jsonify({'error': '请输入邮箱'}), 400
+    
+    conn = get_db()
+    conn.execute('DELETE FROM waiting_queue WHERE email = ?', (email,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'message': '已退出排队'})
+
+def get_queue_position(email: str) -> int:
+    """获取排队位置"""
+    conn = get_db()
+    row = conn.execute('''
+        SELECT COUNT(*) + 1 as position FROM waiting_queue 
+        WHERE notified = 0 AND created_at < (SELECT created_at FROM waiting_queue WHERE email = ?)
+    ''', (email,)).fetchone()
+    conn.close()
+    return row['position'] if row else 0
+
+def notify_waiting_users(available_seats: int):
+    """通知排队用户有空位"""
+    if available_seats <= 0 or not SENDGRID_API_KEY:
+        return
+    
+    conn = get_db()
+    # 获取未通知的排队用户（按排队顺序，最多通知空位数的2倍）
+    users = conn.execute('''
+        SELECT * FROM waiting_queue WHERE notified = 0 
+        ORDER BY created_at ASC LIMIT ?
+    ''', (available_seats * 2,)).fetchall()
+    
+    for user in users:
+        if send_notification_email(user['email'], available_seats):
+            conn.execute('''
+                UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ?
+            ''', (user['id'],))
+            conn.commit()
+    
+    conn.close()
 
 @app.route('/api/invite/check', methods=['POST'])
 def check_invite():
@@ -863,6 +1000,7 @@ def background_sync():
                 'SELECT * FROM team_accounts WHERE enabled = 1 AND authorization_token IS NOT NULL AND account_id IS NOT NULL'
             ).fetchall()
             
+            total_available = 0
             for acc in accounts:
                 try:
                     data = fetch_team_status(acc['account_id'], acc['authorization_token'])
@@ -870,11 +1008,19 @@ def background_sync():
                         UPDATE team_accounts SET seats_in_use = ?, seats_entitled = ?, pending_invites = ?, active_until = ?, last_sync = datetime('now')
                         WHERE id = ?
                     ''', (data['seats_in_use'], data['seats_entitled'], data.get('pending_invites', 0), data.get('active_until'), acc['id']))
+                    # 计算可用空位
+                    available = data['seats_entitled'] - data['seats_in_use'] - data.get('pending_invites', 0)
+                    if available > 0:
+                        total_available += available
                 except Exception as e:
                     print(f"[同步失败] {acc['name']}: {e}")
             
             conn.commit()
             conn.close()
+            
+            # 有空位时通知排队用户
+            if total_available > 0:
+                notify_waiting_users(total_available)
         except Exception as e:
             print(f"[后台同步错误] {e}")
 
