@@ -565,6 +565,10 @@ def join_waiting_queue():
     email = (data.get('email') or '').strip().lower()
     user_id = request.user['user_id']
     
+    # 邮箱必填验证
+    if not email or '@' not in email:
+        return jsonify({'error': '请输入有效的邮箱地址'}), 400
+    
     conn = get_db()
     
     # 检查用户状态
