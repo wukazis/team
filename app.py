@@ -607,6 +607,29 @@ def leave_waiting_queue():
     
     return jsonify({'message': '已退出排队'})
 
+@app.route('/api/waiting/list')
+@jwt_required
+def waiting_list():
+    """获取排队队列列表（需要登录）"""
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT wq.id, wq.user_id, wq.created_at, u.username
+        FROM waiting_queue wq
+        LEFT JOIN users u ON wq.user_id = u.id
+        WHERE wq.notified = 0
+        ORDER BY wq.created_at ASC
+    ''').fetchall()
+    conn.close()
+    
+    result = []
+    for i, row in enumerate(rows):
+        result.append({
+            'position': i + 1,
+            'username': row['username'] or '未知用户'
+        })
+    
+    return jsonify({'queue': result})
+
 def get_queue_position_by_user(user_id: int) -> int:
     """根据用户ID获取排队位置"""
     conn = get_db()
