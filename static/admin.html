@@ -446,6 +446,7 @@
                         <span class="title"><i class="bi bi-activity" style="margin-right: 4px;"></i> 实时状态</span>
                         <div class="table-actions">
                             <span class="text-muted" id="monTestMode"></span>
+                            <button class="btn btn-primary" onclick="forceDispatch()"><i class="bi bi-send"></i> 强制发车</button>
                             <button class="btn btn-ghost" onclick="loadMonitor()"><i class="bi bi-arrow-clockwise"></i></button>
                         </div>
                     </div>
@@ -1061,6 +1062,19 @@
                 el.style.color = 'var(--warning)';
             } else {
                 el.style.color = 'var(--success)';
+            }
+        }
+        
+        async function forceDispatch() {
+            if (!confirm('确定要强制发车吗？将跳过人满发车检查，立即给排队用户发送邀请码。')) return;
+            
+            const { ok, data } = await api('/admin/send-invite-codes', { method: 'POST' });
+            if (ok) {
+                alert(data.message || '发车成功');
+                loadMonitor();
+                loadQueue();
+            } else {
+                alert(data.error || '发车失败');
             }
         }
         

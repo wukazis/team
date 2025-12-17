@@ -713,11 +713,16 @@ def get_queue_position_by_user(user_id: int) -> int:
     conn.close()
     return row['position'] if row else 0
 
-def notify_waiting_users(available_seats: int):
-    """自动给排队用户发送邀请码（按空位数量和车位分配）"""
+def notify_waiting_users(available_seats: int, force: bool = False):
+    """自动给排队用户发送邀请码（按空位数量和车位分配）
+    
+    Args:
+        available_seats: 可用空位数（内部会重新计算）
+        force: 是否强制发车（跳过人满发车检查）
+    """
     if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
         print("Microsoft Graph API 邮件未配置，跳过自动发码")
-        return
+        return 0
     
     conn = get_db()
     
@@ -743,7 +748,7 @@ def notify_waiting_users(available_seats: int):
     
     if not available_slots:
         conn.close()
-        return
+        return 0
     
     # 2. 获取未通知的排队用户数量
     queue_count = conn.execute('''
@@ -751,11 +756,11 @@ def notify_waiting_users(available_seats: int):
         WHERE notified = 0 AND email IS NOT NULL AND email != ''
     ''').fetchone()[0]
     
-    # 人满发车：只有排队人数 >= 空位数才发车
-    if queue_count < len(available_slots):
+    # 人满发车：只有排队人数 >= 空位数才发车（强制发车跳过此检查）
+    if not force and queue_count < len(available_slots):
         print(f"[轮询] 排队 {queue_count} 人，空位 {len(available_slots)} 个，等待人满发车...")
         conn.close()
-        return
+        return 0
     
     # 3. 获取未通知的排队用户（按排队顺序，数量等于空位数）
     users = conn.execute('''
@@ -767,9 +772,10 @@ def notify_waiting_users(available_seats: int):
     
     if not users:
         conn.close()
-        return
+        return 0
     
-    # 3. 为每个用户生成邀请码并发送
+    # 4. 为每个用户生成邀请码并发送
+    sent_count = 0
     for i, user in enumerate(users):
         if i >= len(available_slots):
             break
@@ -802,6 +808,7 @@ def notify_waiting_users(available_seats: int):
                 UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ?
             ''', (user['id'],))
             conn.commit()
+            sent_count += 1
             print(f"已发送邀请码 {code} 到 {user['email']} (车位: {slot['team_name']})")
         else:
             # 发送失败，删除刚生成的邀请码
@@ -810,6 +817,7 @@ def notify_waiting_users(available_seats: int):
             print(f"发送邀请码到 {user['email']} 失败（已重试 {max_retries} 次）")
     
     conn.close()
+    return sent_count
 
 @app.route('/api/invite/check', methods=['POST'])
 def check_invite():
@@ -1159,10 +1167,10 @@ def sync_all_team_accounts():
 @app.route('/api/admin/send-invite-codes', methods=['POST'])
 @admin_required
 def admin_send_invite_codes():
-    """手动触发给排队用户发送邀请码"""
+    """手动触发给排队用户发送邀请码（强制发车，跳过人满检查）"""
     try:
-        notify_waiting_users(999)  # 传入大数，函数内部会按实际空位计算
-        return jsonify({'status': 'ok', 'message': '已触发自动发码'})
+        sent = notify_waiting_users(999, force=True)  # 强制发车
+        return jsonify({'status': 'ok', 'message': f'已强制发车，发送 {sent or 0} 个邀请码'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
