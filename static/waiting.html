@@ -581,6 +581,29 @@
                     window.location.href = '/';
                     return false;
                 }
+                
+                const data = await res.json();
+                
+                // 检查用户是否在冷却期
+                if (data.user.hasUsed) {
+                    // 尝试加入排队来检测冷却状态
+                    const joinRes = await fetch('/api/waiting/join', {
+                        method: 'POST',
+                        headers: { 
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${jwtToken}`
+                        },
+                        body: JSON.stringify({ email: null })
+                    });
+                    
+                    if (joinRes.status === 403) {
+                        // 在冷却期，跳转到首页
+                        alert('您在冷却期内，暂时无法访问候车室');
+                        window.location.href = '/';
+                        return false;
+                    }
+                }
+                
                 return true;
             } catch (err) {
                 window.location.href = '/';
