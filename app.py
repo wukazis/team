@@ -1495,7 +1495,7 @@ def get_pending_invite_codes_count():
     return count
 
 def cleanup_expired_invite_codes():
-    """清理过期的邀请码（超过有效期未使用的）"""
+    """清理过期的邀请码（超过有效期未使用的）- 同时移除用户出队列"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
@@ -1511,10 +1511,12 @@ def cleanup_expired_invite_codes():
         for code in expired:
             # 删除邀请码
             conn.execute('DELETE FROM invite_codes WHERE id = ?', (code['id'],))
-            # 重置用户的 notified 状态，让他们可以重新收到邀请码
+            # 从队列中移除用户（邀请码过期视为放弃排队）
             if code['user_id']:
-                conn.execute('UPDATE waiting_queue SET notified = 0, notified_at = NULL WHERE user_id = ?', (code['user_id'],))
-            print(f"[清理] 已删除过期邀请码 {code['code']}")
+                conn.execute('DELETE FROM waiting_queue WHERE user_id = ?', (code['user_id'],))
+                print(f"[清理] 已删除过期邀请码 {code['code']}，用户已移出队列")
+            else:
+                print(f"[清理] 已删除过期邀请码 {code['code']}")
         conn.commit()
     
     conn.close()
