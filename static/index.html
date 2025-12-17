@@ -512,7 +512,7 @@
             const c = document.getElementById('teamAccountsContainer');
             if (!teamAccounts.length) { c.innerHTML = '<p class="muted" style="text-align:center">暂无可用车位</p>'; return; }
             c.innerHTML = teamAccounts.map(a => {
-                const avail = a.seatsEntitled - a.seatsInUse - a.pendingInvites;
+                const avail = Math.max(0, a.seatsEntitled - a.seatsInUse - a.pendingInvites);
                 const full = a.seatsInUse + a.pendingInvites >= 5;
                 const sel = selectedAccountId === a.id;
                 const exp = a.activeUntil ? new Date(a.activeUntil).toLocaleDateString() : '';
