@@ -43,6 +43,9 @@ MS_MAIL_FROM = os.environ.get('MS_MAIL_FROM', '')  # 发件人邮箱
 # 测试模式（跳过真实发送 ChatGPT 邀请）
 TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 
+# 发车模式：auto=自动发车, manual=手动确认发车
+DISPATCH_MODE = os.environ.get('DISPATCH_MODE', 'auto')  # 默认自动模式
+
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_EXPIRY_HOURS = 24
@@ -1489,10 +1492,23 @@ def get_monitor_status():
         'pollWaitTime': POLL_WAIT_TIME,
         'syncInterval': SYNC_INTERVAL,
         'testMode': TEST_MODE,
+        'dispatchMode': DISPATCH_MODE,
         'teams': team_status,
         'lastSyncTime': monitor_state.get('last_sync_time'),
         'lastBatchTime': monitor_state.get('last_batch_time')
     })
+
+@app.route('/api/admin/dispatch-mode', methods=['POST'])
+@admin_required
+def set_dispatch_mode():
+    """设置发车模式"""
+    global DISPATCH_MODE
+    data = request.json or {}
+    mode = data.get('mode', 'auto')
+    if mode not in ('auto', 'manual'):
+        return jsonify({'error': '无效的模式'}), 400
+    DISPATCH_MODE = mode
+    return jsonify({'status': 'ok', 'mode': DISPATCH_MODE})
 
 # ========== 后台自动同步 ==========
 
@@ -1613,6 +1629,13 @@ def background_sync():
             
             # 3. 没有未使用的邀请码，检查是否需要发新的
             if total_available > 0:
+                # 手动模式：不自动发车，等待管理员手动触发
+                if DISPATCH_MODE == 'manual':
+                    monitor_state['status'] = 'manual_wait'
+                    monitor_state['status_text'] = '手动模式 - 等待管理员发车'
+                    time.sleep(SYNC_INTERVAL)
+                    continue
+                
                 # 如果刚发完一批，等待1分钟
                 if last_batch_time and (time.time() - last_batch_time) < POLL_WAIT_TIME:
                     wait_time = POLL_WAIT_TIME - (time.time() - last_batch_time)
