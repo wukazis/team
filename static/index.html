@@ -31,6 +31,9 @@
             --muted: #94a3b8;
             --hover-bg: #334155;
         }
+        [data-theme="dark"] .message.success { background: rgba(22, 163, 74, 0.15); border-color: rgba(22, 163, 74, 0.3); }
+        [data-theme="dark"] .message.error { background: rgba(220, 38, 38, 0.15); border-color: rgba(220, 38, 38, 0.3); }
+        [data-theme="dark"] .success-box { background: rgba(22, 163, 74, 0.15); border-color: rgba(22, 163, 74, 0.3); }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: var(--bg); min-height: 100vh; color: var(--text); }
         .navbar {
@@ -148,7 +151,7 @@
             padding: 0.75rem 1rem;
             border: 2px solid var(--border);
             border-radius: 10px;
-            background: #fff;
+            background: var(--card);
             cursor: pointer;
             transition: all 0.15s;
         }
@@ -157,7 +160,7 @@
         }
         .team-row.selected {
             border-color: var(--primary);
-            background: #f0f7ff;
+            background: var(--hover-bg);
         }
         .team-row.full {
             opacity: 0.5;
@@ -210,7 +213,7 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             font-size: 0.95rem;
-            background: #fff;
+            background: var(--card);
             color: var(--text);
             transition: border-color 0.15s, box-shadow 0.15s;
         }
