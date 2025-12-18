@@ -450,6 +450,7 @@
                     <div class="table-header">
                         <span class="title"><i class="bi bi-activity" style="margin-right: 4px;"></i> 实时状态</span>
                         <div class="table-actions">
+                            <span class="text-muted" id="monDbType"></span>
                             <span class="text-muted" id="monTestMode"></span>
                             <select id="dispatchModeSelect" onchange="setDispatchMode(this.value)" style="padding: 0.3rem 0.5rem; border-radius: 4px; border: 1px solid var(--border); font-size: 0.85rem;">
                                 <option value="auto">自动模式</option>
@@ -1176,6 +1177,11 @@
             else if (data.status === 'sending') statusColor = 'var(--primary)';
             else if (data.status === 'error') statusColor = 'var(--danger)';
             statusEl.innerHTML = `<span style="color: ${statusColor}">${data.statusText}</span>`;
+            
+            // 数据库类型标识
+            document.getElementById('monDbType').innerHTML = data.databaseType === 'PostgreSQL'
+                ? '<span class="badge enabled">PostgreSQL</span>'
+                : '<span class="badge disabled">SQLite</span>';
             
             // 测试模式标识
             document.getElementById('monTestMode').innerHTML = data.testMode 

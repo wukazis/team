@@ -1792,6 +1792,7 @@ def get_monitor_status():
         'syncInterval': SYNC_INTERVAL,
         'testMode': TEST_MODE,
         'dispatchMode': DISPATCH_MODE,
+        'databaseType': 'PostgreSQL' if USE_POSTGRES else 'SQLite',
         'teams': team_status,
         'lastSyncTime': monitor_state.get('last_sync_time'),
         'lastBatchTime': monitor_state.get('last_batch_time')
