@@ -116,6 +116,14 @@ def migrate():
         pg_conn.commit()
         print("表结构创建完成")
         
+        # 辅助函数：安全获取列值
+        def safe_get(row, key, default=None):
+            try:
+                val = row[key]
+                return val if val is not None else default
+            except (IndexError, KeyError):
+                return default
+        
         # 2. 迁移 team_accounts
         print("迁移 team_accounts...")
         rows = sqlite_conn.execute('SELECT * FROM team_accounts').fetchall()
@@ -128,7 +136,7 @@ def migrate():
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (row['id'], row['name'], row['authorization_token'], row['account_id'], 
                       row['max_seats'], row['seats_entitled'], row['seats_in_use'], row['enabled'],
-                      row.get('active_until'), row.get('pending_invites', 0), row['last_sync'], row['created_at']))
+                      safe_get(row, 'active_until'), safe_get(row, 'pending_invites', 0), row['last_sync'], row['created_at']))
             # 重置序列
             pg_cursor.execute("SELECT setval('team_accounts_id_seq', (SELECT MAX(id) FROM team_accounts))")
             print(f"  迁移了 {len(rows)} 条记录")
@@ -143,7 +151,7 @@ def migrate():
                     INSERT INTO users (id, username, name, avatar_template, trust_level, has_used, created_at, updated_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (row['id'], row['username'], row['name'], row['avatar_template'],
-                      row['trust_level'], row.get('has_used', 0), row['created_at'], row['updated_at']))
+                      row['trust_level'], safe_get(row, 'has_used', 0), row['created_at'], row['updated_at']))
             print(f"  迁移了 {len(rows)} 条记录")
         
         # 4. 迁移 invite_codes
@@ -156,7 +164,7 @@ def migrate():
                     INSERT INTO invite_codes (id, code, team_account_id, user_id, used, used_email, auto_generated, created_at, used_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ''', (row['id'], row['code'], row['team_account_id'], row['user_id'],
-                      row['used'], row['used_email'], row.get('auto_generated', 0), row['created_at'], row['used_at']))
+                      row['used'], row['used_email'], safe_get(row, 'auto_generated', 0), row['created_at'], row['used_at']))
             pg_cursor.execute("SELECT setval('invite_codes_id_seq', (SELECT MAX(id) FROM invite_codes))")
             print(f"  迁移了 {len(rows)} 条记录")
         
