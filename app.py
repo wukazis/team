@@ -767,7 +767,7 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
                     {"emailAddress": {"address": to_email}}
                 ]
             },
-            "saveToSentItems": "false"
+            "saveToSentItems": "true"
         }
         
         headers = {
