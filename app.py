@@ -771,40 +771,27 @@ def oauth_callback():
     avatar_template = user_data.get('avatar_template', '')
     trust_level = user_data.get('trust_level', 0)
     
-    import sys
     conn = get_db()
     try:
-        print(f"[OAuth] 尝试创建/更新用户 {username} (ID: {user_id})", file=sys.stderr, flush=True)
         existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
-        print(f"[OAuth] 查询现有用户结果: {existing}", file=sys.stderr, flush=True)
         if existing:
-            result = conn.execute('''
+            conn.execute('''
                 UPDATE users SET username = ?, name = ?, avatar_template = ?, trust_level = ?, updated_at = datetime('now')
                 WHERE id = ?
             ''', (username, name, avatar_template, trust_level, user_id))
-            print(f"[OAuth] UPDATE rowcount: {result.rowcount}", file=sys.stderr, flush=True)
         else:
-            sql = 'INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)'
-            params = (user_id, username, name, avatar_template, trust_level)
-            print(f"[OAuth] 执行 INSERT, params: {params}", file=sys.stderr, flush=True)
-            result = conn.execute(sql, params)
-            print(f"[OAuth] INSERT rowcount: {result.rowcount}", file=sys.stderr, flush=True)
+            conn.execute('''
+                INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, username, name, avatar_template, trust_level))
         conn.commit()
-        print(f"[OAuth] commit() 调用完成", file=sys.stderr, flush=True)
-        # 验证插入
-        verify = conn.execute('SELECT id, username FROM users WHERE id = ?', (user_id,)).fetchone()
-        print(f"[OAuth] 验证查询结果: {verify}", file=sys.stderr, flush=True)
     except Exception as e:
-        print(f"[OAuth] 用户创建/更新失败: {e}", file=sys.stderr, flush=True)
-        import traceback
-        traceback.print_exc()
+        print(f"OAuth 用户创建失败: {e}")
         return redirect(f'{APP_BASE_URL}?error=db_error')
     finally:
         conn.close()
     
     # 生成 JWT
     jwt_token = create_jwt_token(user_id, username)
-    print(f"[OAuth] JWT 生成成功，重定向用户 {username}", file=sys.stderr, flush=True)
     return redirect(f'{APP_BASE_URL}?token={jwt_token}')
 
 @app.route('/api/user/state')
