@@ -1719,7 +1719,7 @@ def clear_all_codes():
 @app.route('/api/admin/cooldown-users', methods=['GET'])
 @admin_required
 def list_cooldown_users():
-    """获取冷却中的用户列表（用过邀请码或has_used=1的用户）"""
+    """获取冷却中的用户列表（has_used=1的用户）"""
     conn = get_db()
     
     if USE_POSTGRES:
@@ -1730,7 +1730,7 @@ def list_cooldown_users():
             FROM users u
             LEFT JOIN invite_codes c ON u.id = c.user_id AND c.used = 1
             LEFT JOIN team_accounts t ON c.team_account_id = t.id
-            WHERE u.has_used = 1 OR c.user_id IS NOT NULL
+            WHERE u.has_used = 1
             GROUP BY u.id, u.username, u.name, c.used_email, c.used_at, u.updated_at, t.name
             ORDER BY COALESCE(c.used_at, u.updated_at) DESC
         ''').fetchall()
@@ -1744,7 +1744,7 @@ def list_cooldown_users():
             FROM users u
             LEFT JOIN invite_codes c ON u.id = c.user_id AND c.used = 1
             LEFT JOIN team_accounts t ON c.team_account_id = t.id
-            WHERE u.has_used = 1 OR c.user_id IS NOT NULL
+            WHERE u.has_used = 1
             GROUP BY u.id
             ORDER BY used_at DESC
         ''').fetchall()
