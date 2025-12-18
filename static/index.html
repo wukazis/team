@@ -401,10 +401,10 @@
              Team Invite</a>
         <div class="navbar-right">
             <div id="shanghaiClock" style="font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums;"></div>
+            <div id="userInfo" class="user-info hidden"></div>
             <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; cursor: pointer; color: var(--text);" id="themeBtn">
                 <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
             </button>
-            <div id="userInfo" class="user-info hidden"></div>
         </div>
     </nav>
 
@@ -590,7 +590,6 @@
             ui.innerHTML = `
                 <img src="${avatarUrl}" alt="avatar" class="user-avatar" onerror="this.src='${fallbackAvatar}'">
                 <div class="user-card">
-                    <img src="${avatarUrl}" alt="avatar" class="user-card-avatar" onerror="this.src='${fallbackAvatar}'">
                     <div class="user-card-name">${displayName}</div>
                     <div class="user-card-username">@${currentUser.username}</div>
                     <div class="user-card-meta">ID: ${currentUser.user_id} · Trust ${trustLevel}</div>
@@ -779,7 +778,7 @@
             const now = new Date();
             const shanghaiTime = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Shanghai' }));
             const timeStr = shanghaiTime.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            document.getElementById('shanghaiClock').textContent = '🕐 ' + timeStr;
+            document.getElementById('shanghaiClock').innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" style="vertical-align: -2px; margin-right: 4px;"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71V3.5z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0z"/></svg>' + timeStr;
         }
         updateShanghaiClock();
         setInterval(updateShanghaiClock, 1000);
