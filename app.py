@@ -1053,13 +1053,6 @@ def join_waiting_queue():
     
     conn = get_db()
     
-    # 检查排队人数上限
-    if WAITING_ROOM_MAX_QUEUE > 0:
-        queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue').fetchone()[0]
-        if queue_count >= WAITING_ROOM_MAX_QUEUE:
-            conn.close()
-            return jsonify({'error': f'排队人数已达上限（{WAITING_ROOM_MAX_QUEUE}人），请稍后再试'}), 403
-    
     # 检查用户状态
     user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     if not user:
@@ -1101,9 +1094,31 @@ def join_waiting_queue():
         conn.close()
         return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': existing['email'], 'queueCount': queue_count})
     
-    # 使用事务和唯一约束防止并发重复插入
+    # 使用原子操作：检查人数上限 + 插入，防止幻读导致超员
     try:
-        conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
+        if WAITING_ROOM_MAX_QUEUE > 0:
+            # 原子操作：只有当队列未满时才插入
+            if USE_POSTGRES:
+                conn.execute('''
+                    INSERT INTO waiting_queue (user_id, email)
+                    SELECT %s, %s
+                    WHERE (SELECT COUNT(*) FROM waiting_queue) < %s
+                ''', (user_id, email if email else None, WAITING_ROOM_MAX_QUEUE))
+            else:
+                conn.execute('''
+                    INSERT INTO waiting_queue (user_id, email)
+                    SELECT ?, ?
+                    WHERE (SELECT COUNT(*) FROM waiting_queue) < ?
+                ''', (user_id, email if email else None, WAITING_ROOM_MAX_QUEUE))
+            
+            # 检查是否插入成功（rowcount为0表示队列已满）
+            if conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone() is None:
+                conn.close()
+                return jsonify({'error': f'排队人数已达上限（{WAITING_ROOM_MAX_QUEUE}人），请稍后再试'}), 403
+        else:
+            # 无人数限制，直接插入
+            conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
+        
         conn.commit()
     except Exception as e:
         # 并发插入导致唯一约束冲突，说明用户已在队列中
