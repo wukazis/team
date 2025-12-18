@@ -206,9 +206,55 @@
         .form-actions { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
         
         a { color: var(--primary); text-decoration: none; }
+        
+        /* 加载动画 */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: var(--bg);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+            transition: opacity 0.3s ease;
+        }
+        .loading-overlay.fade-out { opacity: 0; pointer-events: none; }
+        .logo-container { width: 60px; height: 60px; }
+        .tech-stroke {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 2;
+            stroke-linecap: round;
+            filter: drop-shadow(0 0 2px var(--primary));
+        }
+        .ring-group { transform-origin: 50px 50px; animation: spin 2s linear infinite; }
+        .draw-path { stroke-dasharray: 100; stroke-dashoffset: 100; animation: draw 0.8s ease-out forwards; }
+        .center-circle { animation: pop 0.3s ease forwards 0.5s; opacity: 0; transform-origin: 50px 50px; fill: var(--bg); }
+        @keyframes draw { to { stroke-dashoffset: 0; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pop { to { opacity: 1; } }
     </style>
 </head>
 <body>
+    <!-- 加载动画 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="logo-container">
+            <svg viewBox="0 0 100 100">
+                <defs><path id="petal" d="M40,22 L60,22 L62,24 L60,26 L40,26 L38,24 Z" /></defs>
+                <g class="ring-group">
+                    <use href="#petal" class="tech-stroke draw-path" transform="rotate(0, 50, 50)" />
+                    <use href="#petal" class="tech-stroke draw-path" transform="rotate(60, 50, 50)" style="animation-delay:.1s" />
+                    <use href="#petal" class="tech-stroke draw-path" transform="rotate(120, 50, 50)" style="animation-delay:.2s" />
+                    <use href="#petal" class="tech-stroke draw-path" transform="rotate(180, 50, 50)" style="animation-delay:.3s" />
+                    <use href="#petal" class="tech-stroke draw-path" transform="rotate(240, 50, 50)" style="animation-delay:.4s" />
+                    <use href="#petal" class="tech-stroke draw-path" transform="rotate(300, 50, 50)" style="animation-delay:.5s" />
+                </g>
+                <circle class="center-circle tech-stroke" cx="50" cy="50" r="8" stroke-width="2" />
+            </svg>
+        </div>
+    </div>
+
     <!-- 登录 -->
     <div id="loginSection">
         <div class="login-container">
@@ -1304,6 +1350,11 @@
             if (e.key === 'Enter') login();
         });
 
+        function hideLoading() {
+            const o = document.getElementById('loadingOverlay');
+            if (o) { o.classList.add('fade-out'); setTimeout(() => o.remove(), 300); }
+        }
+
         // 检查登录状态
         (async () => {
             checkTotpRequired();
@@ -1313,6 +1364,7 @@
                 document.getElementById('adminSection').classList.remove('hidden');
                 loadAll();
             }
+            hideLoading();
         })();
     </script>
 </body>
