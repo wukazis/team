@@ -2129,6 +2129,59 @@ def set_waiting_room_settings():
         'maxQueue': WAITING_ROOM_MAX_QUEUE
     })
 
+# ========== 定时开放 API ==========
+
+@app.route('/api/admin/scheduled-open', methods=['GET'])
+@admin_required
+def get_scheduled_open():
+    """获取定时开放设置"""
+    conn = get_db()
+    row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
+    conn.close()
+    
+    scheduled_time = row[0] if row and row[0] else None
+    return jsonify({'scheduledTime': scheduled_time})
+
+@app.route('/api/admin/scheduled-open', methods=['POST'])
+@admin_required
+def set_scheduled_open():
+    """设置定时开放时间"""
+    data = request.json or {}
+    scheduled_time = data.get('scheduledTime')
+    
+    if scheduled_time:
+        save_setting('scheduled_open_time', scheduled_time)
+    else:
+        save_setting('scheduled_open_time', '')
+    
+    return jsonify({'status': 'ok', 'scheduledTime': scheduled_time})
+
+# 定时开放检查（在后台线程中运行）
+def check_scheduled_open():
+    """检查是否到达定时开放时间"""
+    while True:
+        try:
+            conn = get_db()
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
+            if row and row[0]:
+                from dateutil import parser
+                scheduled_time = parser.isoparse(row[0])
+                now = datetime.utcnow()
+                
+                # 如果到达开放时间
+                if now >= scheduled_time:
+                    # 开放候车室
+                    conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
+                    # 清除定时
+                    conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
+                    conn.commit()
+                    print(f"[定时开放] 候车室已自动开放 at {now}")
+            conn.close()
+        except Exception as e:
+            print(f"[定时开放] 检查失败: {e}")
+        
+        time.sleep(5)  # 每5秒检查一次
+
 # ========== 同步间隔设置 API ==========
 
 @app.route('/api/admin/sync-interval', methods=['GET'])
@@ -2358,6 +2411,11 @@ if __name__ == '__main__':
     sync_thread = threading.Thread(target=background_sync, daemon=True)
     sync_thread.start()
     print(f"✅ 后台同步已启动，每 {SYNC_INTERVAL} 秒更新一次")
+    
+    # 启动定时开放检查线程
+    scheduled_thread = threading.Thread(target=check_scheduled_open, daemon=True)
+    scheduled_thread.start()
+    print("✅ 定时开放检查已启动")
     
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'

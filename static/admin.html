@@ -627,6 +627,18 @@
                                 </div>
                                 <div class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;">当前排队: <span id="currentQueueCount">-</span> 人</div>
                             </div>
+                            <div style="border-top: 1px solid var(--border); padding-top: 1.5rem; margin-top: 0.5rem;">
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">定时开放</span>
+                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">设置候车室自动开放时间（上海时间）</span>
+                                </label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                    <input type="datetime-local" id="scheduledOpenTime" style="padding: 0.5rem;">
+                                    <button class="btn btn-primary" onclick="saveScheduledOpen()">设置</button>
+                                    <button class="btn btn-ghost" onclick="clearScheduledOpen()">清除</button>
+                                </div>
+                                <div id="scheduledOpenStatus" class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -756,6 +768,7 @@
                 loadCooldownUsers(),
                 loadMonitor(),
                 loadWaitingRoomSettings(),
+                loadScheduledOpen(),
                 loadSyncInterval()
             ]);
             startMonitorTimer();
@@ -784,6 +797,67 @@
                 loadWaitingRoomSettings();
             } else {
                 alert(data.error || '保存失败');
+            }
+        }
+        
+        // ========== 定时开放 ==========
+        async function loadScheduledOpen() {
+            const { ok, data } = await api('/admin/scheduled-open');
+            if (!ok) return;
+            
+            const statusEl = document.getElementById('scheduledOpenStatus');
+            const inputEl = document.getElementById('scheduledOpenTime');
+            
+            if (data.scheduledTime) {
+                // 转换为本地时间显示
+                const dt = new Date(data.scheduledTime);
+                inputEl.value = dt.toISOString().slice(0, 16);
+                
+                // 计算倒计时
+                const now = new Date();
+                const diff = dt - now;
+                if (diff > 0) {
+                    const hours = Math.floor(diff / 3600000);
+                    const mins = Math.floor((diff % 3600000) / 60000);
+                    statusEl.innerHTML = `<span style="color: var(--primary);">⏰ 将于 ${dt.toLocaleString('zh-CN')} 自动开放（${hours}小时${mins}分钟后）</span>`;
+                } else {
+                    statusEl.textContent = '定时已过期';
+                }
+            } else {
+                inputEl.value = '';
+                statusEl.textContent = '未设置定时开放';
+            }
+        }
+        
+        async function saveScheduledOpen() {
+            const inputVal = document.getElementById('scheduledOpenTime').value;
+            if (!inputVal) {
+                alert('请选择开放时间');
+                return;
+            }
+            
+            // 转换为 ISO 格式发送
+            const dt = new Date(inputVal);
+            const { ok, data } = await api('/admin/scheduled-open', {
+                method: 'POST',
+                body: JSON.stringify({ scheduledTime: dt.toISOString() })
+            });
+            
+            if (ok) {
+                loadScheduledOpen();
+            } else {
+                alert(data.error || '设置失败');
+            }
+        }
+        
+        async function clearScheduledOpen() {
+            const { ok } = await api('/admin/scheduled-open', {
+                method: 'POST',
+                body: JSON.stringify({ scheduledTime: null })
+            });
+            
+            if (ok) {
+                loadScheduledOpen();
             }
         }
 
