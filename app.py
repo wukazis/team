@@ -196,8 +196,12 @@ def verify_turnstile(token, ip=None):
         return False
 
 def get_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    # 性能优化
+    conn.execute('PRAGMA synchronous=NORMAL')
+    conn.execute('PRAGMA cache_size=10000')
+    conn.execute('PRAGMA temp_store=MEMORY')
     return conn
 
 def init_db():
@@ -281,8 +285,13 @@ def init_db():
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_waiting_queue_user_id ON waiting_queue(user_id)')
     except sqlite3.OperationalError:
         pass  # 索引已存在
-    # 修改 email 为可空
-    # SQLite 不支持直接修改列，但新记录可以为空
+    
+    # 创建性能优化索引
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)')
+    conn.execute('CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)')
     
     # 创建系统设置表
     conn.execute('''
