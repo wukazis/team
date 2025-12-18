@@ -2157,12 +2157,13 @@ def set_scheduled_open():
 # 定时开放检查（在后台线程中运行）
 def check_scheduled_open():
     """检查是否到达定时开放时间"""
+    from dateutil import parser
     while True:
+        conn = None
         try:
             conn = get_db()
             row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
             if row and row[0]:
-                from dateutil import parser
                 scheduled_time = parser.isoparse(row[0])
                 now = datetime.utcnow()
                 
@@ -2174,9 +2175,14 @@ def check_scheduled_open():
                     conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
                     conn.commit()
                     print(f"[定时开放] 候车室已自动开放 at {now}")
-            conn.close()
         except Exception as e:
             print(f"[定时开放] 检查失败: {e}")
+        finally:
+            if conn:
+                try:
+                    conn.close()
+                except:
+                    pass
         
         time.sleep(5)  # 每5秒检查一次
 
