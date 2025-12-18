@@ -433,7 +433,7 @@
                     </svg>
                     候车室暂不开放
                 </p>
-                <p class="muted">请关注后续通知</p>
+                <p id="waitingCountdown" class="muted"></p>
             </div>
             <!-- 冷却状态 -->
             <div id="waitingCooldown" class="hidden">
@@ -599,20 +599,27 @@
             // 显示候车室入口并检测冷却状态
             document.getElementById('waitingEntry').classList.remove('hidden');
             checkCooldownStatus();
-            // 每30秒刷新候车室状态
-            setInterval(checkCooldownStatus, 30000);
         }
+        
+        let countdownTimer = null;
         
         async function checkCooldownStatus() {
             const waitingNormal = document.getElementById('waitingNormal');
             const waitingClosed = document.getElementById('waitingClosed');
             const waitingCooldown = document.getElementById('waitingCooldown');
             const waitingEntry = document.getElementById('waitingEntry');
+            const waitingCountdown = document.getElementById('waitingCountdown');
             
             // 先隐藏所有状态
             waitingNormal.classList.add('hidden');
             waitingClosed.classList.add('hidden');
             waitingCooldown.classList.add('hidden');
+            
+            // 清除之前的倒计时
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
             
             try {
                 // 检查候车室是否开放
@@ -624,6 +631,41 @@
                         waitingClosed.classList.remove('hidden');
                         waitingEntry.style.opacity = '0.6';
                         waitingEntry.style.pointerEvents = 'none';
+                        
+                        // 如果有定时开放时间，显示倒计时
+                        if (settings.scheduledTime) {
+                            const openTime = new Date(settings.scheduledTime);
+                            
+                            function updateCountdown() {
+                                const now = new Date();
+                                const diff = openTime - now;
+                                
+                                if (diff <= 0) {
+                                    // 时间到，刷新状态
+                                    clearInterval(countdownTimer);
+                                    countdownTimer = null;
+                                    checkCooldownStatus();
+                                    return;
+                                }
+                                
+                                const hours = Math.floor(diff / 3600000);
+                                const mins = Math.floor((diff % 3600000) / 60000);
+                                const secs = Math.floor((diff % 60000) / 1000);
+                                
+                                if (hours > 0) {
+                                    waitingCountdown.textContent = `预计 ${hours}小时${mins}分钟 后开放`;
+                                } else if (mins > 0) {
+                                    waitingCountdown.textContent = `预计 ${mins}分${secs}秒 后开放`;
+                                } else {
+                                    waitingCountdown.textContent = `预计 ${secs}秒 后开放`;
+                                }
+                            }
+                            
+                            updateCountdown();
+                            countdownTimer = setInterval(updateCountdown, 1000);
+                        } else {
+                            waitingCountdown.textContent = '请关注后续通知';
+                        }
                         return;
                     }
                 }

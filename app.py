@@ -666,45 +666,23 @@ def load_settings():
     global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE, SYNC_INTERVAL
     try:
         conn = get_db()
-        if USE_POSTGRES:
-            cursor = conn.cursor(cursor_factory=RealDictCursor)
-            cursor.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'")
-            row = cursor.fetchone()
-            if row:
-                WAITING_ROOM_ENABLED = row['value'] == 'true'
-            
-            cursor.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'")
-            row = cursor.fetchone()
-            if row:
-                WAITING_ROOM_MAX_QUEUE = int(row['value'])
-            
-            cursor.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'")
-            row = cursor.fetchone()
-            if row:
-                DISPATCH_MODE = row['value']
-            
-            cursor.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'")
-            row = cursor.fetchone()
-            if row:
-                SYNC_INTERVAL = int(row['value'])
-        else:
-            row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
-            if row:
-                WAITING_ROOM_ENABLED = row['value'] == 'true'
-            
-            row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
-            if row:
-                WAITING_ROOM_MAX_QUEUE = int(row['value'])
-            
-            row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'").fetchone()
-            if row:
-                DISPATCH_MODE = row['value']
-            
-            row = conn.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'").fetchone()
-            if row:
-                SYNC_INTERVAL = int(row['value'])
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
+        if row:
+            WAITING_ROOM_ENABLED = row[0] == 'true'
         
-        close_db(conn)
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
+        if row:
+            WAITING_ROOM_MAX_QUEUE = int(row[0])
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'").fetchone()
+        if row:
+            DISPATCH_MODE = row[0]
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'").fetchone()
+        if row:
+            SYNC_INTERVAL = int(row[0])
+        
+        conn.close()
     except Exception as e:
         print(f"加载设置失败: {e}")
 
@@ -2102,15 +2080,18 @@ def get_waiting_room_settings():
     # 从数据库实时读取设置
     enabled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
     max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
+    scheduled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
     conn.close()
     
     enabled = enabled_row[0] == 'true' if enabled_row else False
     max_queue = int(max_queue_row[0]) if max_queue_row else 0
+    scheduled_time = scheduled_row[0] if scheduled_row and scheduled_row[0] else None
     
     return jsonify({
         'enabled': enabled,
         'maxQueue': max_queue,
-        'currentQueue': queue_count
+        'currentQueue': queue_count,
+        'scheduledTime': scheduled_time
     })
 
 @app.route('/api/admin/waiting-room-settings', methods=['POST'])
@@ -2408,18 +2389,36 @@ def background_sync():
             print(f"[后台同步错误] {e}")
             time.sleep(SYNC_INTERVAL)
 
-if __name__ == '__main__':
-    init_db()
-    
-    # 启动后台同步线程
-    sync_thread = threading.Thread(target=background_sync, daemon=True)
-    sync_thread.start()
-    print(f"✅ 后台同步已启动，每 {SYNC_INTERVAL} 秒更新一次")
+# ========== 后台线程启动 ==========
+
+# 后台线程启动标志
+_threads_started = False
+_threads_lock = threading.Lock()
+
+def start_background_threads():
+    """启动后台线程（确保只启动一次）"""
+    global _threads_started
+    with _threads_lock:
+        if _threads_started:
+            return
+        _threads_started = True
     
     # 启动定时开放检查线程
     scheduled_thread = threading.Thread(target=check_scheduled_open, daemon=True)
     scheduled_thread.start()
     print("✅ 定时开放检查已启动")
+    
+    # 启动后台同步线程
+    sync_thread = threading.Thread(target=background_sync, daemon=True)
+    sync_thread.start()
+    print(f"✅ 后台同步已启动，每 {SYNC_INTERVAL} 秒更新一次")
+
+# Gunicorn 启动时初始化数据库和后台线程
+init_db()
+start_background_threads()
+
+if __name__ == '__main__':
+    # 直接运行时 init_db 已在上面调用，这里不需要重复
     
     port = int(os.environ.get('PORT', 5000))
     debug = os.environ.get('DEBUG', 'false').lower() == 'true'
