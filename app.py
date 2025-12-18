@@ -592,6 +592,18 @@ def save_setting(key: str, value: str):
 def generate_code():
     return secrets.token_urlsafe(8).upper()[:12]
 
+def parse_datetime(value):
+    """解析数据库返回的时间值，兼容 PostgreSQL datetime 对象和 SQLite 字符串"""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        # PostgreSQL 返回的是 datetime 对象
+        return value.replace(tzinfo=None)
+    if isinstance(value, str):
+        # SQLite 返回的是字符串
+        return datetime.fromisoformat(value.replace('Z', '+00:00').replace(' ', 'T')).replace(tzinfo=None)
+    return None
+
 # ========== Microsoft Graph API 邮件 ==========
 
 def get_ms_access_token() -> str:
@@ -823,9 +835,9 @@ def user_cooldown():
         
         cooldown_start = None
         if last_used and last_used['used_at']:
-            cooldown_start = datetime.fromisoformat(last_used['used_at'].replace('Z', '+00:00').replace(' ', 'T'))
+            cooldown_start = parse_datetime(last_used['used_at'])
         elif user['updated_at']:
-            cooldown_start = datetime.fromisoformat(user['updated_at'].replace('Z', '+00:00').replace(' ', 'T'))
+            cooldown_start = parse_datetime(user['updated_at'])
         
         conn.close()
         
@@ -917,7 +929,6 @@ def join_waiting_queue():
     
     # 检查是否已使用过邀请（28天冷却期）
     if user['has_used']:
-        from datetime import datetime
         now = datetime.utcnow()
         
         # 查找最后使用邀请码的时间
@@ -927,10 +938,10 @@ def join_waiting_queue():
         
         cooldown_start = None
         if last_used and last_used['used_at']:
-            cooldown_start = datetime.fromisoformat(last_used['used_at'].replace('Z', '+00:00').replace(' ', 'T'))
+            cooldown_start = parse_datetime(last_used['used_at'])
         elif user['updated_at']:
             # 没有邀请码记录，用用户更新时间作为冷却起点
-            cooldown_start = datetime.fromisoformat(user['updated_at'].replace('Z', '+00:00').replace(' ', 'T'))
+            cooldown_start = parse_datetime(user['updated_at'])
         
         if cooldown_start:
             cooldown_end = cooldown_start + timedelta(days=28)
@@ -1701,24 +1712,61 @@ def clear_all_codes():
 def list_cooldown_users():
     """获取冷却中的用户列表（用过邀请码或has_used=1的用户）"""
     conn = get_db()
-    rows = conn.execute('''
-        SELECT u.id, u.username, u.name, c.used_email, 
-               COALESCE(c.used_at, u.updated_at) as used_at, 
-               t.name as team_name,
-               datetime(COALESCE(c.used_at, u.updated_at), '+28 days') as cooldown_end,
-               MAX(0, CAST(julianday(datetime(COALESCE(c.used_at, u.updated_at), '+28 days')) - julianday('now') AS INTEGER)) as days_left
-        FROM users u
-        LEFT JOIN invite_codes c ON u.id = c.user_id AND c.used = 1
-        LEFT JOIN team_accounts t ON c.team_account_id = t.id
-        WHERE u.has_used = 1 OR c.user_id IS NOT NULL
-        GROUP BY u.id
-        ORDER BY used_at DESC
-    ''').fetchall()
+    
+    if USE_POSTGRES:
+        rows = conn.execute('''
+            SELECT u.id, u.username, u.name, c.used_email, 
+                   COALESCE(c.used_at, u.updated_at) as used_at, 
+                   t.name as team_name
+            FROM users u
+            LEFT JOIN invite_codes c ON u.id = c.user_id AND c.used = 1
+            LEFT JOIN team_accounts t ON c.team_account_id = t.id
+            WHERE u.has_used = 1 OR c.user_id IS NOT NULL
+            GROUP BY u.id, u.username, u.name, c.used_email, c.used_at, u.updated_at, t.name
+            ORDER BY COALESCE(c.used_at, u.updated_at) DESC
+        ''').fetchall()
+    else:
+        rows = conn.execute('''
+            SELECT u.id, u.username, u.name, c.used_email, 
+                   COALESCE(c.used_at, u.updated_at) as used_at, 
+                   t.name as team_name,
+                   datetime(COALESCE(c.used_at, u.updated_at), '+28 days') as cooldown_end,
+                   MAX(0, CAST(julianday(datetime(COALESCE(c.used_at, u.updated_at), '+28 days')) - julianday('now') AS INTEGER)) as days_left
+            FROM users u
+            LEFT JOIN invite_codes c ON u.id = c.user_id AND c.used = 1
+            LEFT JOIN team_accounts t ON c.team_account_id = t.id
+            WHERE u.has_used = 1 OR c.user_id IS NOT NULL
+            GROUP BY u.id
+            ORDER BY used_at DESC
+        ''').fetchall()
     conn.close()
     
+    # 计算冷却结束时间和剩余天数
+    result = []
+    now = datetime.utcnow()
+    for row in rows:
+        used_at = parse_datetime(row['used_at'])
+        if used_at:
+            cooldown_end = used_at + timedelta(days=28)
+            days_left = max(0, (cooldown_end - now).days)
+        else:
+            cooldown_end = None
+            days_left = 0
+        
+        result.append({
+            'id': row['id'],
+            'username': row['username'],
+            'name': row['name'],
+            'used_email': row['used_email'],
+            'used_at': str(row['used_at']) if row['used_at'] else None,
+            'team_name': row['team_name'],
+            'cooldown_end': cooldown_end.strftime('%Y-%m-%d %H:%M') if cooldown_end else None,
+            'days_left': days_left
+        })
+    
     return jsonify({
-        'users': [dict(r) for r in rows],
-        'count': len(rows)
+        'users': result,
+        'count': len(result)
     })
 
 @app.route('/api/admin/cooldown-users/clear-all', methods=['POST'])
