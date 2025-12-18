@@ -1117,28 +1117,24 @@ def join_waiting_queue():
     max_queue = int(max_queue_row[0]) if max_queue_row else 0
     
     try:
-        if max_queue > 0:
-            # 原子操作：只有当队列未满时才插入
-            if USE_POSTGRES:
-                conn.execute('''
-                    INSERT INTO waiting_queue (user_id, email)
-                    SELECT %s, %s
-                    WHERE (SELECT COUNT(*) FROM waiting_queue) < %s
-                ''', (user_id, email if email else None, max_queue))
-            else:
-                conn.execute('''
-                    INSERT INTO waiting_queue (user_id, email)
-                    SELECT ?, ?
-                    WHERE (SELECT COUNT(*) FROM waiting_queue) < ?
-                ''', (user_id, email if email else None, max_queue))
-            
-            # 检查是否插入成功（rowcount为0表示队列已满）
-            if conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone() is None:
-                conn.close()
-                return jsonify({'error': f'排队人数已达上限（{max_queue}人），请稍后再试'}), 403
+        # 原子操作：只有当队列未满时才插入
+        if USE_POSTGRES:
+            conn.execute('''
+                INSERT INTO waiting_queue (user_id, email)
+                SELECT %s, %s
+                WHERE (SELECT COUNT(*) FROM waiting_queue) < %s
+            ''', (user_id, email if email else None, max_queue))
         else:
-            # 无人数限制，直接插入
-            conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
+            conn.execute('''
+                INSERT INTO waiting_queue (user_id, email)
+                SELECT ?, ?
+                WHERE (SELECT COUNT(*) FROM waiting_queue) < ?
+            ''', (user_id, email if email else None, max_queue))
+        
+        # 检查是否插入成功（rowcount为0表示队列已满）
+        if conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone() is None:
+            conn.close()
+            return jsonify({'error': f'排队人数已达上限（{max_queue}人），请稍后再试'}), 403
         
         conn.commit()
     except Exception as e:
@@ -2095,15 +2091,22 @@ def set_dispatch_mode():
 # ========== 候车室设置 API ==========
 
 @app.route('/api/admin/waiting-room-settings', methods=['GET'])
-@admin_required
 def get_waiting_room_settings():
-    """获取候车室设置"""
+    """获取候车室设置（从数据库实时读取）"""
     conn = get_db()
     queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue').fetchone()[0]
+    
+    # 从数据库实时读取设置
+    enabled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
+    max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
     conn.close()
+    
+    enabled = enabled_row[0] == 'true' if enabled_row else False
+    max_queue = int(max_queue_row[0]) if max_queue_row else 0
+    
     return jsonify({
-        'enabled': WAITING_ROOM_ENABLED,
-        'maxQueue': WAITING_ROOM_MAX_QUEUE,
+        'enabled': enabled,
+        'maxQueue': max_queue,
         'currentQueue': queue_count
     })
 

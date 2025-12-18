@@ -234,6 +234,44 @@
         @keyframes draw { to { stroke-dashoffset: 0; } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pop { to { opacity: 1; } }
+        
+        /* Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: var(--border);
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: var(--primary);
+        }
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
     </style>
 </head>
 <body>
@@ -568,7 +606,10 @@
                         <div style="display: flex; flex-direction: column; gap: 1.5rem; max-width: 400px;">
                             <div>
                                 <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
-                                    <input type="checkbox" id="waitingRoomEnabled" onchange="saveWaitingRoomSettings()" style="width: 18px; height: 18px;">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="waitingRoomEnabled" onchange="saveWaitingRoomSettings()">
+                                        <span class="toggle-slider"></span>
+                                    </label>
                                     <div>
                                         <div style="font-weight: 600;">开放候车室</div>
                                         <div class="text-muted" style="font-size: 0.85rem;">关闭后用户无法进入候车室排队</div>
@@ -578,7 +619,6 @@
                             <div>
                                 <label style="display: block; margin-bottom: 0.5rem;">
                                     <span style="font-weight: 600;">排队人数上限</span>
-                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">0 表示不限制</span>
                                 </label>
                                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                                     <input type="number" id="waitingRoomMaxQueue" min="0" value="0" style="width: 100px; padding: 0.5rem;">
@@ -733,7 +773,7 @@
         
         async function saveWaitingRoomSettings() {
             const enabled = document.getElementById('waitingRoomEnabled').checked;
-            const maxQueue = parseInt(document.getElementById('waitingRoomMaxQueue').value) || 0;
+            const maxQueue = Math.max(0, parseInt(document.getElementById('waitingRoomMaxQueue').value) || 0);
             
             const { ok, data } = await api('/admin/waiting-room-settings', {
                 method: 'POST',
