@@ -781,21 +781,31 @@ def oauth_callback():
     trust_level = user_data.get('trust_level', 0)
     
     conn = get_db()
-    existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
-    if existing:
-        conn.execute('''
-            UPDATE users SET username = ?, name = ?, avatar_template = ?, trust_level = ?, updated_at = datetime('now')
-            WHERE id = ?
-        ''', (username, name, avatar_template, trust_level, user_id))
-    else:
-        conn.execute('''
-            INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
-        ''', (user_id, username, name, avatar_template, trust_level))
-    conn.commit()
-    conn.close()
+    try:
+        existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+        if existing:
+            conn.execute('''
+                UPDATE users SET username = ?, name = ?, avatar_template = ?, trust_level = ?, updated_at = datetime('now')
+                WHERE id = ?
+            ''', (username, name, avatar_template, trust_level, user_id))
+            print(f"用户更新成功: {username} (ID: {user_id})")
+        else:
+            conn.execute('''
+                INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
+            ''', (user_id, username, name, avatar_template, trust_level))
+            print(f"新用户创建成功: {username} (ID: {user_id})")
+        conn.commit()
+    except Exception as e:
+        print(f"用户创建/更新失败: {e}")
+        import traceback
+        traceback.print_exc()
+        return redirect(f'{APP_BASE_URL}?error=db_error')
+    finally:
+        conn.close()
     
     # 生成 JWT
     jwt_token = create_jwt_token(user_id, username)
+    print(f"JWT 生成成功，重定向到: {APP_BASE_URL}?token=...")
     return redirect(f'{APP_BASE_URL}?token={jwt_token}')
 
 @app.route('/api/user/state')
