@@ -289,15 +289,6 @@ class PostgresConnectionWrapper:
                 self._cursor.execute(sql, params)
             else:
                 self._cursor.execute(sql)
-            # 尝试获取 lastrowid
-            if sql.strip().upper().startswith('INSERT') and 'RETURNING' not in sql.upper():
-                try:
-                    self._cursor.execute('SELECT lastval()')
-                    row = self._cursor.fetchone()
-                    if row:
-                        self._lastrowid = row.get('lastval') or row.get(0)
-                except:
-                    pass
         except Exception as e:
             self._conn.rollback()
             raise e
@@ -793,9 +784,10 @@ def oauth_callback():
             ''', (username, name, avatar_template, trust_level, user_id))
             print(f"[OAuth] UPDATE rowcount: {result.rowcount}", file=sys.stderr, flush=True)
         else:
-            result = conn.execute('''
-                INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
-            ''', (user_id, username, name, avatar_template, trust_level))
+            sql = 'INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)'
+            params = (user_id, username, name, avatar_template, trust_level)
+            print(f"[OAuth] 执行 INSERT, params: {params}", file=sys.stderr, flush=True)
+            result = conn.execute(sql, params)
             print(f"[OAuth] INSERT rowcount: {result.rowcount}", file=sys.stderr, flush=True)
         conn.commit()
         print(f"[OAuth] commit() 调用完成", file=sys.stderr, flush=True)
