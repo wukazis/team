@@ -73,11 +73,73 @@ JWT_EXPIRY_HOURS = 24
 # OAuth state 存储
 oauth_states = {}
 
+# API 限流配置
+rate_limit_store = {}  # {ip: {endpoint: [(timestamp, count)]}}
+RATE_LIMITS = {
+    'default': (60, 60),      # 默认：60秒内60次
+    'oauth': (60, 10),        # OAuth：60秒内10次
+    'invite': (60, 5),        # 邀请码：60秒内5次
+    'admin_login': (60, 5),   # 管理员登录：60秒内5次
+}
+
+def get_client_ip():
+    """获取客户端真实IP"""
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    return request.remote_addr or '127.0.0.1'
+
+def check_rate_limit(limit_type='default'):
+    """检查请求是否超过限流"""
+    ip = get_client_ip()
+    now = time.time()
+    window, max_requests = RATE_LIMITS.get(limit_type, RATE_LIMITS['default'])
+    
+    if ip not in rate_limit_store:
+        rate_limit_store[ip] = {}
+    if limit_type not in rate_limit_store[ip]:
+        rate_limit_store[ip][limit_type] = []
+    
+    # 清理过期记录
+    rate_limit_store[ip][limit_type] = [t for t in rate_limit_store[ip][limit_type] if now - t < window]
+    
+    if len(rate_limit_store[ip][limit_type]) >= max_requests:
+        return False
+    
+    rate_limit_store[ip][limit_type].append(now)
+    return True
+
+def rate_limit(limit_type='default'):
+    """限流装饰器"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if not check_rate_limit(limit_type):
+                return jsonify({'error': '请求过于频繁，请稍后再试'}), 429
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
 # 获取当前脚本所在目录
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, 'static')
 
 app = Flask(__name__, static_folder=STATIC_DIR, static_url_path='')
+
+# ========== 管理员操作日志 ==========
+
+def log_admin_action(action, details=None):
+    """记录管理员操作日志"""
+    try:
+        ip = get_client_ip()
+        conn = get_db()
+        conn.execute(
+            'INSERT INTO admin_logs (action, details, ip_address) VALUES (?, ?, ?)',
+            (action, details, ip)
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"记录管理员日志失败: {e}")
 
 # ========== ChatGPT Team API ==========
 
@@ -424,6 +486,16 @@ def init_db():
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id SERIAL PRIMARY KEY,
+                action TEXT NOT NULL,
+                details TEXT,
+                ip_address TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)')
@@ -517,6 +589,15 @@ def init_db():
             CREATE TABLE IF NOT EXISTS system_settings (
                 key TEXT PRIMARY KEY,
                 value TEXT
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS admin_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                action TEXT NOT NULL,
+                details TEXT,
+                ip_address TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
             )
         ''')
         conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false')")
@@ -705,6 +786,7 @@ def waiting_page():
 # ========== OAuth API ==========
 
 @app.route('/api/oauth/login')
+@rate_limit('oauth')
 def oauth_login():
     """发起 LinuxDO OAuth 登录"""
     if not LINUXDO_CLIENT_ID:
@@ -1209,6 +1291,7 @@ def check_invite():
     })
 
 @app.route('/api/invite/use', methods=['POST'])
+@rate_limit('invite')
 @jwt_required
 def use_invite():
     """使用邀请码 - 发送真实的 ChatGPT Team 邀请（需要登录）"""
@@ -1330,6 +1413,7 @@ def admin_totp_required():
     return jsonify({'required': bool(ADMIN_TOTP_SECRET)})
 
 @app.route('/api/admin/login', methods=['POST'])
+@rate_limit('admin_login')
 def admin_login():
     data = request.json or {}
     password = data.get('password', '')
@@ -1425,6 +1509,7 @@ def create_team_account():
                 print(f"[同步失败] 车位 {name}: {e}")
         threading.Thread(target=safe_sync, daemon=True).start()
     
+    log_admin_action('创建车位', f'名称: {name}, ID: {new_id}')
     return jsonify({'id': new_id, 'name': name, 'maxSeats': max_seats})
 
 @app.route('/api/admin/team-accounts/<int:account_id>', methods=['PUT'])
@@ -1562,6 +1647,7 @@ def delete_team_account(account_id):
     conn.commit()
     conn.close()
     
+    log_admin_action('删除车位', f'ID: {account_id}')
     return jsonify({'status': 'deleted'})
 
 # ========== 邀请码管理 ==========
@@ -1708,6 +1794,7 @@ def clear_all_queue():
     deleted = cursor.rowcount
     conn.commit()
     conn.close()
+    log_admin_action('清空排队队列', f'删除 {deleted} 条记录')
     return jsonify({'status': 'ok', 'deleted': deleted})
 
 @app.route('/api/admin/users/clear-all', methods=['POST'])
@@ -1719,6 +1806,7 @@ def clear_all_users():
     deleted = cursor.rowcount
     conn.commit()
     conn.close()
+    log_admin_action('清空所有用户', f'删除 {deleted} 条记录')
     return jsonify({'status': 'ok', 'deleted': deleted})
 
 @app.route('/api/admin/codes/clear-all', methods=['POST'])
@@ -1730,6 +1818,7 @@ def clear_all_codes():
     deleted = cursor.rowcount
     conn.commit()
     conn.close()
+    log_admin_action('清空所有邀请码', f'删除 {deleted} 条记录')
     return jsonify({'status': 'ok', 'deleted': deleted})
 
 # ========== 冷却用户管理 ==========
@@ -1805,7 +1894,23 @@ def clear_all_cooldown():
     updated = cursor.rowcount
     conn.commit()
     conn.close()
+    log_admin_action('清除所有冷却', f'更新 {updated} 条记录')
     return jsonify({'status': 'ok', 'updated': updated})
+
+# ========== 管理员日志 API ==========
+
+@app.route('/api/admin/logs', methods=['GET'])
+@admin_required
+def get_admin_logs():
+    """获取管理员操作日志"""
+    limit = min(int(request.args.get('limit', 50)), 200)
+    conn = get_db()
+    rows = conn.execute('''
+        SELECT id, action, details, ip_address, created_at 
+        FROM admin_logs ORDER BY created_at DESC LIMIT ?
+    ''', (limit,)).fetchall()
+    conn.close()
+    return jsonify({'logs': [dict(r.items()) for r in rows]})
 
 # ========== 发车监控 API ==========
 
