@@ -709,12 +709,11 @@ def save_setting(key: str, value: str):
     """保存设置到数据库"""
     conn = get_db()
     if USE_POSTGRES:
-        cursor = conn.cursor()
-        cursor.execute('INSERT INTO system_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', (key, value))
+        conn.execute('INSERT INTO system_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', (key, value))
     else:
         conn.execute('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', (key, value))
     conn.commit()
-    close_db(conn)
+    conn.close()
 
 def generate_code():
     return secrets.token_urlsafe(8).upper()[:12]
