@@ -446,7 +446,11 @@ class PostgresConnectionWrapper:
 
 def get_db():
     """获取数据库连接"""
+    global db_pool
     if USE_POSTGRES:
+        # Gunicorn worker fork 后需要重新初始化连接池
+        if db_pool is None:
+            init_db_pool()
         conn = db_pool.getconn()
         return PostgresConnectionWrapper(conn)
     else:
