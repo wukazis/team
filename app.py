@@ -222,6 +222,34 @@ def init_db_pool():
         )
         print("PostgreSQL 连接池已初始化")
 
+class DictRowWrapper:
+    """包装 PostgreSQL 返回的字典，支持数字索引和键名访问"""
+    def __init__(self, row):
+        self._row = row
+        self._keys = list(row.keys()) if row else []
+    
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            # 数字索引访问
+            return self._row[self._keys[key]]
+        # 键名访问
+        return self._row[key]
+    
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except (KeyError, IndexError):
+            return default
+    
+    def keys(self):
+        return self._keys
+    
+    def values(self):
+        return self._row.values()
+    
+    def items(self):
+        return self._row.items()
+
 class PostgresConnectionWrapper:
     """PostgreSQL 连接包装器，模拟 SQLite 的接口"""
     def __init__(self, conn):
@@ -286,12 +314,17 @@ class PostgresConnectionWrapper:
     
     def fetchone(self):
         if self._cursor:
-            return self._cursor.fetchone()
+            row = self._cursor.fetchone()
+            if row is None:
+                return None
+            # 包装成支持数字索引和键名访问的对象
+            return DictRowWrapper(row)
         return None
     
     def fetchall(self):
         if self._cursor:
-            return self._cursor.fetchall()
+            rows = self._cursor.fetchall()
+            return [DictRowWrapper(row) for row in rows]
         return []
     
     def commit(self):
