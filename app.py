@@ -324,8 +324,9 @@ def init_db():
     """初始化数据库表结构"""
     if USE_POSTGRES:
         init_db_pool()
-        conn = get_db()
-        cursor = conn.cursor()
+        # 直接从连接池获取原始连接用于初始化
+        raw_conn = db_pool.getconn()
+        cursor = raw_conn.cursor()
         
         # PostgreSQL 建表语句
         cursor.execute('''
@@ -403,8 +404,8 @@ def init_db():
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto') ON CONFLICT (key) DO NOTHING")
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('sync_interval', '30') ON CONFLICT (key) DO NOTHING")
         
-        conn.commit()
-        close_db(conn)
+        raw_conn.commit()
+        db_pool.putconn(raw_conn)
         print("PostgreSQL 数据库初始化完成")
     else:
         # SQLite 初始化
