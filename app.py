@@ -260,11 +260,14 @@ APP_BASE_URL = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
 
 # ========== JWT 工具 ==========
 
-def create_jwt_token(user_id, username):
+def create_jwt_token(user_id, username, name='', avatar_template='', trust_level=0):
     """创建 JWT token"""
     payload = {
         'user_id': user_id,
         'username': username,
+        'name': name,
+        'avatar_template': avatar_template,
+        'trust_level': trust_level,
         'exp': datetime.utcnow() + timedelta(hours=JWT_EXPIRY_HOURS)
     }
     return jwt.encode(payload, JWT_SECRET, algorithm='HS256')
@@ -918,7 +921,7 @@ def oauth_callback():
         conn.close()
     
     # 生成 JWT
-    jwt_token = create_jwt_token(user_id, username)
+    jwt_token = create_jwt_token(user_id, username, name, avatar_template, trust_level)
     return redirect(f'{APP_BASE_URL}?token={jwt_token}')
 
 @app.route('/api/user/state')
@@ -935,10 +938,11 @@ def user_state():
     
     return jsonify({
         'user': {
-            'id': user['id'],
+            'user_id': user['id'],
             'username': user['username'],
             'name': user['name'],
-            'trustLevel': user['trust_level'],
+            'avatar_template': user['avatar_template'],
+            'trust_level': user['trust_level'],
             'hasUsed': bool(user['has_used'])
         }
     })

@@ -65,11 +65,59 @@
         }
         .navbar-link:hover { color: var(--primary); }
         .user-info {
+            position: relative;
             display: flex;
             align-items: center;
             gap: 0.5rem;
             font-size: 0.9rem;
         }
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid var(--border);
+            transition: border-color 0.2s;
+        }
+        .user-avatar:hover { border-color: var(--primary); }
+        .user-card {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            margin-top: 0.5rem;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            min-width: 200px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-10px);
+            transition: all 0.2s ease;
+            z-index: 100;
+        }
+        .user-info:hover .user-card {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+        .user-card-name { font-weight: 600; font-size: 1rem; }
+        .user-card-username { color: var(--muted); font-size: 0.85rem; }
+        .user-card-meta { color: var(--muted); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--border); }
+        .user-card-logout { 
+            display: block; 
+            width: 100%; 
+            margin-top: 0.75rem; 
+            padding: 0.5rem; 
+            background: var(--bg); 
+            border: 1px solid var(--border); 
+            border-radius: 6px; 
+            cursor: pointer; 
+            color: var(--text);
+            text-align: center;
+        }
+        .user-card-logout:hover { background: var(--border); }
         .page {
             width: min(420px, 94%);
             margin: 1.5rem auto;
@@ -510,7 +558,28 @@
             document.getElementById('loginPanel').classList.add('hidden');
             document.getElementById('teamSection').classList.remove('hidden');
             const ui = document.getElementById('userInfo');
-            ui.innerHTML = `<span>${currentUser.username}</span><a href="#" onclick="logout();return false" class="navbar-link">退出</a>`;
+            
+            // 构建头像URL
+            let avatarUrl = '';
+            if (currentUser.avatar_template) {
+                avatarUrl = currentUser.avatar_template.replace('{size}', '120');
+                if (!avatarUrl.startsWith('http')) {
+                    avatarUrl = 'https://linux.do' + avatarUrl;
+                }
+            }
+            
+            const displayName = currentUser.name || currentUser.username;
+            const trustLevel = currentUser.trust_level || 0;
+            
+            ui.innerHTML = `
+                <img src="${avatarUrl}" alt="avatar" class="user-avatar" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%232563eb%22/><text x=%2250%22 y=%2265%22 font-size=%2250%22 fill=%22white%22 text-anchor=%22middle%22>${currentUser.username[0].toUpperCase()}</text></svg>'">
+                <div class="user-card">
+                    <div class="user-card-name">${displayName}</div>
+                    <div class="user-card-username">@${currentUser.username}</div>
+                    <div class="user-card-meta">ID: ${currentUser.user_id} · Trust ${trustLevel}</div>
+                    <button class="user-card-logout" onclick="logout()">登出</button>
+                </div>
+            `;
             ui.classList.remove('hidden');
             
             // 如果用户已使用过邀请，隐藏邀请表单
