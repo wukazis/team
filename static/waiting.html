@@ -1026,10 +1026,24 @@
             if (o) { o.classList.add('fade-out'); setTimeout(() => o.remove(), 300); }
         }
 
-        // 初始化：先检查登录状态
+        // 初始化：先检查登录状态和候车室开放状态
         (async () => {
             const loggedIn = await checkLogin();
             if (loggedIn) {
+                // 检查候车室是否开放
+                try {
+                    const settingsRes = await fetch('/api/admin/waiting-room-settings');
+                    if (settingsRes.ok) {
+                        const settings = await settingsRes.json();
+                        if (!settings.enabled) {
+                            window.location.href = '/';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error('检查候车室状态失败:', e);
+                }
+                
                 loadTeamStatus();
                 checkQueueStatus();
                 // 每 30 秒自动刷新
