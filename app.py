@@ -1058,15 +1058,17 @@ def join_waiting_queue():
     email = (data.get('email') or '').strip().lower()
     user_id = request.user['user_id']
     
-    # 检查候车室是否开放
-    if not WAITING_ROOM_ENABLED:
-        return jsonify({'error': '候车室已关闭，暂不接受排队'}), 403
-    
     # 邮箱必填验证
     if not email or '@' not in email:
         return jsonify({'error': '请输入有效的邮箱地址'}), 400
     
     conn = get_db()
+    
+    # 从数据库实时读取候车室设置（避免内存变量不同步）
+    waiting_enabled = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
+    if not waiting_enabled or waiting_enabled[0] != 'true':
+        conn.close()
+        return jsonify({'error': '候车室已关闭，暂不接受排队'}), 403
     
     # 检查用户状态
     user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
@@ -1110,26 +1112,30 @@ def join_waiting_queue():
         return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': existing['email'], 'queueCount': queue_count})
     
     # 使用原子操作：检查人数上限 + 插入，防止幻读导致超员
+    # 从数据库实时读取队列上限
+    max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
+    max_queue = int(max_queue_row[0]) if max_queue_row else 0
+    
     try:
-        if WAITING_ROOM_MAX_QUEUE > 0:
+        if max_queue > 0:
             # 原子操作：只有当队列未满时才插入
             if USE_POSTGRES:
                 conn.execute('''
                     INSERT INTO waiting_queue (user_id, email)
                     SELECT %s, %s
                     WHERE (SELECT COUNT(*) FROM waiting_queue) < %s
-                ''', (user_id, email if email else None, WAITING_ROOM_MAX_QUEUE))
+                ''', (user_id, email if email else None, max_queue))
             else:
                 conn.execute('''
                     INSERT INTO waiting_queue (user_id, email)
                     SELECT ?, ?
                     WHERE (SELECT COUNT(*) FROM waiting_queue) < ?
-                ''', (user_id, email if email else None, WAITING_ROOM_MAX_QUEUE))
+                ''', (user_id, email if email else None, max_queue))
             
             # 检查是否插入成功（rowcount为0表示队列已满）
             if conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone() is None:
                 conn.close()
-                return jsonify({'error': f'排队人数已达上限（{WAITING_ROOM_MAX_QUEUE}人），请稍后再试'}), 403
+                return jsonify({'error': f'排队人数已达上限（{max_queue}人），请稍后再试'}), 403
         else:
             # 无人数限制，直接插入
             conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
