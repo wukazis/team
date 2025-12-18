@@ -1,5 +1,16 @@
 #!/usr/bin/env python3
 
+# Gevent monkey patch - 必须在所有导入之前
+from gevent import monkey
+monkey.patch_all()
+
+# psycogreen 让 psycopg2 支持 gevent 协程
+try:
+    from psycogreen.gevent import patch_psycopg
+    patch_psycopg()
+except ImportError:
+    pass
+
 import os
 import secrets
 import threading
