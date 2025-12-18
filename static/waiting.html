@@ -31,6 +31,11 @@
             --muted: #94a3b8;
             --hover-bg: #334155;
         }
+        [data-theme="dark"] .info-box {
+            background: rgba(37, 99, 235, 0.15);
+            border-color: rgba(37, 99, 235, 0.3);
+            color: #93c5fd;
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: var(--bg); min-height: 100vh; color: var(--text); }
         .navbar {
@@ -460,7 +465,7 @@
             <div id="queueForm" class="hidden">
                 <p class="muted" style="margin-bottom: 1rem;">留下邮箱，有空位时自动发送邀请码到您的邮箱</p>
                 <div style="display: flex; gap: 0.75rem;">
-                    <input type="email" id="queueEmail" placeholder="请输入邮箱" required style="flex: 1; padding: 0.7rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem;">
+                    <input type="email" id="queueEmail" placeholder="请输入邮箱" required style="flex: 1; padding: 0.7rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; background: var(--card); color: var(--text);">
                     <button onclick="joinQueue()" class="btn btn-primary">排队</button>
                 </div>
                 <p id="queueStatus" class="muted" style="margin-top: 0.75rem; font-size: 0.85rem;"></p>
