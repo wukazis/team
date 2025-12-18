@@ -679,26 +679,27 @@
                 waitingEntry.style.pointerEvents = '';
                 
                 // 检查冷却状态
-                const res = await fetch('/api/user/cooldown', {
-                    headers: { 'Authorization': 'Bearer ' + getToken() }
-                });
-                
-                if (!res.ok) {
-                    waitingNormal.classList.remove('hidden');
-                    return;
+                try {
+                    const res = await fetch('/api/user/cooldown', {
+                        headers: { 'Authorization': 'Bearer ' + getToken() }
+                    });
+                    
+                    if (res.ok) {
+                        const data = await res.json();
+                        if (data.inCooldown) {
+                            // 在冷却期
+                            waitingCooldown.classList.remove('hidden');
+                            document.getElementById('cooldownDaysLeft').textContent = data.daysLeft || '?';
+                            document.getElementById('cooldownEndDate').textContent = data.cooldownEnd || '未知';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error('检查冷却状态失败:', e);
                 }
                 
-                const data = await res.json();
-                
-                if (data.inCooldown) {
-                    // 在冷却期
-                    waitingCooldown.classList.remove('hidden');
-                    document.getElementById('cooldownDaysLeft').textContent = data.daysLeft || '?';
-                    document.getElementById('cooldownEndDate').textContent = data.cooldownEnd || '未知';
-                } else {
-                    // 不在冷却期，显示正常入口
-                    waitingNormal.classList.remove('hidden');
-                }
+                // 不在冷却期或检查失败，显示正常入口
+                waitingNormal.classList.remove('hidden');
             } catch (err) {
                 console.error('检测状态失败:', err);
                 waitingNormal.classList.remove('hidden');
