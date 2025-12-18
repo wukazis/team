@@ -83,18 +83,17 @@
         .user-card {
             position: absolute;
             top: 100%;
-            right: -20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-10px);
             margin-top: 0.5rem;
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 1rem;
-            padding-top: 2.5rem;
             min-width: 180px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.15);
             opacity: 0;
             visibility: hidden;
-            transform: translateY(-10px);
             transition: all 0.2s ease;
             z-index: 100;
             text-align: center;
@@ -102,18 +101,7 @@
         .user-info:hover .user-card {
             opacity: 1;
             visibility: visible;
-            transform: translateY(0);
-        }
-        .user-card-avatar {
-            position: absolute;
-            top: -24px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: 3px solid var(--card);
-            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+            transform: translateX(-50%) translateY(0);
         }
         .user-card-name { font-weight: 600; font-size: 0.95rem; color: var(--text); }
         .user-card-username { color: var(--muted); font-size: 0.8rem; margin-top: 2px; }
