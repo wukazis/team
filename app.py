@@ -780,34 +780,35 @@ def oauth_callback():
     avatar_template = user_data.get('avatar_template', '')
     trust_level = user_data.get('trust_level', 0)
     
+    import sys
     conn = get_db()
     try:
-        app.logger.info(f"OAuth: 尝试创建/更新用户 {username} (ID: {user_id})")
+        print(f"[OAuth] 尝试创建/更新用户 {username} (ID: {user_id})", file=sys.stderr, flush=True)
         existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
         if existing:
             conn.execute('''
                 UPDATE users SET username = ?, name = ?, avatar_template = ?, trust_level = ?, updated_at = datetime('now')
                 WHERE id = ?
             ''', (username, name, avatar_template, trust_level, user_id))
-            app.logger.info(f"OAuth: 用户更新成功: {username} (ID: {user_id})")
+            print(f"[OAuth] 用户更新成功: {username} (ID: {user_id})", file=sys.stderr, flush=True)
         else:
             conn.execute('''
                 INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
             ''', (user_id, username, name, avatar_template, trust_level))
-            app.logger.info(f"OAuth: 新用户创建成功: {username} (ID: {user_id})")
+            print(f"[OAuth] 新用户创建成功: {username} (ID: {user_id})", file=sys.stderr, flush=True)
         conn.commit()
-        app.logger.info(f"OAuth: 数据库提交成功")
+        print(f"[OAuth] 数据库提交成功", file=sys.stderr, flush=True)
     except Exception as e:
-        app.logger.error(f"OAuth: 用户创建/更新失败: {e}")
+        print(f"[OAuth] 用户创建/更新失败: {e}", file=sys.stderr, flush=True)
         import traceback
-        app.logger.error(traceback.format_exc())
+        traceback.print_exc()
         return redirect(f'{APP_BASE_URL}?error=db_error')
     finally:
         conn.close()
     
     # 生成 JWT
     jwt_token = create_jwt_token(user_id, username)
-    app.logger.info(f"OAuth: JWT 生成成功，重定向用户 {username}")
+    print(f"[OAuth] JWT 生成成功，重定向用户 {username}", file=sys.stderr, flush=True)
     return redirect(f'{APP_BASE_URL}?token={jwt_token}')
 
 @app.route('/api/user/state')
