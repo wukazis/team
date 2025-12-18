@@ -525,6 +525,8 @@
             // 显示候车室入口并检测冷却状态
             document.getElementById('waitingEntry').classList.remove('hidden');
             checkCooldownStatus();
+            // 每30秒刷新候车室状态
+            setInterval(checkCooldownStatus, 30000);
         }
         
         async function checkCooldownStatus() {
