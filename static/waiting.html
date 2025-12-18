@@ -21,9 +21,18 @@
             --danger: #dc2626;
             --success: #16a34a;
             --warning: #f59e0b;
+            --hover-bg: #f1f5f9;
+        }
+        [data-theme="dark"] {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --hover-bg: #334155;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: var(--bg); min-height: 100vh; }
+        body { background: var(--bg); min-height: 100vh; color: var(--text); }
         .navbar {
             background: var(--card);
             border-bottom: 1px solid var(--border);
@@ -360,6 +369,9 @@
             </svg>
             Team Invite
         </a>
+        <button onclick="toggleTheme()" style="background: none; border: 1px solid var(--border); border-radius: 6px; padding: 0.4rem 0.6rem; cursor: pointer; color: var(--text);" id="themeBtn">
+            <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+        </button>
     </nav>
 
     <main class="page">
@@ -456,7 +468,7 @@
             <!-- 已排队状态 -->
             <div id="queueSuccess" class="hidden" style="text-align: center; padding: 1rem 0;">
                 <p style="color: var(--success); font-weight: 500;">✓ 已加入队列</p>
-                <p class="muted" style="margin-top: 0.5rem;">当前位置: 第 <span id="queuePosition">-</span> 位</p>
+                <p class="muted" style="margin-top: 0.5rem;">当前位置: 第 <span id="queuePosition">-</span> 位 <span id="queueTotal" style="font-size: 0.8rem; color: var(--muted);"></span></p>
                 <p class="muted" style="margin-top: 0.25rem; font-size: 0.85rem;">通知邮箱: <span id="queueEmail2">-</span></p>
                 <div style="margin-top: 1rem; position: relative; display: inline-block;">
                     <button onclick="toggleQueueMenu()" style="width: 28px; height: 28px; border-radius: 50%; background: var(--primary); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
@@ -647,6 +659,31 @@
             setTimeout(() => icon.classList.remove('spinning'), 500);
         }
 
+        // ========== 主题切换 ==========
+        function toggleTheme() {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-theme') === 'dark';
+            html.setAttribute('data-theme', isDark ? '' : 'dark');
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+            updateThemeIcon();
+        }
+        
+        function updateThemeIcon() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.getElementById('themeIcon').innerHTML = isDark 
+                ? '<circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>'
+                : '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>';
+        }
+        
+        // 初始化主题
+        (function() {
+            const saved = localStorage.getItem('theme');
+            if (saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.setAttribute('data-theme', 'dark');
+            }
+            updateThemeIcon();
+        })();
+
         // ========== 登录检查 ==========
         let jwtToken = localStorage.getItem('token') || '';
 
@@ -719,7 +756,7 @@
                 const data = await res.json();
                 
                 if (res.ok) {
-                    showQueueSuccess(data.position, email);
+                    showQueueSuccess(data.position, email, data.queueCount);
                 } else {
                     document.getElementById('queueStatus').textContent = data.error || '排队失败';
                 }
@@ -892,7 +929,7 @@
                 const data = await res.json();
                 
                 if (data.inQueue && data.position) {
-                    showQueueSuccess(data.position, data.email);
+                    showQueueSuccess(data.position, data.email, data.queueCount);
                 } else {
                     // 检查用户是否在冷却期
                     await checkUserCooldown();
@@ -933,7 +970,7 @@
                         const days = match ? match[1] : '?';
                         showCooldown(days);
                     } else if (joinRes.ok) {
-                        showQueueSuccess(joinData.position, joinData.email);
+                        showQueueSuccess(joinData.position, joinData.email, joinData.queueCount);
                     } else {
                         showQueueForm();
                     }
@@ -953,12 +990,13 @@
             document.getElementById('cooldownDays').textContent = days;
         }
 
-        function showQueueSuccess(position, email) {
+        function showQueueSuccess(position, email, total) {
             document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('queueForm').classList.add('hidden');
             document.getElementById('queueSuccess').classList.remove('hidden');
             document.getElementById('queuePosition').textContent = position || '-';
             document.getElementById('queueEmail2').textContent = email || '-';
+            document.getElementById('queueTotal').textContent = total ? `(共 ${total} 人)` : '';
         }
 
         function showQueueForm() {

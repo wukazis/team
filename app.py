@@ -873,7 +873,27 @@ def turnstile_site_key():
 
 @app.route('/api/health')
 def health():
-    return jsonify({'status': 'ok', 'time': datetime.now().isoformat()})
+    """健康检查端点 - 检查数据库连接状态"""
+    health_status = {
+        'status': 'ok',
+        'time': datetime.now().isoformat(),
+        'database': {
+            'type': 'PostgreSQL' if USE_POSTGRES else 'SQLite',
+            'connected': False
+        }
+    }
+    
+    try:
+        conn = get_db()
+        conn.execute('SELECT 1').fetchone()
+        conn.close()
+        health_status['database']['connected'] = True
+    except Exception as e:
+        health_status['status'] = 'degraded'
+        health_status['database']['error'] = str(e)
+    
+    status_code = 200 if health_status['status'] == 'ok' else 503
+    return jsonify(health_status), status_code
 
 @app.route('/api/team-accounts/status')
 def team_accounts_status():
@@ -967,8 +987,9 @@ def join_waiting_queue():
     # 检查是否已在队列中
     existing = conn.execute('SELECT * FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
     if existing:
+        queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
         conn.close()
-        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': existing['email']})
+        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': existing['email'], 'queueCount': queue_count})
     
     # 使用事务和唯一约束防止并发重复插入
     try:
@@ -982,9 +1003,10 @@ def join_waiting_queue():
         raise e
     
     position = get_queue_position_by_user(user_id)
+    queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
     conn.close()
     
-    return jsonify({'message': '排队成功！有空位时会通知您', 'position': position, 'email': email})
+    return jsonify({'message': '排队成功！有空位时会通知您', 'position': position, 'email': email, 'queueCount': queue_count})
 
 @app.route('/api/waiting/status')
 @jwt_required
