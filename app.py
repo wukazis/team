@@ -2165,6 +2165,9 @@ def check_scheduled_open():
             row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
             if row and row[0]:
                 scheduled_time = parser.isoparse(row[0])
+                # 移除时区信息，统一用 naive datetime 比较
+                if scheduled_time.tzinfo is not None:
+                    scheduled_time = scheduled_time.replace(tzinfo=None)
                 now = datetime.utcnow()
                 
                 # 如果到达开放时间
