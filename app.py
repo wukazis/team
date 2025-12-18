@@ -80,6 +80,13 @@ RATE_LIMITS = {
     'oauth': (60, 10),        # OAuth：60秒内10次
     'invite': (60, 5),        # 邀请码：60秒内5次
     'admin_login': (60, 5),   # 管理员登录：60秒内5次
+    'queue_join': (60, 3),    # 排队：60秒内3次（防止疯狂点击）
+}
+
+# 全局限流（针对高并发场景）
+global_rate_limit = {'queue_join': [], 'lock': threading.Lock()}
+GLOBAL_RATE_LIMITS = {
+    'queue_join': (1, 50),    # 每秒最多处理50个排队请求
 }
 
 def get_client_ip():
@@ -108,11 +115,35 @@ def check_rate_limit(limit_type='default'):
     rate_limit_store[ip][limit_type].append(now)
     return True
 
+def check_global_rate_limit(limit_type):
+    """检查全局限流（所有用户共享）"""
+    if limit_type not in GLOBAL_RATE_LIMITS:
+        return True
+    
+    window, max_requests = GLOBAL_RATE_LIMITS[limit_type]
+    now = time.time()
+    
+    with global_rate_limit['lock']:
+        if limit_type not in global_rate_limit:
+            global_rate_limit[limit_type] = []
+        # 清理过期记录
+        global_rate_limit[limit_type] = [t for t in global_rate_limit[limit_type] if now - t < window]
+        
+        if len(global_rate_limit[limit_type]) >= max_requests:
+            return False
+        
+        global_rate_limit[limit_type].append(now)
+        return True
+
 def rate_limit(limit_type='default'):
     """限流装饰器"""
     def decorator(f):
         @wraps(f)
         def decorated_function(*args, **kwargs):
+            # 先检查全局限流
+            if not check_global_rate_limit(limit_type):
+                return jsonify({'error': '系统繁忙，请稍后再试'}), 503
+            # 再检查单用户限流
             if not check_rate_limit(limit_type):
                 return jsonify({'error': '请求过于频繁，请稍后再试'}), 429
             return f(*args, **kwargs)
@@ -1004,6 +1035,7 @@ def team_accounts_status():
 # ========== 排队通知 API ==========
 
 @app.route('/api/waiting/join', methods=['POST'])
+@rate_limit('queue_join')
 @jwt_required
 def join_waiting_queue():
     """加入排队队列（需要登录）"""
