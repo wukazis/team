@@ -225,8 +225,8 @@ def init_db_pool():
 class DictRowWrapper:
     """包装 PostgreSQL 返回的字典，支持数字索引和键名访问"""
     def __init__(self, row):
-        self._row = row
-        self._keys = list(row.keys()) if row else []
+        self._row = dict(row) if row else {}
+        self._keys = list(self._row.keys()) if self._row else []
     
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -234,6 +234,9 @@ class DictRowWrapper:
             return self._row[self._keys[key]]
         # 键名访问
         return self._row[key]
+    
+    def __iter__(self):
+        return iter(self._keys)
     
     def get(self, key, default=None):
         try:
@@ -335,6 +338,12 @@ class PostgresConnectionWrapper:
     
     def close(self):
         db_pool.putconn(self._conn)
+    
+    @property
+    def rowcount(self):
+        if self._cursor:
+            return self._cursor.rowcount
+        return 0
     
     @property
     def lastrowid(self):
@@ -1551,7 +1560,7 @@ def list_codes():
         ORDER BY c.created_at DESC
     ''').fetchall()
     conn.close()
-    return jsonify({'codes': [dict(r) for r in rows]})
+    return jsonify({'codes': [dict(r.items()) for r in rows]})
 
 @app.route('/api/admin/codes', methods=['POST'])
 @admin_required
@@ -1605,7 +1614,7 @@ def list_users():
         SELECT * FROM users ORDER BY created_at DESC
     ''').fetchall()
     conn.close()
-    return jsonify({'users': [dict(r) for r in rows]})
+    return jsonify({'users': [dict(r.items()) for r in rows]})
 
 @app.route('/api/admin/users/<int:user_id>', methods=['PUT'])
 @admin_required
@@ -1647,7 +1656,7 @@ def list_queue():
     notified = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 1').fetchone()[0]
     conn.close()
     return jsonify({
-        'queue': [dict(r) for r in rows],
+        'queue': [dict(r.items()) for r in rows],
         'waiting': waiting,
         'notified': notified,
         'total': waiting + notified
@@ -1841,11 +1850,11 @@ def get_monitor_status():
         status = 'waiting'
         status_text = f'等待 {pending_codes} 个邀请码被使用'
         if oldest_code:
-            from datetime import datetime
-            created = datetime.fromisoformat(oldest_code['created_at'].replace(' ', 'T'))
-            expire_time = created + timedelta(seconds=INVITE_CODE_EXPIRE)
-            remaining = (expire_time - datetime.utcnow()).total_seconds()
-            expire_countdown = max(0, int(remaining))
+            created = parse_datetime(oldest_code['created_at'])
+            if created:
+                expire_time = created + timedelta(seconds=INVITE_CODE_EXPIRE)
+                remaining = (expire_time - datetime.utcnow()).total_seconds()
+                expire_countdown = max(0, int(remaining))
     elif queue_count > 0 and available_slots > 0:
         if queue_count >= available_slots:
             status = 'ready'
