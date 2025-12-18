@@ -785,19 +785,23 @@ def oauth_callback():
     try:
         print(f"[OAuth] 尝试创建/更新用户 {username} (ID: {user_id})", file=sys.stderr, flush=True)
         existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
+        print(f"[OAuth] 查询现有用户结果: {existing}", file=sys.stderr, flush=True)
         if existing:
-            conn.execute('''
+            result = conn.execute('''
                 UPDATE users SET username = ?, name = ?, avatar_template = ?, trust_level = ?, updated_at = datetime('now')
                 WHERE id = ?
             ''', (username, name, avatar_template, trust_level, user_id))
-            print(f"[OAuth] 用户更新成功: {username} (ID: {user_id})", file=sys.stderr, flush=True)
+            print(f"[OAuth] UPDATE rowcount: {result.rowcount}", file=sys.stderr, flush=True)
         else:
-            conn.execute('''
+            result = conn.execute('''
                 INSERT INTO users (id, username, name, avatar_template, trust_level) VALUES (?, ?, ?, ?, ?)
             ''', (user_id, username, name, avatar_template, trust_level))
-            print(f"[OAuth] 新用户创建成功: {username} (ID: {user_id})", file=sys.stderr, flush=True)
+            print(f"[OAuth] INSERT rowcount: {result.rowcount}", file=sys.stderr, flush=True)
         conn.commit()
-        print(f"[OAuth] 数据库提交成功", file=sys.stderr, flush=True)
+        print(f"[OAuth] commit() 调用完成", file=sys.stderr, flush=True)
+        # 验证插入
+        verify = conn.execute('SELECT id, username FROM users WHERE id = ?', (user_id,)).fetchone()
+        print(f"[OAuth] 验证查询结果: {verify}", file=sys.stderr, flush=True)
     except Exception as e:
         print(f"[OAuth] 用户创建/更新失败: {e}", file=sys.stderr, flush=True)
         import traceback
