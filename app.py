@@ -254,6 +254,11 @@ def init_db():
         conn.execute('ALTER TABLE team_accounts ADD COLUMN pending_invites INTEGER DEFAULT 0')
     except sqlite3.OperationalError:
         pass  # 列已存在
+    # 添加 auto_generated 列（区分系统自动生成和管理员手动生成的邀请码）
+    try:
+        conn.execute('ALTER TABLE invite_codes ADD COLUMN auto_generated INTEGER DEFAULT 0')
+    except sqlite3.OperationalError:
+        pass  # 列已存在
     
     # 创建排队表
     conn.execute('''
@@ -412,7 +417,7 @@ def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> b
             <p style="font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 3px; margin: 0;">{invite_code}</p>
             <p style="color: #64748b; font-size: 13px; margin: 12px 0 0 0;">绑定车位: {team_name}</p>
         </div>
-        <p>请前往首页填写邀请码和您的上车邮箱完成领取（这只是一个测试，点击发送邀请后会显示成功，仅用作候车系统测试）：</p>
+        <p>请前往首页填写邀请码和您的上车邮箱完成领取：</p>
         <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">立即上车</a></p>
         <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">⚠️ 此邀请码仅限您本人使用，请勿分享给他人。</p>
         <p style="color: #64748b; font-size: 13px;">邀请码有效期为邮件发出后的半小时，逾期未用将自动作废。</p>
@@ -813,10 +818,10 @@ def notify_waiting_users(available_seats: int, force: bool = False):
     # 计算每个车位的可用空位（空位数 = 总席位 - 已用 - 待处理 - 已发出未使用的邀请码）
     available_slots = []
     for acc in accounts:
-        # 查询该车位已发出但未使用的邀请码数量
+        # 查询该车位已发出但未使用的邀请码数量（只统计系统自动生成的）
         pending_codes = conn.execute('''
             SELECT COUNT(*) FROM invite_codes 
-            WHERE team_account_id = ? AND used = 0
+            WHERE team_account_id = ? AND used = 0 AND auto_generated = 1
         ''', (acc['id'],)).fetchone()[0]
         
         avail = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0) - pending_codes
@@ -863,9 +868,9 @@ def notify_waiting_users(available_seats: int, force: bool = False):
         # 生成邀请码
         code = generate_code()
         
-        # 插入邀请码（绑定车位和用户）
+        # 插入邀请码（绑定车位和用户，标记为系统自动生成）
         conn.execute('''
-            INSERT INTO invite_codes (code, team_account_id, user_id) VALUES (?, ?, ?)
+            INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated) VALUES (?, ?, ?, 1)
         ''', (code, slot['team_id'], user['user_id']))
         
         # 发送邮件（最多重试3次）
@@ -1493,8 +1498,8 @@ def get_monitor_status():
     # 获取已通知但未使用的人数
     notified_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 1').fetchone()[0]
     
-    # 获取待使用邀请码数
-    pending_codes = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0').fetchone()[0]
+    # 获取待使用邀请码数（只统计系统自动生成的）
+    pending_codes = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0 AND auto_generated = 1').fetchone()[0]
     
     # 获取各车位空位
     accounts = conn.execute('''
@@ -1505,10 +1510,10 @@ def get_monitor_status():
     available_slots = 0
     team_status = []
     for acc in accounts:
-        # 查询该车位已发出但未使用的邀请码数量
+        # 查询该车位已发出但未使用的邀请码数量（只统计系统自动生成的）
         acc_pending_codes = conn.execute('''
             SELECT COUNT(*) FROM invite_codes 
-            WHERE team_account_id = ? AND used = 0
+            WHERE team_account_id = ? AND used = 0 AND auto_generated = 1
         ''', (acc['id'],)).fetchone()[0]
         
         avail = max(0, (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0) - acc_pending_codes)
@@ -1524,9 +1529,9 @@ def get_monitor_status():
             'lastSync': acc['last_sync']
         })
     
-    # 获取最早的未使用邀请码创建时间（用于计算过期倒计时）
+    # 获取最早的未使用邀请码创建时间（只统计系统自动生成的，用于计算过期倒计时）
     oldest_code = conn.execute('''
-        SELECT created_at FROM invite_codes WHERE used = 0 ORDER BY created_at ASC LIMIT 1
+        SELECT created_at FROM invite_codes WHERE used = 0 AND auto_generated = 1 ORDER BY created_at ASC LIMIT 1
     ''').fetchone()
     
     conn.close()
@@ -1730,22 +1735,22 @@ def sync_team_accounts():
     return total_available
 
 def get_pending_invite_codes_count():
-    """获取已发出但未使用的邀请码数量"""
+    """获取已发出但未使用的邀请码数量（只统计系统自动生成的）"""
     conn = sqlite3.connect(DB_PATH)
-    count = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0').fetchone()[0]
+    count = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0 AND auto_generated = 1').fetchone()[0]
     conn.close()
     return count
 
 def cleanup_expired_invite_codes():
-    """清理过期的邀请码（超过有效期未使用的）- 同时移除用户出队列"""
+    """清理过期的邀请码（超过有效期未使用的系统自动生成邀请码）- 同时移除用户出队列"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
-    # 查找过期的邀请码（创建时间超过有效期且未使用）
+    # 查找过期的邀请码（只清理系统自动生成的，创建时间超过有效期且未使用）
     expired = conn.execute(f'''
         SELECT ic.*, wq.id as queue_id FROM invite_codes ic
         LEFT JOIN waiting_queue wq ON ic.user_id = wq.user_id
-        WHERE ic.used = 0 AND datetime(ic.created_at, '+{INVITE_CODE_EXPIRE} seconds') < datetime('now')
+        WHERE ic.used = 0 AND ic.auto_generated = 1 AND datetime(ic.created_at, '+{INVITE_CODE_EXPIRE} seconds') < datetime('now')
     ''').fetchall()
     
     if expired:
