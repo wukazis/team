@@ -451,6 +451,15 @@
             html.setAttribute('data-theme', isDark ? '' : 'dark');
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
             updateThemeIcon();
+            // 重新渲染 Turnstile 以匹配主题
+            if (turnstileSiteKey && window.turnstile && turnstileWidgetId !== null) {
+                window.turnstile.remove(turnstileWidgetId);
+                turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { 
+                    sitekey: turnstileSiteKey, 
+                    theme: isDark ? 'light' : 'dark',  // 注意：isDark 是切换前的状态
+                    size: 'flexible' 
+                });
+            }
         }
         
         function updateThemeIcon() {
@@ -498,7 +507,8 @@
             } else {
                 document.getElementById('inviteSection').classList.remove('hidden');
                 if (turnstileSiteKey && window.turnstile) {
-                    turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: 'light', size: 'flexible' });
+                    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+                    turnstileWidgetId = window.turnstile.render(document.getElementById('turnstileContainer'), { sitekey: turnstileSiteKey, theme: isDark ? 'dark' : 'light', size: 'flexible' });
                 }
             }
             // 显示候车室入口并检测冷却状态
