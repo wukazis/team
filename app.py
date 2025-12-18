@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import sqlite3
 import secrets
 import threading
 import time
@@ -16,8 +15,25 @@ from urllib.parse import urlencode
 from flask import Flask, request, jsonify, send_from_directory, session, redirect
 from dotenv import load_dotenv
 import requests
+from contextlib import contextmanager
 
 load_dotenv()
+
+# 数据库配置
+DATABASE_URL = os.environ.get('DATABASE_URL', '')
+DB_PATH = os.environ.get('DB_PATH', 'data.db')
+
+# 判断使用哪种数据库
+USE_POSTGRES = DATABASE_URL.startswith('postgresql')
+
+if USE_POSTGRES:
+    import psycopg2
+    from psycopg2 import pool
+    from psycopg2.extras import RealDictCursor
+    # PostgreSQL 连接池
+    db_pool = None
+else:
+    import sqlite3
 
 # 同步间隔（秒）
 SYNC_INTERVAL = int(os.environ.get('SYNC_INTERVAL', 30))
@@ -195,128 +211,288 @@ def verify_turnstile(token, ip=None):
     except:
         return False
 
+def init_db_pool():
+    """初始化 PostgreSQL 连接池"""
+    global db_pool
+    if USE_POSTGRES and db_pool is None:
+        db_pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=5,
+            maxconn=50,
+            dsn=DATABASE_URL
+        )
+        print("PostgreSQL 连接池已初始化")
+
+class PostgresConnectionWrapper:
+    """PostgreSQL 连接包装器，模拟 SQLite 的接口"""
+    def __init__(self, conn):
+        self._conn = conn
+        self._cursor = None
+        self._lastrowid = None
+    
+    def _convert_sql(self, sql):
+        """转换 SQLite SQL 到 PostgreSQL"""
+        import re
+        # 转换占位符
+        sql = sql.replace('?', '%s')
+        # 转换时间函数
+        sql = sql.replace("datetime('now')", "NOW()")
+        # 处理 SQLite 的时间计算语法 '+N seconds'
+        sql = re.sub(r"'\+(\d+) seconds'", r"|| INTERVAL '\1 seconds'", sql)
+        sql = re.sub(r", '\+(\d+) seconds'\)", r" + INTERVAL '\1 seconds')", sql)
+        # INSERT OR IGNORE -> INSERT ... ON CONFLICT DO NOTHING
+        if 'INSERT OR IGNORE' in sql.upper():
+            sql = sql.replace('INSERT OR IGNORE', 'INSERT')
+            sql = sql.rstrip(')') + ') ON CONFLICT DO NOTHING'
+        # INSERT OR REPLACE -> INSERT ... ON CONFLICT DO UPDATE (需要知道主键)
+        if 'INSERT OR REPLACE' in sql.upper():
+            sql = sql.replace('INSERT OR REPLACE', 'INSERT')
+            if 'system_settings' in sql:
+                sql = sql.rstrip(')') + ') ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value'
+        return sql
+    
+    def execute(self, sql, params=None):
+        sql = self._convert_sql(sql)
+        self._cursor = self._conn.cursor(cursor_factory=RealDictCursor)
+        try:
+            if params:
+                self._cursor.execute(sql, params)
+            else:
+                self._cursor.execute(sql)
+            # 尝试获取 lastrowid
+            if sql.strip().upper().startswith('INSERT') and 'RETURNING' not in sql.upper():
+                try:
+                    self._cursor.execute('SELECT lastval()')
+                    row = self._cursor.fetchone()
+                    if row:
+                        self._lastrowid = row.get('lastval') or row.get(0)
+                except:
+                    pass
+        except Exception as e:
+            self._conn.rollback()
+            raise e
+        return self
+    
+    def executescript(self, sql):
+        # PostgreSQL 不支持 executescript，逐条执行
+        cursor = self._conn.cursor()
+        for statement in sql.split(';'):
+            statement = statement.strip()
+            if statement:
+                try:
+                    cursor.execute(self._convert_sql(statement))
+                except Exception as e:
+                    print(f"SQL 执行失败: {statement[:100]}... 错误: {e}")
+        return self
+    
+    def fetchone(self):
+        if self._cursor:
+            return self._cursor.fetchone()
+        return None
+    
+    def fetchall(self):
+        if self._cursor:
+            return self._cursor.fetchall()
+        return []
+    
+    def commit(self):
+        self._conn.commit()
+    
+    def rollback(self):
+        self._conn.rollback()
+    
+    def close(self):
+        db_pool.putconn(self._conn)
+    
+    @property
+    def lastrowid(self):
+        return self._lastrowid
+
 def get_db():
-    conn = sqlite3.connect(DB_PATH, timeout=30)
-    conn.row_factory = sqlite3.Row
-    # 性能优化
-    conn.execute('PRAGMA synchronous=NORMAL')
-    conn.execute('PRAGMA cache_size=10000')
-    conn.execute('PRAGMA temp_store=MEMORY')
-    return conn
+    """获取数据库连接"""
+    if USE_POSTGRES:
+        conn = db_pool.getconn()
+        return PostgresConnectionWrapper(conn)
+    else:
+        conn = sqlite3.connect(DB_PATH, timeout=30)
+        conn.row_factory = sqlite3.Row
+        conn.execute('PRAGMA synchronous=NORMAL')
+        conn.execute('PRAGMA cache_size=10000')
+        conn.execute('PRAGMA temp_store=MEMORY')
+        return conn
 
 def init_db():
-    conn = get_db()
-    conn.execute('PRAGMA journal_mode=WAL')
-    conn.executescript('''
-        CREATE TABLE IF NOT EXISTS team_accounts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            authorization_token TEXT,
-            account_id TEXT,
-            max_seats INTEGER DEFAULT 5,
-            seats_entitled INTEGER DEFAULT 5,
-            seats_in_use INTEGER DEFAULT 0,
-            enabled INTEGER DEFAULT 1,
-            active_until TEXT,
-            last_sync TEXT,
-            created_at TEXT DEFAULT (datetime('now'))
-        );
+    """初始化数据库表结构"""
+    if USE_POSTGRES:
+        init_db_pool()
+        conn = get_db()
+        cursor = conn.cursor()
         
-        CREATE TABLE IF NOT EXISTS invite_codes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            code TEXT UNIQUE NOT NULL,
-            team_account_id INTEGER REFERENCES team_accounts(id),
-            user_id INTEGER,
-            used INTEGER DEFAULT 0,
-            used_email TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            used_at TEXT
-        );
+        # PostgreSQL 建表语句
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS team_accounts (
+                id SERIAL PRIMARY KEY,
+                name TEXT NOT NULL,
+                authorization_token TEXT,
+                account_id TEXT,
+                max_seats INTEGER DEFAULT 5,
+                seats_entitled INTEGER DEFAULT 5,
+                seats_in_use INTEGER DEFAULT 0,
+                enabled INTEGER DEFAULT 1,
+                active_until TEXT,
+                pending_invites INTEGER DEFAULT 0,
+                last_sync TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
         
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY,
-            username TEXT NOT NULL,
-            name TEXT,
-            avatar_template TEXT,
-            trust_level INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
-            updated_at TEXT DEFAULT (datetime('now'))
-        );
-    ''')
-    # 添加 active_until 列（如果不存在）
-    try:
-        conn.execute('ALTER TABLE team_accounts ADD COLUMN active_until TEXT')
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-    # 添加 has_used 列（如果不存在）
-    try:
-        conn.execute('ALTER TABLE users ADD COLUMN has_used INTEGER DEFAULT 0')
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-    # 添加 pending_invites 列（如果不存在）
-    try:
-        conn.execute('ALTER TABLE team_accounts ADD COLUMN pending_invites INTEGER DEFAULT 0')
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-    # 添加 auto_generated 列（区分系统自动生成和管理员手动生成的邀请码）
-    try:
-        conn.execute('ALTER TABLE invite_codes ADD COLUMN auto_generated INTEGER DEFAULT 0')
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-    
-    # 创建排队表
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS waiting_queue (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER REFERENCES users(id),
-            email TEXT,
-            notified INTEGER DEFAULT 0,
-            created_at TEXT DEFAULT (datetime('now')),
-            notified_at TEXT
-        )
-    ''')
-    # 添加 user_id 列（如果不存在）
-    try:
-        conn.execute('ALTER TABLE waiting_queue ADD COLUMN user_id INTEGER REFERENCES users(id)')
-    except sqlite3.OperationalError:
-        pass  # 列已存在
-    # 添加 user_id 唯一索引（防止并发重复插入）
-    try:
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                id SERIAL PRIMARY KEY,
+                code TEXT UNIQUE NOT NULL,
+                team_account_id INTEGER REFERENCES team_accounts(id),
+                user_id INTEGER,
+                used INTEGER DEFAULT 0,
+                used_email TEXT,
+                auto_generated INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                used_at TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                name TEXT,
+                avatar_template TEXT,
+                trust_level INTEGER DEFAULT 0,
+                has_used INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                updated_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS waiting_queue (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER REFERENCES users(id) UNIQUE,
+                email TEXT,
+                notified INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW(),
+                notified_at TIMESTAMP
+            )
+        ''')
+        
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        
+        # 创建索引
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)')
+        
+        # 初始化默认设置
+        cursor.execute("INSERT INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false') ON CONFLICT (key) DO NOTHING")
+        cursor.execute("INSERT INTO system_settings (key, value) VALUES ('waiting_room_max_queue', '0') ON CONFLICT (key) DO NOTHING")
+        cursor.execute("INSERT INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto') ON CONFLICT (key) DO NOTHING")
+        cursor.execute("INSERT INTO system_settings (key, value) VALUES ('sync_interval', '30') ON CONFLICT (key) DO NOTHING")
+        
+        conn.commit()
+        close_db(conn)
+        print("PostgreSQL 数据库初始化完成")
+    else:
+        # SQLite 初始化
+        conn = get_db()
+        conn.execute('PRAGMA journal_mode=WAL')
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS team_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                authorization_token TEXT,
+                account_id TEXT,
+                max_seats INTEGER DEFAULT 5,
+                seats_entitled INTEGER DEFAULT 5,
+                seats_in_use INTEGER DEFAULT 0,
+                enabled INTEGER DEFAULT 1,
+                active_until TEXT,
+                last_sync TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            );
+            
+            CREATE TABLE IF NOT EXISTS invite_codes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code TEXT UNIQUE NOT NULL,
+                team_account_id INTEGER REFERENCES team_accounts(id),
+                user_id INTEGER,
+                used INTEGER DEFAULT 0,
+                used_email TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                used_at TEXT
+            );
+            
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                username TEXT NOT NULL,
+                name TEXT,
+                avatar_template TEXT,
+                trust_level INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                updated_at TEXT DEFAULT (datetime('now'))
+            );
+        ''')
+        # 添加列（如果不存在）
+        for sql in [
+            'ALTER TABLE team_accounts ADD COLUMN active_until TEXT',
+            'ALTER TABLE team_accounts ADD COLUMN pending_invites INTEGER DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN has_used INTEGER DEFAULT 0',
+            'ALTER TABLE invite_codes ADD COLUMN auto_generated INTEGER DEFAULT 0',
+        ]:
+            try:
+                conn.execute(sql)
+            except sqlite3.OperationalError:
+                pass
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS waiting_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER REFERENCES users(id),
+                email TEXT,
+                notified INTEGER DEFAULT 0,
+                created_at TEXT DEFAULT (datetime('now')),
+                notified_at TEXT
+            )
+        ''')
+        try:
+            conn.execute('ALTER TABLE waiting_queue ADD COLUMN user_id INTEGER REFERENCES users(id)')
+        except sqlite3.OperationalError:
+            pass
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_waiting_queue_user_id ON waiting_queue(user_id)')
-    except sqlite3.OperationalError:
-        pass  # 索引已存在
-    
-    # 创建性能优化索引
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)')
-    conn.execute('CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)')
-    
-    # 创建系统设置表
-    conn.execute('''
-        CREATE TABLE IF NOT EXISTS system_settings (
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
-    ''')
-    
-    # 初始化默认设置（如果不存在）
-    conn.execute('''
-        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false')
-    ''')
-    conn.execute('''
-        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_max_queue', '0')
-    ''')
-    conn.execute('''
-        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto')
-    ''')
-    conn.execute('''
-        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_interval', '30')
-    ''')
-    
-    conn.commit()
-    conn.close()
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)')
+        
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS system_settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        ''')
+        conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false')")
+        conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_max_queue', '0')")
+        conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto')")
+        conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_interval', '30')")
+        
+        conn.commit()
+        conn.close()
+        print("SQLite 数据库初始化完成")
     
     # 加载设置到全局变量
     load_settings()
@@ -325,35 +501,59 @@ def load_settings():
     """从数据库加载设置到全局变量"""
     global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE, SYNC_INTERVAL
     try:
-        conn = sqlite3.connect(DB_PATH)
-        conn.row_factory = sqlite3.Row
+        conn = get_db()
+        if USE_POSTGRES:
+            cursor = conn.cursor(cursor_factory=RealDictCursor)
+            cursor.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'")
+            row = cursor.fetchone()
+            if row:
+                WAITING_ROOM_ENABLED = row['value'] == 'true'
+            
+            cursor.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'")
+            row = cursor.fetchone()
+            if row:
+                WAITING_ROOM_MAX_QUEUE = int(row['value'])
+            
+            cursor.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'")
+            row = cursor.fetchone()
+            if row:
+                DISPATCH_MODE = row['value']
+            
+            cursor.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'")
+            row = cursor.fetchone()
+            if row:
+                SYNC_INTERVAL = int(row['value'])
+        else:
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
+            if row:
+                WAITING_ROOM_ENABLED = row['value'] == 'true'
+            
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
+            if row:
+                WAITING_ROOM_MAX_QUEUE = int(row['value'])
+            
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'").fetchone()
+            if row:
+                DISPATCH_MODE = row['value']
+            
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'").fetchone()
+            if row:
+                SYNC_INTERVAL = int(row['value'])
         
-        row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
-        if row:
-            WAITING_ROOM_ENABLED = row['value'] == 'true'
-        
-        row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
-        if row:
-            WAITING_ROOM_MAX_QUEUE = int(row['value'])
-        
-        row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'").fetchone()
-        if row:
-            DISPATCH_MODE = row['value']
-        
-        row = conn.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'").fetchone()
-        if row:
-            SYNC_INTERVAL = int(row['value'])
-        
-        conn.close()
+        close_db(conn)
     except Exception as e:
         print(f"加载设置失败: {e}")
 
 def save_setting(key: str, value: str):
     """保存设置到数据库"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.execute('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', (key, value))
+    conn = get_db()
+    if USE_POSTGRES:
+        cursor = conn.cursor()
+        cursor.execute('INSERT INTO system_settings (key, value) VALUES (%s, %s) ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value', (key, value))
+    else:
+        conn.execute('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', (key, value))
     conn.commit()
-    conn.close()
+    close_db(conn)
 
 def generate_code():
     return secrets.token_urlsafe(8).upper()[:12]
@@ -720,10 +920,12 @@ def join_waiting_queue():
     try:
         conn.execute('INSERT INTO waiting_queue (user_id, email) VALUES (?, ?)', (user_id, email if email else None))
         conn.commit()
-    except sqlite3.IntegrityError:
+    except Exception as e:
         # 并发插入导致唯一约束冲突，说明用户已在队列中
-        conn.close()
-        return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': email})
+        if 'UNIQUE' in str(e).upper() or 'duplicate' in str(e).lower() or 'IntegrityError' in str(type(e)):
+            conn.close()
+            return jsonify({'message': '您已在排队队列中', 'position': get_queue_position_by_user(user_id), 'email': email})
+        raise e
     
     position = get_queue_position_by_user(user_id)
     conn.close()
@@ -1331,8 +1533,11 @@ def create_codes():
                 (code, team_account_id)
             )
             codes.append(code)
-        except sqlite3.IntegrityError:
-            continue
+        except Exception as e:
+            # 唯一约束冲突，跳过
+            if 'UNIQUE' in str(e).upper() or 'duplicate' in str(e).lower():
+                continue
+            raise e
     conn.commit()
     conn.close()
     
@@ -1697,8 +1902,7 @@ def sync_team_accounts():
     
     优化策略：已满的车位每30分钟同步一次，有空位的车位每次都同步
     """
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     accounts = conn.execute(
         'SELECT * FROM team_accounts WHERE enabled = 1 AND authorization_token IS NOT NULL AND account_id IS NOT NULL'
     ).fetchall()
@@ -1715,8 +1919,12 @@ def sync_team_accounts():
         if current_available <= 0 and acc['last_sync']:
             # 已满的车位，检查上次同步时间
             try:
-                last_sync = datetime.fromisoformat(acc['last_sync'].replace(' ', 'T'))
-                time_since_sync = (now - last_sync).total_seconds()
+                last_sync_str = str(acc['last_sync']).replace(' ', 'T')
+                if '+' not in last_sync_str and 'Z' not in last_sync_str:
+                    last_sync = datetime.fromisoformat(last_sync_str)
+                else:
+                    last_sync = datetime.fromisoformat(last_sync_str.replace('Z', '+00:00'))
+                time_since_sync = (now - last_sync.replace(tzinfo=None)).total_seconds()
                 if time_since_sync < FULL_CAR_SYNC_INTERVAL:
                     # 30分钟内已同步过，跳过
                     need_sync = False
@@ -1745,22 +1953,28 @@ def sync_team_accounts():
 
 def get_pending_invite_codes_count():
     """获取已发出但未使用的邀请码数量（只统计系统自动生成的）"""
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db()
     count = conn.execute('SELECT COUNT(*) FROM invite_codes WHERE used = 0 AND auto_generated = 1').fetchone()[0]
     conn.close()
     return count
 
 def cleanup_expired_invite_codes():
     """清理过期的邀请码（超过有效期未使用的系统自动生成邀请码）- 同时移除用户出队列"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = get_db()
     
     # 查找过期的邀请码（只清理系统自动生成的，创建时间超过有效期且未使用）
-    expired = conn.execute(f'''
-        SELECT ic.*, wq.id as queue_id FROM invite_codes ic
-        LEFT JOIN waiting_queue wq ON ic.user_id = wq.user_id
-        WHERE ic.used = 0 AND ic.auto_generated = 1 AND datetime(ic.created_at, '+{INVITE_CODE_EXPIRE} seconds') < datetime('now')
-    ''').fetchall()
+    if USE_POSTGRES:
+        expired = conn.execute(f'''
+            SELECT ic.*, wq.id as queue_id FROM invite_codes ic
+            LEFT JOIN waiting_queue wq ON ic.user_id = wq.user_id
+            WHERE ic.used = 0 AND ic.auto_generated = 1 AND ic.created_at + INTERVAL '{INVITE_CODE_EXPIRE} seconds' < NOW()
+        ''').fetchall()
+    else:
+        expired = conn.execute(f'''
+            SELECT ic.*, wq.id as queue_id FROM invite_codes ic
+            LEFT JOIN waiting_queue wq ON ic.user_id = wq.user_id
+            WHERE ic.used = 0 AND ic.auto_generated = 1 AND datetime(ic.created_at, '+{INVITE_CODE_EXPIRE} seconds') < datetime('now')
+        ''').fetchall()
     
     if expired:
         print(f"[清理] 发现 {len(expired)} 个过期邀请码")
