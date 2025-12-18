@@ -706,7 +706,7 @@
             const { ok, data } = await api('/admin/sync-interval');
             if (!ok) return;
             
-            document.getElementById('syncIntervalSelect').value = data.syncInterval || 30;
+            document.getElementById('syncIntervalSelect').value = data.syncInterval || 900;
         }
         
         async function saveSyncInterval() {
