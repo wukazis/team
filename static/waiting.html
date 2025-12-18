@@ -723,25 +723,26 @@
         }
 
         let queueCountdownTimer = null;
+        let queueListData = []; // 缓存队列数据用于本地倒计时更新
         
         async function viewQueueList() {
             hideQueueMenu();
             const card = document.getElementById('queueListCard');
             card.classList.remove('hidden');
             await loadQueueList();
-            // 启动倒计时更新定时器
+            // 启动本地倒计时更新定时器（不请求API）
             startQueueCountdown();
         }
         
         function hideQueueListCard() {
             document.getElementById('queueListCard').classList.add('hidden');
-            // 停止倒计时更新定时器
             stopQueueCountdown();
         }
         
         function startQueueCountdown() {
             stopQueueCountdown();
-            queueCountdownTimer = setInterval(loadQueueList, 1000);
+            // 每秒更新本地倒计时显示，每30秒刷新一次数据
+            queueCountdownTimer = setInterval(updateQueueCountdownDisplay, 1000);
         }
         
         function stopQueueCountdown() {
@@ -749,6 +750,33 @@
                 clearInterval(queueCountdownTimer);
                 queueCountdownTimer = null;
             }
+        }
+        
+        function updateQueueCountdownDisplay() {
+            // 只更新倒计时显示，不请求API
+            const container = document.getElementById('queueListContent');
+            if (!queueListData.length) return;
+            
+            container.innerHTML = `
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border);">
+                            <th style="padding: 0.5rem; text-align: left; color: var(--muted); font-weight: 500;">位置</th>
+                            <th style="padding: 0.5rem; text-align: left; color: var(--muted); font-weight: 500;">用户</th>
+                            <th style="padding: 0.5rem; text-align: left; color: var(--muted); font-weight: 500;">状态</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${queueListData.map(item => `
+                            <tr style="border-bottom: 1px solid var(--border);">
+                                <td style="padding: 0.5rem; font-weight: 600; color: var(--primary);">${item.position ? '#' + item.position : '-'}</td>
+                                <td style="padding: 0.5rem;">${item.username}</td>
+                                <td style="padding: 0.5rem; font-size: 0.8rem;">${getStatusHtml(item)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
         }
         
         // 邀请码有效期（30分钟）
@@ -786,33 +814,14 @@
                     headers: { 'Authorization': `Bearer ${jwtToken}` }
                 });
                 const data = await res.json();
-                const queue = data.queue || [];
+                queueListData = data.queue || [];
                 
-                if (!queue.length) {
+                if (!queueListData.length) {
                     container.innerHTML = '<p class="muted text-center" style="padding: 1rem;">暂无排队用户</p>';
                     return;
                 }
                 
-                container.innerHTML = `
-                    <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid var(--border);">
-                                <th style="padding: 0.5rem; text-align: left; color: var(--muted); font-weight: 500;">位置</th>
-                                <th style="padding: 0.5rem; text-align: left; color: var(--muted); font-weight: 500;">用户</th>
-                                <th style="padding: 0.5rem; text-align: left; color: var(--muted); font-weight: 500;">状态</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            ${queue.map(item => `
-                                <tr style="border-bottom: 1px solid var(--border);">
-                                    <td style="padding: 0.5rem; font-weight: 600; color: var(--primary);">${item.position ? '#' + item.position : '-'}</td>
-                                    <td style="padding: 0.5rem;">${item.username}</td>
-                                    <td style="padding: 0.5rem; font-size: 0.8rem;">${getStatusHtml(item)}</td>
-                                </tr>
-                            `).join('')}
-                        </tbody>
-                    </table>
-                `;
+                updateQueueCountdownDisplay();
             } catch (err) {
                 container.innerHTML = '<p class="muted text-center" style="padding: 1rem;">加载失败</p>';
             }

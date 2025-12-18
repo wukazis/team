@@ -659,15 +659,18 @@
         }
 
         async function loadAll() {
-            await loadAccounts();
-            await loadCodes();
-            await loadStats();
-            await loadUsers();
-            await loadQueue();
-            await loadCooldownUsers();
-            await loadMonitor();
-            await loadWaitingRoomSettings();
-            await loadSyncInterval();
+            // 并行加载所有数据，提升性能
+            await Promise.all([
+                loadAccounts(),
+                loadCodes(),
+                loadStats(),
+                loadUsers(),
+                loadQueue(),
+                loadCooldownUsers(),
+                loadMonitor(),
+                loadWaitingRoomSettings(),
+                loadSyncInterval()
+            ]);
             startMonitorTimer();
         }
 
