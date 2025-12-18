@@ -297,6 +297,9 @@ def init_db():
     conn.execute('''
         INSERT OR IGNORE INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto')
     ''')
+    conn.execute('''
+        INSERT OR IGNORE INTO system_settings (key, value) VALUES ('sync_interval', '30')
+    ''')
     
     conn.commit()
     conn.close()
@@ -306,7 +309,7 @@ def init_db():
 
 def load_settings():
     """从数据库加载设置到全局变量"""
-    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE
+    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE, SYNC_INTERVAL
     try:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -322,6 +325,10 @@ def load_settings():
         row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_mode'").fetchone()
         if row:
             DISPATCH_MODE = row['value']
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'").fetchone()
+        if row:
+            SYNC_INTERVAL = int(row['value'])
         
         conn.close()
     except Exception as e:
@@ -394,10 +401,10 @@ def send_email(to_email: str, subject: str, html_content: str) -> bool:
 
 def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> bool:
     """发送带邀请码的邮件"""
-    subject = '您的 Team 邀请码（这只是一个测试，邀请码可用，但并非真实上车）'
+    subject = '您的 Team 邀请码'
     html_content = f'''
     <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2563eb;">🎉 Team 上车（测试）</h2>
+        <h2 style="color: #2563eb;">🎉 Team 上车</h2>
         <p>您好！</p>
         <p>您在候车室排队等待的车位现已空出，这是您的专属邀请码：</p>
         <div style="background: #f0f9ff; border: 2px dashed #2563eb; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
@@ -1123,8 +1130,12 @@ def create_team_account():
     
     # 如果有 token 和 account_id，异步同步一次状态
     if authorization_token and account_id:
-        import threading
-        threading.Thread(target=lambda: sync_single_account(new_id, authorization_token, account_id), daemon=True).start()
+        def safe_sync():
+            try:
+                sync_single_account(new_id, authorization_token, account_id)
+            except Exception as e:
+                print(f"[同步失败] 车位 {name}: {e}")
+        threading.Thread(target=safe_sync, daemon=True).start()
     
     return jsonify({'id': new_id, 'name': name, 'maxSeats': max_seats})
 
@@ -1614,6 +1625,37 @@ def set_waiting_room_settings():
         'maxQueue': WAITING_ROOM_MAX_QUEUE
     })
 
+# ========== 同步间隔设置 API ==========
+
+@app.route('/api/admin/sync-interval', methods=['GET'])
+@admin_required
+def get_sync_interval():
+    """获取同步间隔设置"""
+    return jsonify({
+        'syncInterval': SYNC_INTERVAL
+    })
+
+@app.route('/api/admin/sync-interval', methods=['POST'])
+@admin_required
+def set_sync_interval():
+    """设置同步间隔"""
+    global SYNC_INTERVAL
+    data = request.json or {}
+    
+    if 'syncInterval' in data:
+        interval = int(data['syncInterval'])
+        # 验证有效值: 300(5min), 900(15min), 1800(30min), 3600(1h), 7200(2h)
+        valid_intervals = [300, 900, 1800, 3600, 7200]
+        if interval not in valid_intervals:
+            return jsonify({'error': '无效的同步间隔'}), 400
+        SYNC_INTERVAL = interval
+        save_setting('sync_interval', str(SYNC_INTERVAL))
+    
+    return jsonify({
+        'status': 'ok',
+        'syncInterval': SYNC_INTERVAL
+    })
+
 # ========== 后台自动同步 ==========
 
 # 邀请码有效期（秒）
@@ -1633,8 +1675,14 @@ monitor_state = {
     'next_action_time': None,     # 下次操作时间
 }
 
+# 已满车位的同步间隔（秒）- 30分钟
+FULL_CAR_SYNC_INTERVAL = int(os.environ.get('FULL_CAR_SYNC_INTERVAL', 1800))
+
 def sync_team_accounts():
-    """同步所有车账号状态，返回总空位数"""
+    """同步所有车账号状态，返回总空位数
+    
+    优化策略：已满的车位每30分钟同步一次，有空位的车位每次都同步
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     accounts = conn.execute(
@@ -1642,7 +1690,29 @@ def sync_team_accounts():
     ).fetchall()
     
     total_available = 0
+    now = datetime.utcnow()
+    
     for acc in accounts:
+        # 计算当前已知的空位数
+        current_available = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0)
+        
+        # 检查是否需要同步
+        need_sync = True
+        if current_available <= 0 and acc['last_sync']:
+            # 已满的车位，检查上次同步时间
+            try:
+                last_sync = datetime.fromisoformat(acc['last_sync'].replace(' ', 'T'))
+                time_since_sync = (now - last_sync).total_seconds()
+                if time_since_sync < FULL_CAR_SYNC_INTERVAL:
+                    # 30分钟内已同步过，跳过
+                    need_sync = False
+                    print(f"[跳过同步] {acc['name']} 已满，{int(FULL_CAR_SYNC_INTERVAL - time_since_sync)}秒后再同步")
+            except:
+                pass
+        
+        if not need_sync:
+            continue
+        
         try:
             data = fetch_team_status(acc['account_id'], acc['authorization_token'])
             conn.execute('''

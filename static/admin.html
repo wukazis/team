@@ -543,6 +543,34 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 同步设置 -->
+                <div class="table-container" style="margin-top: 1rem;">
+                    <div class="table-header">
+                        <span class="title"><i class="bi bi-arrow-repeat" style="margin-right: 4px;"></i> 同步设置</span>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <div style="display: flex; flex-direction: column; gap: 1.5rem; max-width: 400px;">
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">车位状态同步间隔</span>
+                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">自动同步车位状态的时间间隔</span>
+                                </label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <select id="syncIntervalSelect" style="padding: 0.5rem; min-width: 120px;">
+                                        <option value="300">5 分钟</option>
+                                        <option value="900">15 分钟</option>
+                                        <option value="1800">30 分钟</option>
+                                        <option value="3600">1 小时</option>
+                                        <option value="7200">2 小时</option>
+                                    </select>
+                                    <button class="btn btn-primary" onclick="saveSyncInterval()">保存</button>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;">已满车位每 30 分钟同步一次</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -639,6 +667,7 @@
             await loadCooldownUsers();
             await loadMonitor();
             await loadWaitingRoomSettings();
+            await loadSyncInterval();
             startMonitorTimer();
         }
 
@@ -663,6 +692,30 @@
             
             if (ok) {
                 loadWaitingRoomSettings();
+            } else {
+                alert(data.error || '保存失败');
+            }
+        }
+
+        // ========== 同步间隔设置 ==========
+        async function loadSyncInterval() {
+            const { ok, data } = await api('/admin/sync-interval');
+            if (!ok) return;
+            
+            document.getElementById('syncIntervalSelect').value = data.syncInterval || 30;
+        }
+        
+        async function saveSyncInterval() {
+            const syncInterval = parseInt(document.getElementById('syncIntervalSelect').value);
+            
+            const { ok, data } = await api('/admin/sync-interval', {
+                method: 'POST',
+                body: JSON.stringify({ syncInterval })
+            });
+            
+            if (ok) {
+                alert('同步间隔已保存');
+                loadSyncInterval();
             } else {
                 alert(data.error || '保存失败');
             }
