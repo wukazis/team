@@ -622,12 +622,14 @@
             }
             
             try {
-                // 检查候车室是否开放
-                const settingsRes = await fetch('/api/admin/waiting-room-settings');
+                // 检查候车室是否开放（带 token 检查用户是否在队列中）
+                const settingsRes = await fetch('/api/admin/waiting-room-settings', {
+                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                });
                 if (settingsRes.ok) {
                     const settings = await settingsRes.json();
-                    if (!settings.enabled) {
-                        // 候车室关闭
+                    if (!settings.enabled && !settings.userInQueue) {
+                        // 候车室关闭且用户不在队列中
                         waitingClosed.classList.remove('hidden');
                         waitingEntry.style.opacity = '0.6';
                         waitingEntry.style.pointerEvents = 'none';
@@ -668,9 +670,10 @@
                         }
                         return;
                     }
+                    // 用户在队列中，即使候车室关闭也允许访问
                 }
                 
-                // 候车室开放，恢复样式
+                // 候车室开放或用户在队列中，恢复样式
                 waitingEntry.style.opacity = '';
                 waitingEntry.style.pointerEvents = '';
                 

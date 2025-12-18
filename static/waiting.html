@@ -1030,12 +1030,15 @@
         (async () => {
             const loggedIn = await checkLogin();
             if (loggedIn) {
-                // 检查候车室是否开放
+                // 检查候车室是否开放（带 token 检查用户是否在队列中）
                 try {
-                    const settingsRes = await fetch('/api/admin/waiting-room-settings');
+                    const settingsRes = await fetch('/api/admin/waiting-room-settings', {
+                        headers: { 'Authorization': 'Bearer ' + getToken() }
+                    });
                     if (settingsRes.ok) {
                         const settings = await settingsRes.json();
-                        if (!settings.enabled) {
+                        // 候车室关闭且用户不在队列中，才重定向
+                        if (!settings.enabled && !settings.userInQueue) {
                             window.location.href = '/';
                             return;
                         }

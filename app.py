@@ -2081,17 +2081,30 @@ def get_waiting_room_settings():
     enabled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
     max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
     scheduled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
-    conn.close()
     
     enabled = enabled_row[0] == 'true' if enabled_row else False
     max_queue = int(max_queue_row[0]) if max_queue_row else 0
     scheduled_time = scheduled_row[0] if scheduled_row and scheduled_row[0] else None
     
+    # 检查当前用户是否在队列中（如果有 JWT token）
+    user_in_queue = False
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        payload = verify_jwt_token(token)
+        if payload:
+            user_id = payload.get('user_id')
+            in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
+            user_in_queue = in_queue is not None
+    
+    conn.close()
+    
     return jsonify({
         'enabled': enabled,
         'maxQueue': max_queue,
         'currentQueue': queue_count,
-        'scheduledTime': scheduled_time
+        'scheduledTime': scheduled_time,
+        'userInQueue': user_in_queue
     })
 
 @app.route('/api/admin/waiting-room-settings', methods=['POST'])
