@@ -2233,11 +2233,19 @@ def get_waiting_room_settings():
     # 从数据库实时读取设置
     enabled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
     max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_max_queue'").fetchone()
-    scheduled_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
     
     enabled = enabled_row[0] == 'true' if enabled_row else False
     max_queue = int(max_queue_row[0]) if max_queue_row else 0
-    scheduled_time = scheduled_row[0] if scheduled_row and scheduled_row[0] else None
+    
+    # 从 scheduled_opens 表获取最近的定时开放
+    scheduled_row = conn.execute("SELECT scheduled_time FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC LIMIT 1").fetchone()
+    scheduled_time = None
+    if scheduled_row:
+        st = scheduled_row['scheduled_time']
+        if isinstance(st, datetime):
+            scheduled_time = st.isoformat()
+        else:
+            scheduled_time = st
     
     # 检查当前用户是否在队列中和是否已验证（如果有 JWT token）
     user_in_queue = False
