@@ -506,10 +506,34 @@
 
         async function init() {
             const params = new URLSearchParams(location.search);
+            
+            // 处理登录错误
+            if (params.get('error') === 'trust_level') {
+                const tl = params.get('tl') || '0';
+                history.replaceState({}, '', '/');
+                showTrustLevelError(tl);
+                return;
+            }
+            
             if (params.get('token')) { setToken(params.get('token')); history.replaceState({}, '', '/'); }
             try { turnstileSiteKey = (await (await fetch('/api/turnstile/site-key')).json()).siteKey; } catch {}
             getToken() ? await loadUserState() : showLoginPanel();
             loadTeamAccounts();
+        }
+        
+        function showTrustLevelError(currentTL) {
+            document.getElementById('loadingOverlay').classList.add('fade-out');
+            document.getElementById('loginPanel').innerHTML = `
+                <section class="card login-card">
+                    <h2 style="color: var(--danger);">⚠️ 无法登录</h2>
+                    <p style="margin-bottom: 1rem;">本站仅对 <strong>TL3 及以上</strong> 用户开放</p>
+                    <p style="color: var(--muted); margin-bottom: 1.5rem;">您当前的信任级别为 <strong style="color: var(--danger);">TL${currentTL}</strong></p>
+                    <p style="font-size: 0.85rem; color: var(--muted);">请在 LinuxDO 社区提升信任级别后再试</p>
+                    <a href="https://linux.do" class="btn-linuxdo" style="margin-top: 1.5rem; background: var(--primary);">
+                        前往 LinuxDO
+                    </a>
+                </section>
+            `;
         }
 
         // ========== 主题切换 ==========

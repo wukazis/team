@@ -872,13 +872,18 @@ def oauth_callback():
         print(f"User info fetch failed: {e}")
         return redirect(f'{APP_BASE_URL}?error=userinfo_failed')
     
-    # 保存/更新用户
+    # 提取用户信息
     user_id = user_data.get('id')
     username = user_data.get('username', '')
     name = user_data.get('name', '')
     avatar_template = user_data.get('avatar_template', '')
     trust_level = user_data.get('trust_level', 0)
     
+    # 信任级别检查：需要 TL3 及以上才能登录
+    if trust_level < 3:
+        return redirect(f'{APP_BASE_URL}?error=trust_level&tl={trust_level}')
+    
+    # 保存/更新用户
     conn = get_db()
     try:
         existing = conn.execute('SELECT id FROM users WHERE id = ?', (user_id,)).fetchone()
@@ -1038,6 +1043,11 @@ def join_waiting_queue():
     data = request.json or {}
     email = (data.get('email') or '').strip().lower()
     user_id = request.user['user_id']
+    trust_level = request.user.get('trust_level', 0)
+    
+    # 信任级别检查：需要 TL3 及以上
+    if trust_level < 3:
+        return jsonify({'error': f'需要信任级别 3 才能排队，您当前为 TL{trust_level}'}), 403
     
     # 邮箱必填验证
     if not email or '@' not in email:
