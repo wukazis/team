@@ -347,24 +347,62 @@
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pop { to { opacity: 1; } }
         
-        /* 菱形按钮 */
-        .diamond-btn {
-            width: 16px;
-            height: 16px;
-            background-color: var(--primary);
+        /* 展开箭头按钮 */
+        .expand-btn {
+            background: none;
             border: none;
             cursor: pointer;
-            transform: rotate(45deg);
-            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
         }
-        .diamond-btn.active {
-            background-color: var(--danger);
-            transform: rotate(225deg);
+        .expand-btn.active {
+            transform: rotate(180deg);
         }
-        .diamond-btn:hover {
-            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.4);
+        .expand-btn svg {
+            color: var(--muted);
+            transition: color 0.2s;
         }
+        .expand-btn:hover svg {
+            color: var(--primary);
+        }
+        
+        /* 红绿黄灯状态指示器 */
+        .traffic-light {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-left: 8px;
+        }
+        .light {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            opacity: 0.3;
+            transition: all 0.3s ease;
+        }
+        .light.green { background: var(--success); }
+        .light.yellow { background: var(--warning); }
+        .light.red { background: var(--danger); }
+        .light.active {
+            opacity: 1;
+            box-shadow: 0 0 8px currentColor;
+        }
+        .light.green.active { box-shadow: 0 0 8px rgba(22, 163, 74, 0.6); }
+        .light.yellow.active { box-shadow: 0 0 8px rgba(245, 158, 11, 0.6); }
+        .light.red.active { box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); }
+        
+        /* 状态文字 */
+        .status-text {
+            font-size: 0.85rem;
+            font-weight: 500;
+            margin-left: 8px;
+        }
+        .status-text.green { color: var(--success); }
+        .status-text.yellow { color: var(--warning); }
+        .status-text.red { color: var(--danger); }
     </style>
 </head>
 <body>
@@ -459,7 +497,17 @@
                     </g>
                 </svg>
                 车位详情
-                <div id="teamListToggle" class="diamond-btn" onclick="toggleTeamList()" style="margin-left: auto;"></div>
+                <div class="traffic-light">
+                    <span id="lightGreen" class="light green active"></span>
+                    <span id="lightYellow" class="light yellow"></span>
+                    <span id="lightRed" class="light red"></span>
+                </div>
+                <span id="statusText" class="status-text green">有空位</span>
+                <button id="teamListToggle" class="expand-btn" onclick="toggleTeamList()" style="margin-left: auto;" title="展开/收起">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"></polyline>
+                    </svg>
+                </button>
             </h2>
             <div id="teamList" class="team-list hidden">
                 <p class="muted text-center" style="padding: 2rem;">加载中...</p>
@@ -578,6 +626,33 @@
                 btn.classList.remove('active');
             }
         }
+        
+        function updateTrafficLight(available) {
+            const greenLight = document.getElementById('lightGreen');
+            const yellowLight = document.getElementById('lightYellow');
+            const redLight = document.getElementById('lightRed');
+            const statusText = document.getElementById('statusText');
+            
+            // 清除所有active状态
+            greenLight.classList.remove('active');
+            yellowLight.classList.remove('active');
+            redLight.classList.remove('active');
+            statusText.className = 'status-text';
+            
+            if (available > 3) {
+                greenLight.classList.add('active');
+                statusText.classList.add('green');
+                statusText.textContent = '有空位';
+            } else if (available > 0) {
+                yellowLight.classList.add('active');
+                statusText.classList.add('yellow');
+                statusText.textContent = '车位紧张';
+            } else {
+                redLight.classList.add('active');
+                statusText.classList.add('red');
+                statusText.textContent = '已满';
+            }
+        }
 
         async function loadTeamStatus() {
             try {
@@ -612,6 +687,9 @@
             // 根据可用数量调整颜色
             const availEl = document.getElementById('availableSeats');
             availEl.className = 'stat-value ' + (available > 3 ? 'success' : available > 0 ? 'warning' : 'danger');
+            
+            // 更新红绿灯状态
+            updateTrafficLight(available);
         }
 
         function renderTeamList(accounts) {
