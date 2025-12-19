@@ -400,6 +400,55 @@
             font-weight: 500;
             margin-left: 4px;
         }
+        
+        /* 班车表侧边栏 */
+        .schedule-sidebar {
+            position: fixed;
+            right: 20px;
+            top: 80px;
+            width: 200px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            z-index: 100;
+        }
+        .schedule-sidebar h3 {
+            font-size: 0.95rem;
+            color: var(--primary);
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        .schedule-item {
+            padding: 0.5rem 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .schedule-item:last-child {
+            border-bottom: none;
+        }
+        .schedule-time {
+            font-weight: 600;
+            font-size: 1rem;
+        }
+        .schedule-countdown {
+            font-size: 0.8rem;
+            color: var(--primary);
+            margin-top: 0.25rem;
+        }
+        .schedule-empty {
+            color: var(--muted);
+            font-size: 0.85rem;
+            text-align: center;
+            padding: 1rem 0;
+        }
+        @media (max-width: 1100px) {
+            .schedule-sidebar {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
@@ -432,6 +481,22 @@
             <svg id="themeIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
         </button>
     </nav>
+
+    <!-- 班车表侧边栏 -->
+    <div id="scheduleSidebar" class="schedule-sidebar">
+        <h3>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                <line x1="16" y1="2" x2="16" y2="6"></line>
+                <line x1="8" y1="2" x2="8" y2="6"></line>
+                <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+            班车表
+        </h3>
+        <div id="scheduleContent">
+            <p class="schedule-empty">暂无班次</p>
+        </div>
+    </div>
 
     <main class="page">
         <!-- 欢迎区域 -->
@@ -653,6 +718,67 @@
             
             // 重新渲染列表
             renderTeamList(cachedAccounts);
+        }
+        
+        // ========== 班车表 ==========
+        let scheduleTimer = null;
+        
+        async function loadSchedule() {
+            try {
+                const res = await fetch('/api/admin/scheduled-open');
+                const data = await res.json();
+                renderSchedule(data.scheduledTime);
+            } catch (err) {
+                console.error('加载班车表失败:', err);
+            }
+        }
+        
+        function renderSchedule(scheduledTime) {
+            const container = document.getElementById('scheduleContent');
+            
+            if (!scheduledTime) {
+                container.innerHTML = '<p class="schedule-empty">暂无班次</p>';
+                return;
+            }
+            
+            const dt = new Date(scheduledTime);
+            const now = new Date();
+            const diff = dt - now;
+            
+            if (diff <= 0) {
+                container.innerHTML = '<p class="schedule-empty">暂无班次</p>';
+                return;
+            }
+            
+            const timeStr = dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = dt.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+            
+            const hours = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            
+            let countdown = '';
+            if (hours > 0) {
+                countdown = `${hours}小时${mins}分钟`;
+            } else if (mins > 0) {
+                countdown = `${mins}分${secs}秒`;
+            } else {
+                countdown = `${secs}秒`;
+            }
+            
+            container.innerHTML = `
+                <div class="schedule-item">
+                    <div class="schedule-time">${dateStr} ${timeStr}</div>
+                    <div class="schedule-countdown">⏱ ${countdown}后发车</div>
+                </div>
+            `;
+        }
+        
+        function startScheduleTimer() {
+            if (scheduleTimer) clearInterval(scheduleTimer);
+            scheduleTimer = setInterval(() => {
+                loadSchedule();
+            }, 1000);
         }
 
         async function loadTeamStatus() {
@@ -1172,6 +1298,8 @@
                 
                 loadTeamStatus();
                 checkQueueStatus();
+                loadSchedule();
+                startScheduleTimer();
                 // 每 30 秒自动刷新
                 refreshTimer = setInterval(loadTeamStatus, 30000);
             }
