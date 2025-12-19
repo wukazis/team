@@ -369,40 +369,40 @@
             color: var(--primary);
         }
         
-        /* 红绿黄灯状态指示器 */
-        .traffic-light {
+        /* 筛选器行 */
+        .filter-row {
             display: flex;
             align-items: center;
-            gap: 6px;
-            margin-left: 8px;
+            gap: 8px;
+            padding: 0.75rem 1rem;
+            background: var(--bg);
+            border-radius: 8px;
+            margin-bottom: 0.75rem;
         }
-        .light {
-            width: 10px;
-            height: 10px;
+        .filter-light {
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
-            opacity: 0.3;
-            transition: all 0.3s ease;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            opacity: 0.4;
         }
-        .light.green { background: var(--success); }
-        .light.yellow { background: var(--warning); }
-        .light.red { background: var(--danger); }
-        .light.active {
+        .filter-light.green { background: var(--success); }
+        .filter-light.yellow { background: var(--warning); }
+        .filter-light.red { background: var(--danger); }
+        .filter-light.active {
             opacity: 1;
-            box-shadow: 0 0 8px currentColor;
+            transform: scale(1.2);
         }
-        .light.green.active { box-shadow: 0 0 8px rgba(22, 163, 74, 0.6); }
-        .light.yellow.active { box-shadow: 0 0 8px rgba(245, 158, 11, 0.6); }
-        .light.red.active { box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); }
-        
-        /* 状态文字 */
-        .status-text {
+        .filter-light.green.active { box-shadow: 0 0 8px rgba(22, 163, 74, 0.6); }
+        .filter-light.yellow.active { box-shadow: 0 0 8px rgba(245, 158, 11, 0.6); }
+        .filter-light.red.active { box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); }
+        .filter-light:hover { opacity: 0.8; }
+        .filter-text {
             font-size: 0.85rem;
             font-weight: 500;
-            margin-left: 8px;
+            margin-left: 4px;
         }
-        .status-text.green { color: var(--success); }
-        .status-text.yellow { color: var(--warning); }
-        .status-text.red { color: var(--danger); }
     </style>
 </head>
 <body>
@@ -497,12 +497,6 @@
                     </g>
                 </svg>
                 车位详情
-                <div class="traffic-light">
-                    <span id="lightGreen" class="light green active"></span>
-                    <span id="lightYellow" class="light yellow"></span>
-                    <span id="lightRed" class="light red"></span>
-                </div>
-                <span id="statusText" class="status-text green">有空位</span>
                 <button id="teamListToggle" class="expand-btn" onclick="toggleTeamList()" style="margin-left: auto;" title="展开/收起">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <polyline points="6 9 12 15 18 9"></polyline>
@@ -510,7 +504,16 @@
                 </button>
             </h2>
             <div id="teamList" class="team-list hidden">
-                <p class="muted text-center" style="padding: 2rem;">加载中...</p>
+                <!-- 筛选器行 -->
+                <div class="filter-row">
+                    <span id="filterGreen" class="filter-light green active" onclick="setFilter('green')" title="有空位"></span>
+                    <span id="filterYellow" class="filter-light yellow" onclick="setFilter('yellow')" title="全部"></span>
+                    <span id="filterRed" class="filter-light red" onclick="setFilter('red')" title="无空位"></span>
+                    <span id="filterText" class="filter-text" style="color: var(--success);">有空位</span>
+                </div>
+                <div id="teamListContent">
+                    <p class="muted text-center" style="padding: 2rem;">加载中...</p>
+                </div>
             </div>
         </section>
 
@@ -613,6 +616,8 @@
     <script>
         let refreshTimer = null;
         let teamListExpanded = false;
+        let currentFilter = 'green'; // green=有空位, yellow=全部, red=无空位
+        let cachedAccounts = [];
         
         function toggleTeamList() {
             const list = document.getElementById('teamList');
@@ -627,31 +632,30 @@
             }
         }
         
-        function updateTrafficLight(available) {
-            const greenLight = document.getElementById('lightGreen');
-            const yellowLight = document.getElementById('lightYellow');
-            const redLight = document.getElementById('lightRed');
-            const statusText = document.getElementById('statusText');
+        function setFilter(filter) {
+            currentFilter = filter;
             
-            // 清除所有active状态
-            greenLight.classList.remove('active');
-            yellowLight.classList.remove('active');
-            redLight.classList.remove('active');
-            statusText.className = 'status-text';
+            // 更新灯的状态
+            document.getElementById('filterGreen').classList.remove('active');
+            document.getElementById('filterYellow').classList.remove('active');
+            document.getElementById('filterRed').classList.remove('active');
+            document.getElementById('filter' + filter.charAt(0).toUpperCase() + filter.slice(1)).classList.add('active');
             
-            if (available > 3) {
-                greenLight.classList.add('active');
-                statusText.classList.add('green');
-                statusText.textContent = '有空位';
-            } else if (available > 0) {
-                yellowLight.classList.add('active');
-                statusText.classList.add('yellow');
-                statusText.textContent = '车位紧张';
+            // 更新文字
+            const filterText = document.getElementById('filterText');
+            if (filter === 'green') {
+                filterText.textContent = '有空位';
+                filterText.style.color = 'var(--success)';
+            } else if (filter === 'yellow') {
+                filterText.textContent = '全部';
+                filterText.style.color = 'var(--warning)';
             } else {
-                redLight.classList.add('active');
-                statusText.classList.add('red');
-                statusText.textContent = '已满';
+                filterText.textContent = '无空位';
+                filterText.style.color = 'var(--danger)';
             }
+            
+            // 重新渲染列表
+            renderTeamList(cachedAccounts);
         }
 
         async function loadTeamStatus() {
@@ -688,19 +692,30 @@
             const availEl = document.getElementById('availableSeats');
             availEl.className = 'stat-value ' + (available > 3 ? 'success' : available > 0 ? 'warning' : 'danger');
             
-            // 更新红绿灯状态
-            updateTrafficLight(available);
         }
 
         function renderTeamList(accounts) {
-            const container = document.getElementById('teamList');
+            cachedAccounts = accounts;
+            const container = document.getElementById('teamListContent');
             
-            if (!accounts.length) {
-                container.innerHTML = '<p class="muted text-center" style="padding: 2rem;">暂无可用车位</p>';
+            // 根据筛选条件过滤
+            let filtered = accounts.filter(acc => {
+                const used = (acc.seatsInUse || 0) + (acc.pendingInvites || 0);
+                const total = acc.seatsEntitled || 0;
+                const available = Math.max(0, total - used);
+                
+                if (currentFilter === 'green') return available > 0;
+                if (currentFilter === 'red') return available === 0;
+                return true; // yellow = 全部
+            });
+            
+            if (!filtered.length) {
+                const msg = currentFilter === 'green' ? '暂无可用车位' : currentFilter === 'red' ? '暂无已满车位' : '暂无车位';
+                container.innerHTML = `<p class="muted text-center" style="padding: 2rem;">${msg}</p>`;
                 return;
             }
             
-            container.innerHTML = accounts.map(acc => {
+            container.innerHTML = filtered.map(acc => {
                 const used = (acc.seatsInUse || 0) + (acc.pendingInvites || 0);
                 const total = acc.seatsEntitled || 0;
                 const available = Math.max(0, total - used);
