@@ -2235,17 +2235,22 @@ def verify_waiting_access():
     """验证用户进入候车室的权限，标记为已验证"""
     user_id = request.user.get('user_id')
     
-    # 检查候车室是否开放
-    if not WAITING_ROOM_ENABLED:
+    conn = get_db()
+    # 检查用户是否已在队列中
+    in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = %s', (user_id,)).fetchone()
+    
+    # 候车室关闭且用户不在队列中，拒绝访问
+    if not WAITING_ROOM_ENABLED and not in_queue:
+        conn.close()
         return jsonify({'error': '候车室未开放'}), 403
     
-    # 标记用户为已验证
-    conn = get_db()
-    conn.execute("UPDATE users SET waiting_verified = 1 WHERE id = ?", (user_id,))
-    conn.commit()
+    # 标记用户为已验证（如果候车室开放）
+    if WAITING_ROOM_ENABLED:
+        conn.execute("UPDATE users SET waiting_verified = 1 WHERE id = %s", (user_id,))
+        conn.commit()
     conn.close()
     
-    return jsonify({'status': 'ok', 'verified': True})
+    return jsonify({'status': 'ok', 'verified': True, 'inQueue': in_queue is not None})
 
 # ========== 定时开放 API ==========
 
