@@ -18,8 +18,8 @@
         // 创建 canvas
         var canvas = document.createElement("canvas");
         canvas.id = "live2d";
-        canvas.width = 280;
-        canvas.height = 250;
+        canvas.width = 300;
+        canvas.height = 400;
         canvas.style.cssText = "position:fixed;bottom:0;left:0;z-index:999;pointer-events:none;";
         document.body.appendChild(canvas);
 
