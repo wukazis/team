@@ -1288,8 +1288,8 @@
                     });
                     if (settingsRes.ok) {
                         const settings = await settingsRes.json();
-                        // 候车室关闭且用户不在队列中，才重定向
-                        if (!settings.enabled && !settings.userInQueue) {
+                        // 候车室关闭，重定向到首页
+                        if (!settings.enabled) {
                             window.location.href = '/';
                             return;
                         }
