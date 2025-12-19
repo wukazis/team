@@ -1332,13 +1332,14 @@
                     });
                     if (settingsRes.ok) {
                         const settings = await settingsRes.json();
-                        // 候车室关闭，重定向到首页
-                        if (!settings.enabled) {
+                        // 候车室关闭且用户不在队列中，重定向到首页
+                        // 已排队用户即使候车室关闭也可以留在页面
+                        if (!settings.enabled && !settings.userInQueue) {
                             window.location.href = '/';
                             return;
                         }
-                        // 用户未验证且不在队列中，重定向到首页
-                        if (!settings.userVerified && !settings.userInQueue) {
+                        // 候车室开放但用户未验证且不在队列中，重定向到首页
+                        if (settings.enabled && !settings.userVerified && !settings.userInQueue) {
                             window.location.href = '/';
                             return;
                         }

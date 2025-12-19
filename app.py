@@ -2180,10 +2180,10 @@ def get_waiting_room_settings():
         payload = verify_jwt_token(token)
         if payload:
             user_id = payload.get('user_id')
-            in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
+            in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = %s', (user_id,)).fetchone()
             user_in_queue = in_queue is not None
             # 检查用户是否已验证
-            verified_row = conn.execute('SELECT waiting_verified FROM users WHERE id = ?', (user_id,)).fetchone()
+            verified_row = conn.execute('SELECT waiting_verified FROM users WHERE id = %s', (user_id,)).fetchone()
             user_verified = verified_row and verified_row[0] == 1
     
     conn.close()
