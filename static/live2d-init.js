@@ -27,11 +27,9 @@
             loadExternalResource(live2d_path + "live2d.min.js", "js"),
             loadExternalResource(live2d_path + "waifu-tips.js", "js")
         ]).then(() => {
-            localStorage.setItem("modelId", "0");
-            localStorage.setItem("modelTexturesId", "0");
             initWidget({
                 waifuPath: live2d_path + "waifu-tips.json",
-                apiPath: "https://live2d.fghrsh.net/api/",
+                cdnPath: "https://fastly.jsdelivr.net/gh/fghrsh/live2d_api/",
                 tools: ["hitokoto", "switch-model", "switch-texture", "photo", "info", "quit"]
             });
         });
