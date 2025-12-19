@@ -833,6 +833,28 @@
             }
             
             try {
+                // 先检查冷却状态（优先级最高）
+                try {
+                    const cooldownRes = await fetch('/api/user/cooldown', {
+                        headers: { 'Authorization': 'Bearer ' + getToken() }
+                    });
+                    
+                    if (cooldownRes.ok) {
+                        const cooldownData = await cooldownRes.json();
+                        if (cooldownData.inCooldown) {
+                            // 在冷却期，直接显示冷却状态
+                            waitingCooldown.classList.remove('hidden');
+                            document.getElementById('cooldownDaysLeft').textContent = cooldownData.daysLeft || '?';
+                            document.getElementById('cooldownEndDate').textContent = cooldownData.cooldownEnd || '未知';
+                            waitingEntry.style.opacity = '0.6';
+                            waitingEntry.style.pointerEvents = 'none';
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    console.error('检查冷却状态失败:', e);
+                }
+                
                 // 检查候车室是否开放（带 token 检查用户是否在队列中）
                 const settingsRes = await fetch('/api/admin/waiting-room-settings', {
                     headers: { 'Authorization': 'Bearer ' + getToken() }
@@ -949,31 +971,9 @@
                     // 用户在队列中，即使候车室关闭也允许访问
                 }
                 
-                // 候车室开放或用户在队列中，恢复样式
+                // 候车室开放或用户在队列中，恢复样式并显示正常入口
                 waitingEntry.style.opacity = '';
                 waitingEntry.style.pointerEvents = '';
-                
-                // 检查冷却状态
-                try {
-                    const res = await fetch('/api/user/cooldown', {
-                        headers: { 'Authorization': 'Bearer ' + getToken() }
-                    });
-                    
-                    if (res.ok) {
-                        const data = await res.json();
-                        if (data.inCooldown) {
-                            // 在冷却期
-                            waitingCooldown.classList.remove('hidden');
-                            document.getElementById('cooldownDaysLeft').textContent = data.daysLeft || '?';
-                            document.getElementById('cooldownEndDate').textContent = data.cooldownEnd || '未知';
-                            return;
-                        }
-                    }
-                } catch (e) {
-                    console.error('检查冷却状态失败:', e);
-                }
-                
-                // 不在冷却期或检查失败，显示正常入口
                 waitingNormal.classList.remove('hidden');
             } catch (err) {
                 console.error('检测状态失败:', err);
