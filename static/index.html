@@ -638,15 +638,21 @@
                         // 如果有定时开放时间，显示倒计时
                         if (settings.scheduledTime) {
                             const openTime = new Date(settings.scheduledTime);
+                            let isRefreshing = false;
                             
                             function updateCountdown() {
+                                if (isRefreshing) return;
+                                
                                 const now = new Date();
                                 const diff = openTime - now;
                                 
                                 if (diff <= 0) {
                                     // 时间到，刷新状态
-                                    clearInterval(countdownTimer);
-                                    countdownTimer = null;
+                                    isRefreshing = true;
+                                    if (countdownTimer) {
+                                        clearInterval(countdownTimer);
+                                        countdownTimer = null;
+                                    }
                                     checkCooldownStatus();
                                     return;
                                 }
