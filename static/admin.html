@@ -606,6 +606,9 @@
                     <div style="padding: 1.5rem;">
                         <div style="display: flex; flex-direction: column; gap: 1.5rem; max-width: 400px;">
                             <div>
+                                <div id="waitingRoomStatus" style="margin-bottom: 0.75rem; font-size: 0.9rem;">
+                                    当前候车室状态: <span id="waitingRoomStatusText" style="font-weight: 600; color: var(--danger);">关</span>
+                                </div>
                                 <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
                                     <label class="toggle-switch">
                                         <input type="checkbox" id="waitingRoomEnabled" onchange="saveWaitingRoomSettings()">
@@ -783,6 +786,16 @@
             document.getElementById('waitingRoomEnabled').checked = data.enabled;
             document.getElementById('waitingRoomMaxQueue').value = data.maxQueue || 0;
             document.getElementById('currentQueueCount').textContent = data.currentQueue || 0;
+            
+            // 更新状态显示
+            const statusText = document.getElementById('waitingRoomStatusText');
+            if (data.enabled) {
+                statusText.textContent = '开';
+                statusText.style.color = 'var(--success)';
+            } else {
+                statusText.textContent = '关';
+                statusText.style.color = 'var(--danger)';
+            }
         }
         
         async function saveWaitingRoomSettings() {
@@ -802,12 +815,20 @@
         }
         
         // ========== 定时开放 ==========
+        let scheduledOpenTimer = null;
+        
         async function loadScheduledOpen() {
             const { ok, data } = await api('/admin/scheduled-open');
             if (!ok) return;
             
             const statusEl = document.getElementById('scheduledOpenStatus');
             const inputEl = document.getElementById('scheduledOpenTime');
+            
+            // 清除之前的定时器
+            if (scheduledOpenTimer) {
+                clearTimeout(scheduledOpenTimer);
+                scheduledOpenTimer = null;
+            }
             
             if (data.scheduledTime) {
                 // 转换为本地时间显示
@@ -821,8 +842,16 @@
                     const hours = Math.floor(diff / 3600000);
                     const mins = Math.floor((diff % 3600000) / 60000);
                     statusEl.innerHTML = `<span style="color: var(--primary);">⏰ 将于 ${dt.toLocaleString('zh-CN')} 自动开放（${hours}小时${mins}分钟后）</span>`;
+                    
+                    // 设置定时器，到时间后刷新状态
+                    scheduledOpenTimer = setTimeout(() => {
+                        loadWaitingRoomSettings();
+                        loadScheduledOpen();
+                    }, diff + 1000); // 多等1秒确保后端已处理
                 } else {
                     statusEl.textContent = '定时已过期';
+                    // 刷新候车室状态
+                    loadWaitingRoomSettings();
                 }
             } else {
                 inputEl.value = '';
