@@ -595,6 +595,47 @@
                         <tbody id="monTeamList"></tbody>
                     </table>
                 </div>
+
+                <!-- 发车设置 -->
+                <div class="table-container" style="margin-top: 1rem;">
+                    <div class="table-header">
+                        <span class="title"><i class="bi bi-sliders" style="margin-right: 4px;"></i> 发车设置</span>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem;">
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">邀请码有效时间</span>
+                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">发出后多久过期</span>
+                                </label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <select id="inviteCodeExpireSelect" style="padding: 0.5rem; min-width: 120px;">
+                                        <option value="300">5 分钟</option>
+                                        <option value="600">10 分钟</option>
+                                        <option value="900">15 分钟</option>
+                                        <option value="1800">30 分钟</option>
+                                        <option value="3600">1 小时</option>
+                                        <option value="7200">2 小时</option>
+                                    </select>
+                                    <button class="btn btn-primary" onclick="saveDispatchSettings()">保存</button>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;">当前: <span id="currentInviteExpire">30 分钟</span></div>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">发车人数要求</span>
+                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">排队达到多少人才发车</span>
+                                </label>
+                                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                                    <input type="number" id="dispatchMinPeopleInput" min="0" value="0" style="width: 80px; padding: 0.5rem;">
+                                    <span class="text-muted">人</span>
+                                    <button class="btn btn-primary" onclick="saveDispatchSettings()">保存</button>
+                                </div>
+                                <div class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;">0 = 使用当前空位数 (<span id="currentAvailableSlots">-</span> 位)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- 设置 -->
@@ -1404,12 +1445,13 @@
             // 发车模式
             document.getElementById('dispatchModeSelect').value = data.dispatchMode || 'auto';
             
-            // 发车条件
+            // 发车条件（使用实际发车人数要求）
             const condEl = document.getElementById('monCondition');
-            if (data.queueCount >= data.availableSlots && data.availableSlots > 0) {
-                condEl.innerHTML = `<span style="color: var(--success)">✓ 人满发车 (${data.queueCount} ≥ ${data.availableSlots})</span>`;
+            const minRequired = data.dispatchMinActual || data.availableSlots;
+            if (data.queueCount >= minRequired && data.availableSlots > 0) {
+                condEl.innerHTML = `<span style="color: var(--success)">✓ 人满发车 (${data.queueCount} ≥ ${minRequired})</span>`;
             } else if (data.availableSlots > 0) {
-                condEl.innerHTML = `<span style="color: var(--warning)">等待人满 (${data.queueCount} < ${data.availableSlots})</span>`;
+                condEl.innerHTML = `<span style="color: var(--warning)">等待人满 (${data.queueCount} < ${minRequired})</span>`;
             } else {
                 condEl.innerHTML = `<span style="color: var(--muted)">无空位</span>`;
             }
@@ -1424,6 +1466,12 @@
             // 时间信息
             document.getElementById('monLastSync').textContent = data.lastSyncTime ? formatTime(data.lastSyncTime) : '-';
             document.getElementById('monLastBatch').textContent = data.lastBatchTime ? formatTime(data.lastBatchTime) : '-';
+            
+            // 发车设置
+            document.getElementById('inviteCodeExpireSelect').value = data.inviteCodeExpire || 1800;
+            document.getElementById('dispatchMinPeopleInput').value = data.dispatchMinPeople || 0;
+            document.getElementById('currentAvailableSlots').textContent = data.availableSlots;
+            document.getElementById('currentInviteExpire').textContent = formatExpireTime(data.inviteCodeExpire || 1800);
             
             // 车位列表
             const tbody = document.getElementById('monTeamList');
@@ -1442,6 +1490,11 @@
                     </tr>
                 `).join('');
             }
+        }
+        
+        function formatExpireTime(seconds) {
+            if (seconds >= 3600) return `${seconds / 3600} 小时`;
+            return `${seconds / 60} 分钟`;
         }
         
         function updateExpireCountdown() {
@@ -1489,6 +1542,23 @@
             } else {
                 alert(data.error || '设置失败');
                 loadMonitor(); // 刷新恢复原值
+            }
+        }
+        
+        async function saveDispatchSettings() {
+            const inviteCodeExpire = parseInt(document.getElementById('inviteCodeExpireSelect').value);
+            const dispatchMinPeople = parseInt(document.getElementById('dispatchMinPeopleInput').value) || 0;
+            
+            const { ok, data } = await api('/admin/dispatch-settings', {
+                method: 'POST',
+                body: JSON.stringify({ inviteCodeExpire, dispatchMinPeople })
+            });
+            
+            if (ok) {
+                alert('发车设置已保存');
+                loadMonitor();
+            } else {
+                alert(data.error || '保存失败');
             }
         }
         

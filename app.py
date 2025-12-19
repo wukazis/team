@@ -695,7 +695,7 @@ def init_db():
 
 def load_settings():
     """从数据库加载设置到全局变量"""
-    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE, SYNC_INTERVAL
+    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE, SYNC_INTERVAL, INVITE_CODE_EXPIRE, DISPATCH_MIN_PEOPLE
     try:
         conn = get_db()
         row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
@@ -713,6 +713,14 @@ def load_settings():
         row = conn.execute("SELECT value FROM system_settings WHERE key = 'sync_interval'").fetchone()
         if row:
             SYNC_INTERVAL = int(row[0])
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'invite_code_expire'").fetchone()
+        if row:
+            INVITE_CODE_EXPIRE = int(row[0])
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_min_people'").fetchone()
+        if row:
+            DISPATCH_MIN_PEOPLE = int(row[0])
         
         conn.close()
     except Exception as e:
@@ -1322,9 +1330,12 @@ def notify_waiting_users(available_seats: int, force: bool = False):
         WHERE notified = 0 AND email IS NOT NULL AND email != ''
     ''').fetchone()[0]
     
-    # 人满发车：只有排队人数 >= 空位数才发车（强制发车跳过此检查）
-    if not force and queue_count < len(available_slots):
-        print(f"[轮询] 排队 {queue_count} 人，空位 {len(available_slots)} 个，等待人满发车...")
+    # 发车人数要求：DISPATCH_MIN_PEOPLE=0 表示使用空位数，否则使用设定值
+    min_people = DISPATCH_MIN_PEOPLE if DISPATCH_MIN_PEOPLE > 0 else len(available_slots)
+    
+    # 人满发车：只有排队人数 >= 发车人数要求才发车（强制发车跳过此检查）
+    if not force and queue_count < min_people:
+        print(f"[轮询] 排队 {queue_count} 人，发车要求 {min_people} 人，空位 {len(available_slots)} 个，等待人满发车...")
         conn.close()
         return 0
     
@@ -2108,13 +2119,16 @@ def get_monitor_status():
                 expire_time = created + timedelta(seconds=INVITE_CODE_EXPIRE)
                 remaining = (expire_time - datetime.utcnow()).total_seconds()
                 expire_countdown = max(0, int(remaining))
-    elif queue_count > 0 and available_slots > 0:
-        if queue_count >= available_slots:
+    # 计算实际发车人数要求
+    dispatch_min = DISPATCH_MIN_PEOPLE if DISPATCH_MIN_PEOPLE > 0 else available_slots
+    
+    if queue_count > 0 and available_slots > 0:
+        if queue_count >= dispatch_min:
             status = 'ready'
-            status_text = f'人满发车就绪 ({queue_count}人/{available_slots}位)'
+            status_text = f'人满发车就绪 ({queue_count}人/{dispatch_min}位)'
         else:
             status = 'waiting_queue'
-            status_text = f'等待人满 ({queue_count}人/{available_slots}位)'
+            status_text = f'等待人满 ({queue_count}人/{dispatch_min}位)'
     elif queue_count > 0:
         status = 'no_slots'
         status_text = f'无空位 ({queue_count}人排队)'
@@ -2131,6 +2145,8 @@ def get_monitor_status():
         'statusText': status_text,
         'expireCountdown': expire_countdown,
         'inviteCodeExpire': INVITE_CODE_EXPIRE,
+        'dispatchMinPeople': DISPATCH_MIN_PEOPLE,
+        'dispatchMinActual': dispatch_min,
         'pollWaitTime': POLL_WAIT_TIME,
         'syncInterval': SYNC_INTERVAL,
         'testMode': TEST_MODE,
@@ -2429,12 +2445,72 @@ def set_sync_interval():
         'syncInterval': SYNC_INTERVAL
     })
 
+# ========== 发车设置 API ==========
+
+@app.route('/api/admin/dispatch-settings', methods=['GET'])
+@admin_required
+def get_dispatch_settings():
+    """获取发车设置（邀请码有效期、发车人数要求）"""
+    # 计算当前空位总数
+    conn = get_db()
+    accounts = conn.execute('''
+        SELECT id, seats_entitled, seats_in_use, pending_invites
+        FROM team_accounts WHERE enabled = 1
+    ''').fetchall()
+    
+    total_available = 0
+    for acc in accounts:
+        pending_codes = conn.execute('''
+            SELECT COUNT(*) FROM invite_codes 
+            WHERE team_account_id = ? AND used = 0 AND auto_generated = 1
+        ''', (acc['id'],)).fetchone()[0]
+        avail = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0) - pending_codes
+        if avail > 0:
+            total_available += avail
+    conn.close()
+    
+    return jsonify({
+        'inviteCodeExpire': INVITE_CODE_EXPIRE,
+        'dispatchMinPeople': DISPATCH_MIN_PEOPLE,
+        'currentAvailableSlots': total_available
+    })
+
+@app.route('/api/admin/dispatch-settings', methods=['POST'])
+@admin_required
+def set_dispatch_settings():
+    """设置发车参数（邀请码有效期、发车人数要求）"""
+    global INVITE_CODE_EXPIRE, DISPATCH_MIN_PEOPLE
+    data = request.json or {}
+    
+    if 'inviteCodeExpire' in data:
+        expire = int(data['inviteCodeExpire'])
+        # 验证有效值: 5-120分钟
+        if expire < 300 or expire > 7200:
+            return jsonify({'error': '邀请码有效期需在5-120分钟之间'}), 400
+        INVITE_CODE_EXPIRE = expire
+        save_setting('invite_code_expire', str(INVITE_CODE_EXPIRE))
+    
+    if 'dispatchMinPeople' in data:
+        min_people = int(data['dispatchMinPeople'])
+        if min_people < 0:
+            return jsonify({'error': '发车人数要求不能为负数'}), 400
+        DISPATCH_MIN_PEOPLE = min_people
+        save_setting('dispatch_min_people', str(DISPATCH_MIN_PEOPLE))
+    
+    return jsonify({
+        'status': 'ok',
+        'inviteCodeExpire': INVITE_CODE_EXPIRE,
+        'dispatchMinPeople': DISPATCH_MIN_PEOPLE
+    })
+
 # ========== 后台自动同步 ==========
 
 # 邀请码有效期（秒）
 INVITE_CODE_EXPIRE = int(os.environ.get('INVITE_CODE_EXPIRE', 1800))  # 默认30分钟
 # 轮询等待时间（秒）
 POLL_WAIT_TIME = int(os.environ.get('POLL_WAIT_TIME', 60))  # 默认1分钟
+# 发车人数要求（0表示使用当前空位总数）
+DISPATCH_MIN_PEOPLE = int(os.environ.get('DISPATCH_MIN_PEOPLE', 0))  # 默认0=空位数
 
 # 发车监控状态（全局变量）
 monitor_state = {
