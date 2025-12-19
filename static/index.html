@@ -430,14 +430,14 @@
             </div>
             <!-- 候车室关闭状态 -->
             <div id="waitingClosed" class="hidden">
-                <p style="color: #94a3b8; font-weight: 500; margin-bottom: 0.5rem;">
+                <p id="waitingClosedText" style="color: #94a3b8; font-weight: 500; margin-bottom: 0.5rem;">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -3px; margin-right: 4px;">
                         <circle cx="12" cy="12" r="10"></circle>
                         <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"></line>
                     </svg>
                     候车室暂不开放
                 </p>
-                <p id="waitingCountdown" class="muted"></p>
+                <p id="waitingCountdown" style="font-weight: 600; font-size: 1.1rem; transition: color 0.3s;"></p>
             </div>
             <!-- 冷却状态 -->
             <div id="waitingCooldown" class="hidden">
@@ -645,6 +645,8 @@
                         if (settings.scheduledTime) {
                             const openTime = new Date(settings.scheduledTime);
                             isCountdownRefreshing = false;
+                            // 隐藏"候车室暂不开放"文字
+                            document.getElementById('waitingClosedText').classList.add('hidden');
                             
                             function updateCountdown() {
                                 if (isCountdownRefreshing) return;
@@ -659,27 +661,42 @@
                                         clearInterval(countdownTimer);
                                         countdownTimer = null;
                                     }
-                                    setTimeout(() => checkCooldownStatus(), 500);  // 延迟500ms再刷新，确保后端已更新
+                                    setTimeout(() => checkCooldownStatus(), 500);
                                     return;
                                 }
                                 
                                 const hours = Math.floor(diff / 3600000);
                                 const mins = Math.floor((diff % 3600000) / 60000);
                                 const secs = Math.floor((diff % 60000) / 1000);
+                                const totalMins = Math.floor(diff / 60000);
+                                
+                                // 根据时间远近变色: >10分钟绿色, 5-10分钟黄色, <5分钟红色
+                                let color;
+                                if (totalMins > 10) {
+                                    color = 'var(--success)';  // 绿色
+                                } else if (totalMins > 5) {
+                                    color = '#f59e0b';  // 黄色
+                                } else {
+                                    color = 'var(--danger)';  // 红色
+                                }
+                                waitingCountdown.style.color = color;
                                 
                                 if (hours > 0) {
-                                    waitingCountdown.textContent = `预计 ${hours}小时${mins}分钟 后开放`;
+                                    waitingCountdown.textContent = `⏱ ${hours}小时${mins}分钟 后开放`;
                                 } else if (mins > 0) {
-                                    waitingCountdown.textContent = `预计 ${mins}分${secs}秒 后开放`;
+                                    waitingCountdown.textContent = `⏱ ${mins}分${secs}秒 后开放`;
                                 } else {
-                                    waitingCountdown.textContent = `预计 ${secs}秒 后开放`;
+                                    waitingCountdown.textContent = `⏱ ${secs}秒 后开放`;
                                 }
                             }
                             
                             updateCountdown();
                             countdownTimer = setInterval(updateCountdown, 1000);
                         } else {
+                            // 没有定时，显示"候车室暂不开放"
+                            document.getElementById('waitingClosedText').classList.remove('hidden');
                             waitingCountdown.textContent = '请关注后续通知';
+                            waitingCountdown.style.color = 'var(--muted)';
                         }
                         return;
                     }
