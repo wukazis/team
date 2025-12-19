@@ -677,15 +677,15 @@
                                     <span style="font-weight: 600;">定时开放</span>
                                     <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">设置候车室自动开放时间（上海时间）</span>
                                 </label>
-                                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
+                                <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; margin-bottom: 0.75rem;">
                                     <input type="datetime-local" id="scheduledOpenTime" style="padding: 0.5rem;">
                                     <input type="number" id="scheduledMaxQueue" min="0" placeholder="人数上限" style="padding: 0.5rem; width: 100px;" title="开放时自动设置的人数上限">
                                     <span class="text-muted">人</span>
-                                    <button class="btn btn-primary" onclick="saveScheduledOpen()">设置</button>
-                                    <button class="btn btn-ghost" onclick="clearScheduledOpen()">清除</button>
+                                    <button class="btn btn-primary" onclick="addScheduledOpen()">添加</button>
+                                    <button class="btn btn-danger" onclick="clearAllScheduledOpens()">清除全部</button>
                                 </div>
-                                <div id="scheduledOpenStatus" class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;"></div>
-                                <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.25rem;">💡 达到人数上限后候车室将自动关闭</div>
+                                <div id="scheduledOpenList" style="margin-top: 0.75rem;"></div>
+                                <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.5rem;">💡 达到人数上限后候车室将自动关闭</div>
                             </div>
                         </div>
                     </div>
@@ -867,7 +867,7 @@
             const { ok, data } = await api('/admin/scheduled-open');
             if (!ok) return;
             
-            const statusEl = document.getElementById('scheduledOpenStatus');
+            const listEl = document.getElementById('scheduledOpenList');
             const inputEl = document.getElementById('scheduledOpenTime');
             const maxQueueEl = document.getElementById('scheduledMaxQueue');
             
@@ -877,39 +877,67 @@
                 scheduledOpenTimer = null;
             }
             
-            if (data.scheduledTime) {
-                // 转换为本地时间显示
-                const dt = new Date(data.scheduledTime);
-                inputEl.value = dt.toISOString().slice(0, 16);
-                maxQueueEl.value = data.scheduledMaxQueue || '';
-                
-                // 计算倒计时
-                const now = new Date();
+            const schedules = data.schedules || [];
+            
+            if (schedules.length === 0) {
+                listEl.innerHTML = '<div class="text-muted" style="font-size: 0.85rem;">暂无定时开放</div>';
+                inputEl.value = '';
+                maxQueueEl.value = '';
+                return;
+            }
+            
+            // 渲染定时列表
+            let html = '<div style="display: flex; flex-direction: column; gap: 0.5rem;">';
+            const now = new Date();
+            let nearestDiff = Infinity;
+            
+            for (const schedule of schedules) {
+                const dt = new Date(schedule.scheduledTime);
                 const diff = dt - now;
+                const timeStr = dt.toLocaleString('zh-CN');
+                const maxQueueText = schedule.maxQueue > 0 ? `${schedule.maxQueue} 人` : '不限';
+                
+                let countdownText = '';
+                let statusColor = 'var(--primary)';
+                
                 if (diff > 0) {
                     const hours = Math.floor(diff / 3600000);
                     const mins = Math.floor((diff % 3600000) / 60000);
-                    const maxQueueText = data.scheduledMaxQueue ? `，人数上限 ${data.scheduledMaxQueue} 人` : '';
-                    statusEl.innerHTML = `<span style="color: var(--primary);">⏰ 将于 ${dt.toLocaleString('zh-CN')} 自动开放（${hours}小时${mins}分钟后）${maxQueueText}</span>`;
-                    
-                    // 设置定时器，到时间后刷新状态
-                    scheduledOpenTimer = setTimeout(() => {
-                        loadWaitingRoomSettings();
-                        loadScheduledOpen();
-                    }, diff + 1000); // 多等1秒确保后端已处理
+                    if (hours > 0) {
+                        countdownText = `${hours}小时${mins}分钟后`;
+                    } else {
+                        countdownText = `${mins}分钟后`;
+                    }
+                    if (diff < nearestDiff) nearestDiff = diff;
                 } else {
-                    statusEl.textContent = '定时已过期';
-                    // 刷新候车室状态
-                    loadWaitingRoomSettings();
+                    countdownText = '即将执行';
+                    statusColor = 'var(--success)';
                 }
-            } else {
-                inputEl.value = '';
-                maxQueueEl.value = '';
-                statusEl.textContent = '未设置定时开放';
+                
+                html += `
+                    <div style="display: flex; align-items: center; justify-content: space-between; padding: 0.5rem 0.75rem; background: var(--hover-bg); border-radius: 6px;">
+                        <div>
+                            <span style="font-weight: 600;">⏰ ${timeStr}</span>
+                            <span class="text-muted" style="margin-left: 0.5rem;">上限: ${maxQueueText}</span>
+                            <span style="color: ${statusColor}; margin-left: 0.5rem; font-size: 0.85rem;">${countdownText}</span>
+                        </div>
+                        <button class="btn btn-danger btn-sm" onclick="deleteScheduledOpen(${schedule.id})">删除</button>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            listEl.innerHTML = html;
+            
+            // 设置定时器刷新
+            if (nearestDiff < Infinity && nearestDiff > 0) {
+                scheduledOpenTimer = setTimeout(() => {
+                    loadWaitingRoomSettings();
+                    loadScheduledOpen();
+                }, Math.min(nearestDiff + 1000, 60000)); // 最多1分钟刷新一次
             }
         }
         
-        async function saveScheduledOpen() {
+        async function addScheduledOpen() {
             const inputVal = document.getElementById('scheduledOpenTime').value;
             const maxQueueVal = document.getElementById('scheduledMaxQueue').value;
             if (!inputVal) {
@@ -923,26 +951,42 @@
                 method: 'POST',
                 body: JSON.stringify({ 
                     scheduledTime: dt.toISOString(),
-                    scheduledMaxQueue: maxQueueVal ? parseInt(maxQueueVal) : null
+                    maxQueue: maxQueueVal ? parseInt(maxQueueVal) : 0
                 })
+            });
+            
+            if (ok) {
+                document.getElementById('scheduledOpenTime').value = '';
+                document.getElementById('scheduledMaxQueue').value = '';
+                loadScheduledOpen();
+            } else {
+                alert(data.error || '添加失败');
+            }
+        }
+        
+        async function deleteScheduledOpen(id) {
+            const { ok } = await api('/admin/scheduled-open/' + id, {
+                method: 'DELETE'
             });
             
             if (ok) {
                 loadScheduledOpen();
             } else {
-                alert(data.error || '设置失败');
+                alert('删除失败');
             }
         }
         
-        async function clearScheduledOpen() {
-            const { ok } = await api('/admin/scheduled-open', {
-                method: 'POST',
-                body: JSON.stringify({ scheduledTime: null, scheduledMaxQueue: null })
+        async function clearAllScheduledOpens() {
+            if (!confirm('确定要清除所有定时开放吗？')) return;
+            
+            const { ok } = await api('/admin/scheduled-open/clear', {
+                method: 'POST'
             });
             
             if (ok) {
                 loadScheduledOpen();
-                document.getElementById('scheduledMaxQueue').value = '';
+            } else {
+                alert('清除失败');
             }
         }
 

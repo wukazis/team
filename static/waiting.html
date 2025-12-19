@@ -737,63 +737,73 @@
         
         // ========== 班车表 ==========
         let scheduleTimer = null;
+        let scheduleData = [];
         
         async function loadSchedule() {
             try {
-                const res = await fetch('/api/admin/scheduled-open');
+                const res = await fetch('/api/scheduled-opens');
                 const data = await res.json();
-                renderSchedule(data.scheduledTime);
+                scheduleData = data.schedules || [];
+                renderSchedule();
             } catch (err) {
                 console.error('加载班车表失败:', err);
             }
         }
         
-        function renderSchedule(scheduledTime) {
+        function renderSchedule() {
             const container = document.getElementById('scheduleContent');
-            
-            if (!scheduledTime) {
-                container.innerHTML = '<p class="schedule-empty">暂无班次</p>';
-                return;
-            }
-            
-            const dt = new Date(scheduledTime);
             const now = new Date();
-            const diff = dt - now;
             
-            if (diff <= 0) {
+            // 过滤出未来的班次
+            const futureSchedules = scheduleData.filter(s => new Date(s.scheduledTime) > now);
+            
+            if (futureSchedules.length === 0) {
                 container.innerHTML = '<p class="schedule-empty">暂无班次</p>';
                 return;
             }
             
-            const timeStr = dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
-            const dateStr = dt.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
-            
-            const hours = Math.floor(diff / 3600000);
-            const mins = Math.floor((diff % 3600000) / 60000);
-            const secs = Math.floor((diff % 60000) / 1000);
-            
-            let countdown = '';
-            if (hours > 0) {
-                countdown = `${hours}小时${mins}分钟`;
-            } else if (mins > 0) {
-                countdown = `${mins}分${secs}秒`;
-            } else {
-                countdown = `${secs}秒`;
+            let html = '';
+            for (const schedule of futureSchedules.slice(0, 5)) { // 最多显示5个
+                const dt = new Date(schedule.scheduledTime);
+                const diff = dt - now;
+                
+                const timeStr = dt.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+                const dateStr = dt.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric' });
+                
+                const hours = Math.floor(diff / 3600000);
+                const mins = Math.floor((diff % 3600000) / 60000);
+                const secs = Math.floor((diff % 60000) / 1000);
+                
+                let countdown = '';
+                if (hours > 0) {
+                    countdown = `${hours}小时${mins}分钟`;
+                } else if (mins > 0) {
+                    countdown = `${mins}分${secs}秒`;
+                } else {
+                    countdown = `${secs}秒`;
+                }
+                
+                html += `
+                    <div class="schedule-item">
+                        <div class="schedule-time">${dateStr} ${timeStr}</div>
+                        <div class="schedule-countdown">⏱ ${countdown}后发车</div>
+                    </div>
+                `;
             }
             
-            container.innerHTML = `
-                <div class="schedule-item">
-                    <div class="schedule-time">${dateStr} ${timeStr}</div>
-                    <div class="schedule-countdown">⏱ ${countdown}后发车</div>
-                </div>
-            `;
+            container.innerHTML = html;
         }
         
         function startScheduleTimer() {
             if (scheduleTimer) clearInterval(scheduleTimer);
+            // 每秒更新倒计时显示
             scheduleTimer = setInterval(() => {
-                loadSchedule();
+                renderSchedule();
             }, 1000);
+            // 每30秒重新加载数据
+            setInterval(() => {
+                loadSchedule();
+            }, 30000);
         }
         
         // 班车表拖拽功能

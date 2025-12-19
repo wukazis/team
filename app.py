@@ -569,6 +569,16 @@ def init_db():
             )
         ''')
         
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS scheduled_opens (
+                id SERIAL PRIMARY KEY,
+                scheduled_time TIMESTAMP NOT NULL,
+                max_queue INTEGER DEFAULT 0,
+                executed INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        ''')
+        
         # 添加新字段（如果不存在）
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0')
@@ -678,6 +688,15 @@ def init_db():
                 action TEXT NOT NULL,
                 details TEXT,
                 ip_address TEXT,
+                created_at TEXT DEFAULT (datetime('now'))
+            )
+        ''')
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS scheduled_opens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                scheduled_time TEXT NOT NULL,
+                max_queue INTEGER DEFAULT 0,
+                executed INTEGER DEFAULT 0,
                 created_at TEXT DEFAULT (datetime('now'))
             )
         ''')
@@ -2303,37 +2322,112 @@ def verify_waiting_access():
 
 # ========== 定时开放 API ==========
 
+@app.route('/api/scheduled-opens', methods=['GET'])
+def get_scheduled_opens_public():
+    """公开接口：获取定时开放列表（供用户查看班车表）"""
+    conn = get_db()
+    rows = conn.execute("SELECT scheduled_time, max_queue FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC").fetchall()
+    conn.close()
+    
+    schedules = []
+    for row in rows:
+        scheduled_time = row['scheduled_time']
+        if isinstance(scheduled_time, datetime):
+            scheduled_time = scheduled_time.isoformat()
+        schedules.append({
+            'scheduledTime': scheduled_time,
+            'maxQueue': row['max_queue']
+        })
+    
+    # 兼容旧版前端
+    first_schedule = schedules[0] if schedules else None
+    return jsonify({
+        'schedules': schedules,
+        'scheduledTime': first_schedule['scheduledTime'] if first_schedule else None,
+        'scheduledMaxQueue': first_schedule['maxQueue'] if first_schedule else None
+    })
+
 @app.route('/api/admin/scheduled-open', methods=['GET'])
 @admin_required
 def get_scheduled_open():
-    """获取定时开放设置"""
+    """管理接口：获取所有定时开放设置"""
     conn = get_db()
-    time_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
-    max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
+    rows = conn.execute("SELECT id, scheduled_time, max_queue, executed FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC").fetchall()
     conn.close()
     
-    scheduled_time = time_row[0] if time_row and time_row[0] else None
-    scheduled_max_queue = int(max_queue_row[0]) if max_queue_row and max_queue_row[0] else None
-    return jsonify({'scheduledTime': scheduled_time, 'scheduledMaxQueue': scheduled_max_queue})
+    schedules = []
+    for row in rows:
+        scheduled_time = row['scheduled_time']
+        if isinstance(scheduled_time, datetime):
+            scheduled_time = scheduled_time.isoformat()
+        schedules.append({
+            'id': row['id'],
+            'scheduledTime': scheduled_time,
+            'maxQueue': row['max_queue']
+        })
+    
+    # 兼容旧版前端：返回第一个定时作为 scheduledTime
+    first_schedule = schedules[0] if schedules else None
+    return jsonify({
+        'schedules': schedules,
+        'scheduledTime': first_schedule['scheduledTime'] if first_schedule else None,
+        'scheduledMaxQueue': first_schedule['maxQueue'] if first_schedule else None
+    })
 
 @app.route('/api/admin/scheduled-open', methods=['POST'])
 @admin_required
-def set_scheduled_open():
-    """设置定时开放时间和预设人数上限"""
+def add_scheduled_open():
+    """添加定时开放"""
     data = request.json or {}
     scheduled_time = data.get('scheduledTime')
-    scheduled_max_queue = data.get('scheduledMaxQueue')
+    max_queue = data.get('scheduledMaxQueue') or data.get('maxQueue') or 0
     
-    if scheduled_time:
-        save_setting('scheduled_open_time', scheduled_time)
-        # 保存预设人数上限
-        if scheduled_max_queue is not None:
-            save_setting('scheduled_max_queue', str(int(scheduled_max_queue)))
+    if not scheduled_time:
+        return jsonify({'error': '请选择开放时间'}), 400
+    
+    conn = get_db()
+    if USE_POSTGRES:
+        conn.execute(
+            "INSERT INTO scheduled_opens (scheduled_time, max_queue) VALUES (%s, %s)",
+            (scheduled_time, int(max_queue))
+        )
     else:
-        save_setting('scheduled_open_time', '')
-        save_setting('scheduled_max_queue', '')
+        conn.execute(
+            "INSERT INTO scheduled_opens (scheduled_time, max_queue) VALUES (?, ?)",
+            (scheduled_time, int(max_queue))
+        )
+    conn.commit()
+    conn.close()
     
-    return jsonify({'status': 'ok', 'scheduledTime': scheduled_time, 'scheduledMaxQueue': scheduled_max_queue})
+    log_admin_action('添加定时开放', f'时间: {scheduled_time}, 人数上限: {max_queue}')
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/admin/scheduled-open/<int:schedule_id>', methods=['DELETE'])
+@admin_required
+def delete_scheduled_open(schedule_id):
+    """删除定时开放"""
+    conn = get_db()
+    if USE_POSTGRES:
+        conn.execute("DELETE FROM scheduled_opens WHERE id = %s", (schedule_id,))
+    else:
+        conn.execute("DELETE FROM scheduled_opens WHERE id = ?", (schedule_id,))
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('删除定时开放', f'ID: {schedule_id}')
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/admin/scheduled-open/clear', methods=['POST'])
+@admin_required
+def clear_all_scheduled_opens():
+    """清除所有定时开放"""
+    conn = get_db()
+    conn.execute("DELETE FROM scheduled_opens WHERE executed = 0")
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('清除所有定时开放')
+    return jsonify({'status': 'ok'})
 
 # SSE 候车室开放事件流
 @app.route('/api/waiting-room/events')
@@ -2353,10 +2447,13 @@ def waiting_room_events():
                     yield f"data: {{\"event\": \"opened\"}}\n\n"
                     return  # 已开放，结束流
                 
-                # 检查定时开放时间
-                row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
-                if row and row[0]:
-                    scheduled_time = parser.isoparse(row[0])
+                # 检查定时开放时间（从 scheduled_opens 表）
+                row = conn.execute("SELECT id, scheduled_time, max_queue FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC LIMIT 1").fetchone()
+                if row:
+                    scheduled_time = parse_datetime(row['scheduled_time'])
+                    if scheduled_time is None:
+                        from dateutil import parser as dt_parser
+                        scheduled_time = dt_parser.isoparse(str(row['scheduled_time']))
                     if scheduled_time.tzinfo is not None:
                         scheduled_time = scheduled_time.replace(tzinfo=None)
                     now = datetime.utcnow()
@@ -2367,14 +2464,19 @@ def waiting_room_events():
                         WAITING_ROOM_ENABLED = True
                         conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
                         # 应用预设人数上限
-                        max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
-                        if max_queue_row and max_queue_row[0]:
-                            WAITING_ROOM_MAX_QUEUE = int(max_queue_row[0])
-                            conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (max_queue_row[0],))
+                        max_queue = row['max_queue']
+                        if max_queue and max_queue > 0:
+                            WAITING_ROOM_MAX_QUEUE = int(max_queue)
+                            if USE_POSTGRES:
+                                conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
+                            else:
+                                conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
                             print(f"[SSE] 应用预设人数上限: {WAITING_ROOM_MAX_QUEUE}")
-                        # 清除定时和预设
-                        conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
-                        conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_max_queue'")
+                        # 标记该定时为已执行
+                        if USE_POSTGRES:
+                            conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = %s", (row['id'],))
+                        else:
+                            conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = ?", (row['id'],))
                         conn.commit()
                         print(f"[SSE] 候车室已开放 at {now}, 人数上限: {WAITING_ROOM_MAX_QUEUE}")
                         yield f"data: {{\"event\": \"opened\"}}\n\n"
@@ -2407,14 +2509,17 @@ def waiting_room_events():
 # 定时开放检查（在后台线程中运行，作为备份）
 def check_scheduled_open():
     """检查是否到达定时开放时间（备份机制）"""
-    from dateutil import parser
+    from dateutil import parser as dt_parser
     while True:
         conn = None
         try:
             conn = get_db()
-            row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
-            if row and row[0]:
-                scheduled_time = parser.isoparse(row[0])
+            # 从 scheduled_opens 表获取最近的未执行定时
+            row = conn.execute("SELECT id, scheduled_time, max_queue FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC LIMIT 1").fetchone()
+            if row:
+                scheduled_time = parse_datetime(row['scheduled_time'])
+                if scheduled_time is None:
+                    scheduled_time = dt_parser.isoparse(str(row['scheduled_time']))
                 # 移除时区信息，统一用 naive datetime 比较
                 if scheduled_time.tzinfo is not None:
                     scheduled_time = scheduled_time.replace(tzinfo=None)
@@ -2427,13 +2532,18 @@ def check_scheduled_open():
                     # 开放候车室
                     conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
                     # 应用预设人数上限
-                    max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
-                    if max_queue_row and max_queue_row[0]:
-                        WAITING_ROOM_MAX_QUEUE = int(max_queue_row[0])
-                        conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (max_queue_row[0],))
-                    # 清除定时和预设
-                    conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
-                    conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_max_queue'")
+                    max_queue = row['max_queue']
+                    if max_queue and max_queue > 0:
+                        WAITING_ROOM_MAX_QUEUE = int(max_queue)
+                        if USE_POSTGRES:
+                            conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
+                        else:
+                            conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
+                    # 标记该定时为已执行
+                    if USE_POSTGRES:
+                        conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = %s", (row['id'],))
+                    else:
+                        conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = ?", (row['id'],))
                     conn.commit()
                     print(f"[定时开放] 后台线程，候车室已自动开放 at {now}, 人数上限: {WAITING_ROOM_MAX_QUEUE}")
         except Exception as e:
