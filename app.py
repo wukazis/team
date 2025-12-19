@@ -753,8 +753,20 @@ def parse_datetime(value):
 
 # ========== Microsoft Graph API 邮件 ==========
 
+# Token 缓存
+_ms_token_cache = {
+    'token': None,
+    'expires_at': 0
+}
+
 def get_ms_access_token() -> str:
-    """获取 Microsoft Graph API 访问令牌"""
+    """获取 Microsoft Graph API 访问令牌（带缓存）"""
+    global _ms_token_cache
+    
+    # 检查缓存是否有效（提前5分钟刷新）
+    if _ms_token_cache['token'] and time.time() < _ms_token_cache['expires_at'] - 300:
+        return _ms_token_cache['token']
+    
     url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
     data = {
         'client_id': MS_CLIENT_ID,
@@ -764,7 +776,13 @@ def get_ms_access_token() -> str:
     }
     resp = requests.post(url, data=data, timeout=10)
     resp.raise_for_status()
-    return resp.json()['access_token']
+    result = resp.json()
+    
+    # 缓存 token（默认有效期3600秒）
+    _ms_token_cache['token'] = result['access_token']
+    _ms_token_cache['expires_at'] = time.time() + result.get('expires_in', 3600)
+    
+    return _ms_token_cache['token']
 
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
     """通过 Microsoft Graph API 发送邮件"""
