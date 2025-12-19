@@ -1375,6 +1375,14 @@ def notify_waiting_users(available_seats: int, force: bool = False):
         if i >= len(available_slots):
             break
         
+        # 检查该用户是否已有未使用的邀请码（防止重复发送）
+        existing_code = conn.execute('''
+            SELECT id FROM invite_codes WHERE user_id = ? AND used = 0 AND auto_generated = 1
+        ''', (user['user_id'],)).fetchone()
+        if existing_code:
+            print(f"[跳过] 用户 {user.get('username', user['user_id'])} 已有未使用的邀请码")
+            continue
+        
         slot = available_slots[i]
         
         # 生成邀请码
