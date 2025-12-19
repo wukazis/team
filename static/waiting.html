@@ -349,31 +349,21 @@
         
         /* 菱形按钮 */
         .diamond-btn {
-            width: 24px;
-            height: 24px;
+            width: 16px;
+            height: 16px;
             background-color: var(--primary);
-            color: white;
             border: none;
             cursor: pointer;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 14px;
-            font-weight: bold;
             transform: rotate(45deg);
             transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
-        }
-        .diamond-btn span {
-            transform: rotate(-45deg);
-            transition: transform 0.3s ease;
+            box-shadow: 0 2px 6px rgba(37, 99, 235, 0.3);
         }
         .diamond-btn.active {
             background-color: var(--danger);
             transform: rotate(225deg);
         }
         .diamond-btn:hover {
-            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+            box-shadow: 0 3px 10px rgba(37, 99, 235, 0.4);
         }
     </style>
 </head>
@@ -469,9 +459,7 @@
                     </g>
                 </svg>
                 车位详情
-                <div id="teamListToggle" class="diamond-btn" onclick="toggleTeamList()" style="margin-left: auto;">
-                    <span>+</span>
-                </div>
+                <div id="teamListToggle" class="diamond-btn" onclick="toggleTeamList()" style="margin-left: auto;"></div>
             </h2>
             <div id="teamList" class="team-list hidden">
                 <p class="muted text-center" style="padding: 2rem;">加载中...</p>
