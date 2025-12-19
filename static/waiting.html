@@ -346,6 +346,35 @@
         @keyframes draw { to { stroke-dashoffset: 0; } }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes pop { to { opacity: 1; } }
+        
+        /* 菱形按钮 */
+        .diamond-btn {
+            width: 24px;
+            height: 24px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 14px;
+            font-weight: bold;
+            transform: rotate(45deg);
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+        }
+        .diamond-btn span {
+            transform: rotate(-45deg);
+            transition: transform 0.3s ease;
+        }
+        .diamond-btn.active {
+            background-color: var(--danger);
+            transform: rotate(225deg);
+        }
+        .diamond-btn:hover {
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+        }
     </style>
 </head>
 <body>
@@ -430,7 +459,7 @@
 
         <!-- 车位列表 -->
         <section class="card">
-            <h2 onclick="toggleTeamList()" style="cursor: pointer; user-select: none;">
+            <h2 style="display: flex; align-items: center;">
                 <svg class="react-logo" width="18" height="18" viewBox="-11.5 -10.23174 23 20.46348" fill="none">
                     <circle cx="0" cy="0" r="2.05" fill="currentColor"/>
                     <g stroke="currentColor" stroke-width="1" fill="none">
@@ -440,9 +469,9 @@
                     </g>
                 </svg>
                 车位详情
-                <svg id="teamListArrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-left: auto; transition: transform 0.2s;">
-                    <polyline points="6 9 12 15 18 9"></polyline>
-                </svg>
+                <div id="teamListToggle" class="diamond-btn" onclick="toggleTeamList()" style="margin-left: auto;">
+                    <span>+</span>
+                </div>
             </h2>
             <div id="teamList" class="team-list hidden">
                 <p class="muted text-center" style="padding: 2rem;">加载中...</p>
@@ -551,14 +580,14 @@
         
         function toggleTeamList() {
             const list = document.getElementById('teamList');
-            const arrow = document.getElementById('teamListArrow');
+            const btn = document.getElementById('teamListToggle');
             teamListExpanded = !teamListExpanded;
             if (teamListExpanded) {
                 list.classList.remove('hidden');
-                arrow.style.transform = 'rotate(180deg)';
+                btn.classList.add('active');
             } else {
                 list.classList.add('hidden');
-                arrow.style.transform = '';
+                btn.classList.remove('active');
             }
         }
 
