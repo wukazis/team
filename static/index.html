@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%232563eb' stroke='%231d4ed8' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>W</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
+    <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad" async defer></script>
     <style>
         :root {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -422,15 +422,13 @@
             <!-- 正常状态 -->
             <div id="waitingNormal">
                 <p class="muted" style="margin-bottom: 1rem;">查看车位状态，排队等待发放邀请码</p>
-                <div id="hcaptchaContainer" style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-                    <div id="hcaptchaWidget"></div>
-                    <button id="enterWaitingBtn" onclick="enterWaitingRoom()" class="btn btn-primary" style="display: inline-flex; width: auto; align-items: center; gap: 0.4rem; opacity: 0.5; cursor: not-allowed;" disabled>
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"></path>
-                        </svg>
-                        进入候车室
-                    </button>
-                </div>
+                <div id="hcaptchaWidget" style="display: none;"></div>
+                <button id="enterWaitingBtn" onclick="enterWaitingRoom()" class="btn btn-primary" style="display: inline-flex; width: auto; align-items: center; gap: 0.4rem;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                    进入候车室
+                </button>
             </div>
             <!-- 候车室关闭状态 -->
             <div id="waitingClosed" class="hidden">
@@ -819,27 +817,15 @@
 
         // ========== hCaptcha ==========
         let hcaptchaSiteKey = null;
-        let hcaptchaVerified = false;
+        let hcaptchaWidgetId = null;
         
         async function initHcaptcha() {
             try {
                 const res = await fetch('/api/hcaptcha/site-key');
                 const data = await res.json();
                 hcaptchaSiteKey = data.siteKey;
-                if (hcaptchaSiteKey && window.hcaptcha) {
-                    hcaptcha.render('hcaptchaWidget', {
-                        sitekey: hcaptchaSiteKey,
-                        callback: onHcaptchaSuccess,
-                        'expired-callback': onHcaptchaExpired,
-                        theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
-                    });
-                } else if (!hcaptchaSiteKey) {
-                    // 未配置 hCaptcha，直接启用按钮
-                    enableWaitingButton();
-                }
             } catch (e) {
                 console.error('hCaptcha 初始化失败:', e);
-                enableWaitingButton();
             }
         }
         
@@ -847,36 +833,22 @@
             initHcaptcha();
         }
         
-        function onHcaptchaSuccess(token) {
-            hcaptchaVerified = true;
-            enableWaitingButton();
-        }
-        
-        function onHcaptchaExpired() {
-            hcaptchaVerified = false;
-            disableWaitingButton();
-        }
-        
-        function enableWaitingButton() {
-            const btn = document.getElementById('enterWaitingBtn');
-            if (btn) {
-                btn.disabled = false;
-                btn.style.opacity = '';
-                btn.style.cursor = '';
-            }
-        }
-        
-        function disableWaitingButton() {
-            const btn = document.getElementById('enterWaitingBtn');
-            if (btn) {
-                btn.disabled = true;
-                btn.style.opacity = '0.5';
-                btn.style.cursor = 'not-allowed';
-            }
-        }
-        
         function enterWaitingRoom() {
-            if (!hcaptchaSiteKey || hcaptchaVerified) {
+            // 未配置 hCaptcha，直接跳转
+            if (!hcaptchaSiteKey) {
+                location.href = '/waiting';
+                return;
+            }
+            
+            // 触发 hCaptcha 验证
+            if (window.hcaptcha) {
+                hcaptcha.execute(hcaptchaSiteKey, { async: true }).then(({ response }) => {
+                    // 验证成功，跳转
+                    location.href = '/waiting';
+                }).catch(err => {
+                    console.error('hCaptcha 验证失败:', err);
+                });
+            } else {
                 location.href = '/waiting';
             }
         }
