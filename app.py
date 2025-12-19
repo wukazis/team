@@ -1383,6 +1383,16 @@ def notify_waiting_users(available_seats: int, force: bool = False):
             print(f"[跳过] 用户 {user.get('username', user['user_id'])} 已有未使用的邀请码")
             continue
         
+        # 先标记用户为已通知（防止并发重复）
+        conn.execute('''
+            UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ? AND notified = 0
+        ''', (user['id'],))
+        if conn.rowcount == 0:
+            # 已被其他进程处理
+            print(f"[跳过] 用户 {user.get('username', user['user_id'])} 已被其他进程处理")
+            continue
+        conn.commit()
+        
         slot = available_slots[i]
         
         # 生成邀请码
@@ -1406,18 +1416,15 @@ def notify_waiting_users(available_seats: int, force: bool = False):
                     time.sleep(2)  # 等待2秒后重试
         
         if send_success:
-            # 标记已通知
-            conn.execute('''
-                UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ?
-            ''', (user['id'],))
             conn.commit()
             sent_count += 1
             print(f"已发送邀请码 {code} 到 {user['email']} (车位: {slot['team_name']})")
         else:
-            # 发送失败，删除刚生成的邀请码
+            # 发送失败，删除刚生成的邀请码，恢复用户未通知状态
             conn.execute('DELETE FROM invite_codes WHERE code = ?', (code,))
+            conn.execute('UPDATE waiting_queue SET notified = 0, notified_at = NULL WHERE id = ?', (user['id'],))
             conn.commit()
-            print(f"发送邀请码到 {user['email']} 失败（已重试 {max_retries} 次）")
+            print(f"发送邀请码到 {user['email']} 失败（已重试 {max_retries} 次），已恢复排队状态")
     
     conn.close()
     return sent_count
