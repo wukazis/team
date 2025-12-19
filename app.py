@@ -61,6 +61,10 @@ LINUXDO_USERINFO_URL = 'https://connect.linux.do/api/user'
 CF_TURNSTILE_SITE_KEY = os.environ.get('CF_TURNSTILE_SITE_KEY', '')
 CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 
+# Google reCAPTCHA v2 配置
+RECAPTCHA_SITE_KEY = os.environ.get('RECAPTCHA_SITE_KEY', '')
+RECAPTCHA_SECRET_KEY = os.environ.get('RECAPTCHA_SECRET_KEY', '')
+
 # Microsoft Graph API 邮件配置
 MS_TENANT_ID = os.environ.get('MS_TENANT_ID', '')
 MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
@@ -313,6 +317,25 @@ def verify_turnstile(token, ip=None):
     
     try:
         resp = requests.post('https://challenges.cloudflare.com/turnstile/v0/siteverify', data=data, timeout=5)
+        result = resp.json()
+        return result.get('success', False)
+    except:
+        return False
+
+def verify_recaptcha(token, ip=None):
+    """验证 Google reCAPTCHA v2"""
+    if not RECAPTCHA_SECRET_KEY:
+        return True  # 未配置则跳过验证
+    
+    data = {
+        'secret': RECAPTCHA_SECRET_KEY,
+        'response': token
+    }
+    if ip:
+        data['remoteip'] = ip
+    
+    try:
+        resp = requests.post('https://www.google.com/recaptcha/api/siteverify', data=data, timeout=5)
         result = resp.json()
         return result.get('success', False)
     except:
@@ -978,6 +1001,26 @@ def user_cooldown():
 def turnstile_site_key():
     """获取 Turnstile site key"""
     return jsonify({'siteKey': CF_TURNSTILE_SITE_KEY})
+
+@app.route('/api/recaptcha/site-key')
+def recaptcha_site_key():
+    """获取 reCAPTCHA site key"""
+    return jsonify({'siteKey': RECAPTCHA_SITE_KEY})
+
+@app.route('/api/recaptcha/verify', methods=['POST'])
+def recaptcha_verify():
+    """验证 reCAPTCHA token"""
+    data = request.json or {}
+    token = data.get('token', '')
+    
+    if not token:
+        return jsonify({'success': False, 'error': '缺少验证token'}), 400
+    
+    ip = get_client_ip()
+    if verify_recaptcha(token, ip):
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': '验证失败'}), 400
 
 # ========== 公开 API ==========
 
