@@ -648,20 +648,62 @@
                             // 隐藏"候车室暂不开放"文字
                             document.getElementById('waitingClosedText').classList.add('hidden');
                             
+                            let sseSource = null;
+                            
+                            function showOpened() {
+                                isCountdownRefreshing = true;
+                                if (countdownTimer) {
+                                    clearInterval(countdownTimer);
+                                    countdownTimer = null;
+                                }
+                                if (sseSource) {
+                                    sseSource.close();
+                                    sseSource = null;
+                                }
+                                waitingClosed.classList.add('hidden');
+                                waitingNormal.classList.remove('hidden');
+                                waitingEntry.style.opacity = '';
+                                waitingEntry.style.pointerEvents = '';
+                            }
+                            
+                            // 剩余15秒时启动 SSE 连接
+                            function startSSE() {
+                                if (sseSource) return;
+                                sseSource = new EventSource('/api/waiting-room/events');
+                                sseSource.onmessage = (e) => {
+                                    try {
+                                        const data = JSON.parse(e.data);
+                                        if (data.event === 'opened') {
+                                            showOpened();
+                                        }
+                                    } catch (err) {}
+                                };
+                                sseSource.onerror = () => {
+                                    // 连接断开，3秒后重连
+                                    if (sseSource) {
+                                        sseSource.close();
+                                        sseSource = null;
+                                    }
+                                    if (!isCountdownRefreshing) {
+                                        setTimeout(startSSE, 3000);
+                                    }
+                                };
+                            }
+                            
                             function updateCountdown() {
                                 if (isCountdownRefreshing) return;
                                 
                                 const now = new Date();
                                 const diff = openTime - now;
                                 
+                                // 剩余15秒内启动 SSE
+                                if (diff <= 15000 && diff > 0 && !sseSource) {
+                                    startSSE();
+                                }
+                                
                                 if (diff <= 0) {
-                                    // 时间到，刷新状态
-                                    isCountdownRefreshing = true;
-                                    if (countdownTimer) {
-                                        clearInterval(countdownTimer);
-                                        countdownTimer = null;
-                                    }
-                                    setTimeout(() => checkCooldownStatus(), 500);
+                                    // 时间到，如果 SSE 没触发就直接切换
+                                    showOpened();
                                     return;
                                 }
                                 

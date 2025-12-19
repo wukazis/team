@@ -2154,9 +2154,70 @@ def set_scheduled_open():
     
     return jsonify({'status': 'ok', 'scheduledTime': scheduled_time})
 
-# 定时开放检查（在后台线程中运行）
+# SSE 候车室开放事件流
+@app.route('/api/waiting-room/events')
+def waiting_room_events():
+    """SSE 事件流，推送候车室开放通知"""
+    from dateutil import parser
+    from flask import Response
+    
+    def generate():
+        while True:
+            conn = None
+            try:
+                conn = get_db()
+                # 检查候车室是否已开放
+                row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
+                if row and row[0] == 'true':
+                    yield f"data: {{\"event\": \"opened\"}}\n\n"
+                    return  # 已开放，结束流
+                
+                # 检查定时开放时间
+                row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
+                if row and row[0]:
+                    scheduled_time = parser.isoparse(row[0])
+                    if scheduled_time.tzinfo is not None:
+                        scheduled_time = scheduled_time.replace(tzinfo=None)
+                    now = datetime.utcnow()
+                    
+                    if now >= scheduled_time:
+                        # 到时间了，开放候车室
+                        global WAITING_ROOM_ENABLED
+                        WAITING_ROOM_ENABLED = True
+                        conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
+                        conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
+                        conn.commit()
+                        print(f"[SSE] 候车室已开放 at {now}")
+                        yield f"data: {{\"event\": \"opened\"}}\n\n"
+                        return
+                    else:
+                        # 发送心跳和剩余时间
+                        diff_ms = int((scheduled_time - now).total_seconds() * 1000)
+                        yield f"data: {{\"event\": \"waiting\", \"remainingMs\": {diff_ms}}}\n\n"
+                else:
+                    # 没有定时，发送心跳
+                    yield f"data: {{\"event\": \"heartbeat\"}}\n\n"
+            except Exception as e:
+                print(f"[SSE] 错误: {e}")
+                yield f"data: {{\"event\": \"error\"}}\n\n"
+            finally:
+                if conn:
+                    try:
+                        conn.close()
+                    except:
+                        pass
+            
+            time.sleep(1)  # 每秒检查一次
+    
+    return Response(generate(), mimetype='text/event-stream', headers={
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no'  # nginx 禁用缓冲
+    })
+
+# 定时开放检查（在后台线程中运行，作为备份）
 def check_scheduled_open():
-    """检查是否到达定时开放时间"""
+    """检查是否到达定时开放时间（备份机制）"""
     from dateutil import parser
     while True:
         conn = None
@@ -2172,12 +2233,14 @@ def check_scheduled_open():
                 
                 # 如果到达开放时间
                 if now >= scheduled_time:
+                    global WAITING_ROOM_ENABLED
+                    WAITING_ROOM_ENABLED = True
                     # 开放候车室
                     conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
                     # 清除定时
                     conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
                     conn.commit()
-                    print(f"[定时开放] 候车室已自动开放 at {now}")
+                    print(f"[定时开放] 后台线程，候车室已自动开放 at {now}")
         except Exception as e:
             print(f"[定时开放] 检查失败: {e}")
         finally:
