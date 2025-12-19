@@ -1150,7 +1150,7 @@
                 // 检查候车室是否开放（带 token 检查用户是否在队列中）
                 try {
                     const settingsRes = await fetch('/api/admin/waiting-room-settings', {
-                        headers: { 'Authorization': 'Bearer ' + getToken() }
+                        headers: { 'Authorization': 'Bearer ' + jwtToken }
                     });
                     if (settingsRes.ok) {
                         const settings = await settingsRes.json();
@@ -1159,9 +1159,15 @@
                             window.location.href = '/';
                             return;
                         }
+                    } else {
+                        // API 返回错误，重定向到首页
+                        window.location.href = '/';
+                        return;
                     }
                 } catch (e) {
                     console.error('检查候车室状态失败:', e);
+                    window.location.href = '/';
+                    return;
                 }
                 
                 loadTeamStatus();
