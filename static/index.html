@@ -603,6 +603,7 @@
         }
         
         let countdownTimer = null;
+        let isCountdownRefreshing = false;
         
         async function checkCooldownStatus() {
             const waitingNormal = document.getElementById('waitingNormal');
@@ -638,22 +639,22 @@
                         // 如果有定时开放时间，显示倒计时
                         if (settings.scheduledTime) {
                             const openTime = new Date(settings.scheduledTime);
-                            let isRefreshing = false;
+                            isCountdownRefreshing = false;
                             
                             function updateCountdown() {
-                                if (isRefreshing) return;
+                                if (isCountdownRefreshing) return;
                                 
                                 const now = new Date();
                                 const diff = openTime - now;
                                 
                                 if (diff <= 0) {
                                     // 时间到，刷新状态
-                                    isRefreshing = true;
+                                    isCountdownRefreshing = true;
                                     if (countdownTimer) {
                                         clearInterval(countdownTimer);
                                         countdownTimer = null;
                                     }
-                                    checkCooldownStatus();
+                                    setTimeout(() => checkCooldownStatus(), 500);  // 延迟500ms再刷新，确保后端已更新
                                     return;
                                 }
                                 
