@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%232563eb' stroke='%231d4ed8' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>W</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad" async defer></script>
+    <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
     <style>
         :root {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -824,6 +824,17 @@
                 const res = await fetch('/api/hcaptcha/site-key');
                 const data = await res.json();
                 hcaptchaSiteKey = data.siteKey;
+                
+                // 渲染隐藏的 hCaptcha widget
+                if (hcaptchaSiteKey && window.hcaptcha) {
+                    hcaptchaWidgetId = hcaptcha.render('hcaptchaWidget', {
+                        sitekey: hcaptchaSiteKey,
+                        size: 'invisible',
+                        callback: onHcaptchaSuccess,
+                        'expired-callback': onHcaptchaExpired,
+                        theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+                    });
+                }
             } catch (e) {
                 console.error('hCaptcha 初始化失败:', e);
             }
@@ -831,6 +842,18 @@
         
         function onHcaptchaLoad() {
             initHcaptcha();
+        }
+        
+        function onHcaptchaSuccess(token) {
+            // 验证成功，跳转
+            location.href = '/waiting';
+        }
+        
+        function onHcaptchaExpired() {
+            // 验证过期，重置
+            if (hcaptchaWidgetId !== null && window.hcaptcha) {
+                hcaptcha.reset(hcaptchaWidgetId);
+            }
         }
         
         function enterWaitingRoom() {
@@ -841,13 +864,8 @@
             }
             
             // 触发 hCaptcha 验证
-            if (window.hcaptcha) {
-                hcaptcha.execute(hcaptchaSiteKey, { async: true }).then(({ response }) => {
-                    // 验证成功，跳转
-                    location.href = '/waiting';
-                }).catch(err => {
-                    console.error('hCaptcha 验证失败:', err);
-                });
+            if (window.hcaptcha && hcaptchaWidgetId !== null) {
+                hcaptcha.execute(hcaptchaWidgetId);
             } else {
                 location.href = '/waiting';
             }
