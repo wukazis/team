@@ -421,6 +421,12 @@
             padding: 1rem;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             z-index: 100;
+            cursor: move;
+            user-select: none;
+        }
+        .schedule-sidebar.dragging {
+            opacity: 0.9;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
         }
         .schedule-sidebar h3 {
             font-size: 0.95rem;
@@ -429,6 +435,7 @@
             display: flex;
             align-items: center;
             gap: 0.5rem;
+            cursor: move;
         }
         .schedule-item {
             padding: 0.5rem 0;
@@ -788,6 +795,43 @@
                 loadSchedule();
             }, 1000);
         }
+        
+        // 班车表拖拽功能
+        function initScheduleDrag() {
+            const sidebar = document.getElementById('scheduleSidebar');
+            if (!sidebar) return;
+            
+            let isDragging = false;
+            let offsetX = 0, offsetY = 0;
+            
+            sidebar.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                offsetX = e.clientX - sidebar.offsetLeft;
+                offsetY = e.clientY - sidebar.offsetTop;
+                sidebar.classList.add('dragging');
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isDragging) return;
+                e.preventDefault();
+                let x = e.clientX - offsetX;
+                let y = e.clientY - offsetY;
+                // 限制在窗口内
+                x = Math.max(0, Math.min(x, window.innerWidth - sidebar.offsetWidth));
+                y = Math.max(0, Math.min(y, window.innerHeight - sidebar.offsetHeight));
+                sidebar.style.left = x + 'px';
+                sidebar.style.top = y + 'px';
+                sidebar.style.right = 'auto';
+            });
+            
+            document.addEventListener('mouseup', () => {
+                isDragging = false;
+                sidebar.classList.remove('dragging');
+            });
+        }
+        
+        // 初始化拖拽
+        initScheduleDrag();
 
         async function loadTeamStatus() {
             try {
