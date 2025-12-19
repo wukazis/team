@@ -638,10 +638,13 @@
                                 </label>
                                 <div style="display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap;">
                                     <input type="datetime-local" id="scheduledOpenTime" style="padding: 0.5rem;">
+                                    <input type="number" id="scheduledMaxQueue" min="0" placeholder="人数上限" style="padding: 0.5rem; width: 100px;" title="开放时自动设置的人数上限">
+                                    <span class="text-muted">人</span>
                                     <button class="btn btn-primary" onclick="saveScheduledOpen()">设置</button>
                                     <button class="btn btn-ghost" onclick="clearScheduledOpen()">清除</button>
                                 </div>
                                 <div id="scheduledOpenStatus" class="text-muted" style="font-size: 0.85rem; margin-top: 0.5rem;"></div>
+                                <div class="text-muted" style="font-size: 0.8rem; margin-top: 0.25rem;">💡 达到人数上限后候车室将自动关闭</div>
                             </div>
                         </div>
                     </div>
@@ -823,6 +826,7 @@
             
             const statusEl = document.getElementById('scheduledOpenStatus');
             const inputEl = document.getElementById('scheduledOpenTime');
+            const maxQueueEl = document.getElementById('scheduledMaxQueue');
             
             // 清除之前的定时器
             if (scheduledOpenTimer) {
@@ -834,6 +838,7 @@
                 // 转换为本地时间显示
                 const dt = new Date(data.scheduledTime);
                 inputEl.value = dt.toISOString().slice(0, 16);
+                maxQueueEl.value = data.scheduledMaxQueue || '';
                 
                 // 计算倒计时
                 const now = new Date();
@@ -841,7 +846,8 @@
                 if (diff > 0) {
                     const hours = Math.floor(diff / 3600000);
                     const mins = Math.floor((diff % 3600000) / 60000);
-                    statusEl.innerHTML = `<span style="color: var(--primary);">⏰ 将于 ${dt.toLocaleString('zh-CN')} 自动开放（${hours}小时${mins}分钟后）</span>`;
+                    const maxQueueText = data.scheduledMaxQueue ? `，人数上限 ${data.scheduledMaxQueue} 人` : '';
+                    statusEl.innerHTML = `<span style="color: var(--primary);">⏰ 将于 ${dt.toLocaleString('zh-CN')} 自动开放（${hours}小时${mins}分钟后）${maxQueueText}</span>`;
                     
                     // 设置定时器，到时间后刷新状态
                     scheduledOpenTimer = setTimeout(() => {
@@ -855,12 +861,14 @@
                 }
             } else {
                 inputEl.value = '';
+                maxQueueEl.value = '';
                 statusEl.textContent = '未设置定时开放';
             }
         }
         
         async function saveScheduledOpen() {
             const inputVal = document.getElementById('scheduledOpenTime').value;
+            const maxQueueVal = document.getElementById('scheduledMaxQueue').value;
             if (!inputVal) {
                 alert('请选择开放时间');
                 return;
@@ -870,7 +878,10 @@
             const dt = new Date(inputVal);
             const { ok, data } = await api('/admin/scheduled-open', {
                 method: 'POST',
-                body: JSON.stringify({ scheduledTime: dt.toISOString() })
+                body: JSON.stringify({ 
+                    scheduledTime: dt.toISOString(),
+                    scheduledMaxQueue: maxQueueVal ? parseInt(maxQueueVal) : null
+                })
             });
             
             if (ok) {
@@ -883,11 +894,12 @@
         async function clearScheduledOpen() {
             const { ok } = await api('/admin/scheduled-open', {
                 method: 'POST',
-                body: JSON.stringify({ scheduledTime: null })
+                body: JSON.stringify({ scheduledTime: null, scheduledMaxQueue: null })
             });
             
             if (ok) {
                 loadScheduledOpen();
+                document.getElementById('scheduledMaxQueue').value = '';
             }
         }
 

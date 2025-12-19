@@ -1188,7 +1188,18 @@ def join_waiting_queue():
         raise e
     
     position = get_queue_position_by_user(user_id)
-    queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue WHERE notified = 0').fetchone()[0]
+    queue_count = conn.execute('SELECT COUNT(*) FROM waiting_queue').fetchone()[0]
+    
+    # 检查是否达到人数上限，达到则自动关闭候车室
+    if max_queue > 0 and queue_count >= max_queue:
+        global WAITING_ROOM_ENABLED
+        WAITING_ROOM_ENABLED = False
+        conn.execute("UPDATE system_settings SET value = 'false' WHERE key = 'waiting_room_enabled'")
+        # 重置所有用户的验证状态
+        conn.execute("UPDATE users SET waiting_verified = 0")
+        conn.commit()
+        print(f"[自动关闭] 排队人数达到上限 {max_queue}，候车室已自动关闭")
+    
     conn.close()
     
     return jsonify({'message': '排队成功！有空位时会通知您', 'position': position, 'email': email, 'queueCount': queue_count})
@@ -2243,25 +2254,32 @@ def verify_waiting_access():
 def get_scheduled_open():
     """获取定时开放设置"""
     conn = get_db()
-    row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
+    time_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_open_time'").fetchone()
+    max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
     conn.close()
     
-    scheduled_time = row[0] if row and row[0] else None
-    return jsonify({'scheduledTime': scheduled_time})
+    scheduled_time = time_row[0] if time_row and time_row[0] else None
+    scheduled_max_queue = int(max_queue_row[0]) if max_queue_row and max_queue_row[0] else None
+    return jsonify({'scheduledTime': scheduled_time, 'scheduledMaxQueue': scheduled_max_queue})
 
 @app.route('/api/admin/scheduled-open', methods=['POST'])
 @admin_required
 def set_scheduled_open():
-    """设置定时开放时间"""
+    """设置定时开放时间和预设人数上限"""
     data = request.json or {}
     scheduled_time = data.get('scheduledTime')
+    scheduled_max_queue = data.get('scheduledMaxQueue')
     
     if scheduled_time:
         save_setting('scheduled_open_time', scheduled_time)
+        # 保存预设人数上限
+        if scheduled_max_queue is not None:
+            save_setting('scheduled_max_queue', str(int(scheduled_max_queue)))
     else:
         save_setting('scheduled_open_time', '')
+        save_setting('scheduled_max_queue', '')
     
-    return jsonify({'status': 'ok', 'scheduledTime': scheduled_time})
+    return jsonify({'status': 'ok', 'scheduledTime': scheduled_time, 'scheduledMaxQueue': scheduled_max_queue})
 
 # SSE 候车室开放事件流
 @app.route('/api/waiting-room/events')
@@ -2342,14 +2360,20 @@ def check_scheduled_open():
                 
                 # 如果到达开放时间
                 if now >= scheduled_time:
-                    global WAITING_ROOM_ENABLED
+                    global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE
                     WAITING_ROOM_ENABLED = True
                     # 开放候车室
                     conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
-                    # 清除定时
+                    # 应用预设人数上限
+                    max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
+                    if max_queue_row and max_queue_row[0]:
+                        WAITING_ROOM_MAX_QUEUE = int(max_queue_row[0])
+                        conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (max_queue_row[0],))
+                    # 清除定时和预设
                     conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
+                    conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_max_queue'")
                     conn.commit()
-                    print(f"[定时开放] 后台线程，候车室已自动开放 at {now}")
+                    print(f"[定时开放] 后台线程，候车室已自动开放 at {now}, 人数上限: {WAITING_ROOM_MAX_QUEUE}")
         except Exception as e:
             print(f"[定时开放] 检查失败: {e}")
         finally:
