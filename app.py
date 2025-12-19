@@ -2222,7 +2222,7 @@ def set_waiting_room_settings():
 @jwt_required
 def verify_waiting_access():
     """验证用户进入候车室的权限，标记为已验证"""
-    user_id = request.user_id
+    user_id = request.user.get('user_id')
     
     # 检查候车室是否开放
     if not WAITING_ROOM_ENABLED:
