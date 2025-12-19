@@ -2662,6 +2662,9 @@ def background_sync():
     
     while True:
         try:
+            # 刷新后台任务锁
+            refresh_background_lock()
+            
             # 1. 同步车位状态
             total_available = sync_team_accounts()
             monitor_state['last_sync_time'] = datetime.utcnow().isoformat() + 'Z'
@@ -2735,13 +2738,57 @@ def background_sync():
 _threads_started = False
 _threads_lock = threading.Lock()
 
+def try_acquire_background_lock():
+    """尝试获取后台任务锁（数据库级别，跨进程）"""
+    try:
+        conn = get_db()
+        # 尝试插入锁记录，如果已存在则检查是否过期
+        if USE_POSTGRES:
+            # PostgreSQL: 使用 ON CONFLICT 处理
+            conn.execute('''
+                INSERT INTO system_settings (key, value) 
+                VALUES ('background_lock', %s)
+                ON CONFLICT (key) DO UPDATE SET value = %s
+                WHERE system_settings.value < %s
+            ''', (str(time.time()), str(time.time()), str(time.time() - 120)))
+        else:
+            # SQLite: 先检查再更新
+            row = conn.execute("SELECT value FROM system_settings WHERE key = 'background_lock'").fetchone()
+            if row:
+                last_time = float(row[0]) if row[0] else 0
+                if time.time() - last_time < 120:  # 2分钟内有其他进程持有锁
+                    conn.close()
+                    return False
+            conn.execute("INSERT OR REPLACE INTO system_settings (key, value) VALUES ('background_lock', ?)", (str(time.time()),))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"获取后台锁失败: {e}")
+        return False
+
+def refresh_background_lock():
+    """刷新后台任务锁（保持持有状态）"""
+    try:
+        conn = get_db()
+        conn.execute("UPDATE system_settings SET value = ? WHERE key = 'background_lock'", (str(time.time()),))
+        conn.commit()
+        conn.close()
+    except:
+        pass
+
 def start_background_threads():
-    """启动后台线程（确保只启动一次）"""
+    """启动后台线程（确保只启动一次，跨进程）"""
     global _threads_started
     with _threads_lock:
         if _threads_started:
             return
         _threads_started = True
+    
+    # 尝试获取跨进程锁
+    if not try_acquire_background_lock():
+        print("⏭️  其他 worker 已启动后台任务，本 worker 跳过")
+        return
     
     # 启动定时开放检查线程
     scheduled_thread = threading.Thread(target=check_scheduled_open, daemon=True)
