@@ -2309,12 +2309,20 @@ def waiting_room_events():
                     
                     if now >= scheduled_time:
                         # 到时间了，开放候车室
-                        global WAITING_ROOM_ENABLED
+                        global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE
                         WAITING_ROOM_ENABLED = True
                         conn.execute("UPDATE system_settings SET value = 'true' WHERE key = 'waiting_room_enabled'")
+                        # 应用预设人数上限
+                        max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
+                        if max_queue_row and max_queue_row[0]:
+                            WAITING_ROOM_MAX_QUEUE = int(max_queue_row[0])
+                            conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (max_queue_row[0],))
+                            print(f"[SSE] 应用预设人数上限: {WAITING_ROOM_MAX_QUEUE}")
+                        # 清除定时和预设
                         conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
+                        conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_max_queue'")
                         conn.commit()
-                        print(f"[SSE] 候车室已开放 at {now}")
+                        print(f"[SSE] 候车室已开放 at {now}, 人数上限: {WAITING_ROOM_MAX_QUEUE}")
                         yield f"data: {{\"event\": \"opened\"}}\n\n"
                         return
                     else:
@@ -2368,7 +2376,7 @@ def check_scheduled_open():
                     max_queue_row = conn.execute("SELECT value FROM system_settings WHERE key = 'scheduled_max_queue'").fetchone()
                     if max_queue_row and max_queue_row[0]:
                         WAITING_ROOM_MAX_QUEUE = int(max_queue_row[0])
-                        conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (max_queue_row[0],))
+                        conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (max_queue_row[0],))
                     # 清除定时和预设
                     conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_open_time'")
                     conn.execute("UPDATE system_settings SET value = '' WHERE key = 'scheduled_max_queue'")
