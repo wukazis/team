@@ -2433,8 +2433,8 @@ def set_sync_interval():
     
     if 'syncInterval' in data:
         interval = int(data['syncInterval'])
-        # 验证有效值: 300(5min), 900(15min), 1800(30min), 3600(1h), 7200(2h)
-        valid_intervals = [300, 900, 1800, 3600, 7200]
+        # 验证有效值: 30(30s), 60(1min), 300(5min), 900(15min), 1800(30min), 3600(1h), 7200(2h)
+        valid_intervals = [30, 60, 300, 900, 1800, 3600, 7200]
         if interval not in valid_intervals:
             return jsonify({'error': '无效的同步间隔'}), 400
         SYNC_INTERVAL = interval
