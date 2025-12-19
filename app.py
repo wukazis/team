@@ -535,6 +535,7 @@ def init_db():
                 avatar_template TEXT,
                 trust_level INTEGER DEFAULT 0,
                 has_used INTEGER DEFAULT 0,
+                waiting_verified INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW(),
                 updated_at TIMESTAMP DEFAULT NOW()
             )
@@ -567,6 +568,12 @@ def init_db():
                 created_at TIMESTAMP DEFAULT NOW()
             )
         ''')
+        
+        # 添加新字段（如果不存在）
+        try:
+            cursor.execute('ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0')
+        except:
+            pass
         
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
@@ -629,6 +636,7 @@ def init_db():
             'ALTER TABLE team_accounts ADD COLUMN active_until TEXT',
             'ALTER TABLE team_accounts ADD COLUMN pending_invites INTEGER DEFAULT 0',
             'ALTER TABLE users ADD COLUMN has_used INTEGER DEFAULT 0',
+            'ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0',
             'ALTER TABLE invite_codes ADD COLUMN auto_generated INTEGER DEFAULT 0',
         ]:
             try:
@@ -2151,8 +2159,9 @@ def get_waiting_room_settings():
     max_queue = int(max_queue_row[0]) if max_queue_row else 0
     scheduled_time = scheduled_row[0] if scheduled_row and scheduled_row[0] else None
     
-    # 检查当前用户是否在队列中（如果有 JWT token）
+    # 检查当前用户是否在队列中和是否已验证（如果有 JWT token）
     user_in_queue = False
+    user_verified = False
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
         token = auth_header[7:]
@@ -2161,6 +2170,9 @@ def get_waiting_room_settings():
             user_id = payload.get('user_id')
             in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
             user_in_queue = in_queue is not None
+            # 检查用户是否已验证
+            verified_row = conn.execute('SELECT waiting_verified FROM users WHERE id = ?', (user_id,)).fetchone()
+            user_verified = verified_row and verified_row[0] == 1
     
     conn.close()
     
@@ -2169,7 +2181,8 @@ def get_waiting_room_settings():
         'maxQueue': max_queue,
         'currentQueue': queue_count,
         'scheduledTime': scheduled_time,
-        'userInQueue': user_in_queue
+        'userInQueue': user_in_queue,
+        'userVerified': user_verified
     })
 
 @app.route('/api/admin/waiting-room-settings', methods=['POST'])
@@ -2179,9 +2192,19 @@ def set_waiting_room_settings():
     global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE
     data = request.json or {}
     
+    old_enabled = WAITING_ROOM_ENABLED
+    
     if 'enabled' in data:
         WAITING_ROOM_ENABLED = bool(data['enabled'])
         save_setting('waiting_room_enabled', 'true' if WAITING_ROOM_ENABLED else 'false')
+        
+        # 如果候车室从开放变为关闭，重置所有用户的验证状态
+        if old_enabled and not WAITING_ROOM_ENABLED:
+            conn = get_db()
+            conn.execute("UPDATE users SET waiting_verified = 0")
+            conn.commit()
+            conn.close()
+    
     if 'maxQueue' in data:
         WAITING_ROOM_MAX_QUEUE = max(0, int(data['maxQueue']))
         save_setting('waiting_room_max_queue', str(WAITING_ROOM_MAX_QUEUE))
@@ -2191,6 +2214,26 @@ def set_waiting_room_settings():
         'enabled': WAITING_ROOM_ENABLED,
         'maxQueue': WAITING_ROOM_MAX_QUEUE
     })
+
+# ========== 候车室验证 API ==========
+
+@app.route('/api/waiting/verify', methods=['POST'])
+@jwt_required
+def verify_waiting_access():
+    """验证用户进入候车室的权限，标记为已验证"""
+    user_id = request.user_id
+    
+    # 检查候车室是否开放
+    if not WAITING_ROOM_ENABLED:
+        return jsonify({'error': '候车室未开放'}), 403
+    
+    # 标记用户为已验证
+    conn = get_db()
+    conn.execute("UPDATE users SET waiting_verified = 1 WHERE id = ?", (user_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'status': 'ok', 'verified': True})
 
 # ========== 定时开放 API ==========
 

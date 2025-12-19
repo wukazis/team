@@ -976,9 +976,9 @@
             initHcaptcha();
         }
         
-        function onHcaptchaSuccess(token) {
-            // 验证成功，跳转
-            location.href = '/waiting';
+        async function onHcaptchaSuccess(token) {
+            // hCaptcha 验证成功，调用后端验证并跳转
+            await verifyAndEnterWaiting();
         }
         
         function onHcaptchaExpired() {
@@ -1011,10 +1011,10 @@
             if (text) text.textContent = '进入候车室';
         }
         
-        function enterWaitingRoom() {
-            // 未配置 hCaptcha，直接跳转
+        async function enterWaitingRoom() {
+            // 未配置 hCaptcha，直接验证并跳转
             if (!hcaptchaSiteKey) {
-                location.href = '/waiting';
+                await verifyAndEnterWaiting();
                 return;
             }
             
@@ -1025,7 +1025,26 @@
             if (window.hcaptcha && hcaptchaWidgetId !== null) {
                 hcaptcha.execute(hcaptchaWidgetId);
             } else {
-                location.href = '/waiting';
+                await verifyAndEnterWaiting();
+            }
+        }
+        
+        async function verifyAndEnterWaiting() {
+            try {
+                const res = await fetch('/api/waiting/verify', {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + getToken() }
+                });
+                if (res.ok) {
+                    location.href = '/waiting';
+                } else {
+                    const data = await res.json();
+                    alert(data.error || '验证失败');
+                    resetWaitingButton();
+                }
+            } catch (e) {
+                alert('网络错误');
+                resetWaitingButton();
             }
         }
 
