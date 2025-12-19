@@ -409,6 +409,7 @@
                     <div class="table-header">
                         <span class="title">用户列表 <span class="text-muted" style="font-weight: normal; font-size: 0.85rem;">(<span id="userTotalCount">0</span> 人)</span></span>
                         <div class="table-actions">
+                            <button class="btn btn-warning" onclick="clearNonTL3Users()">删除非TL3</button>
                             <button class="btn btn-danger" onclick="clearAllUsers()">删除所有</button>
                             <button class="btn btn-ghost" onclick="loadUsers()">刷新</button>
                         </div>
@@ -1264,6 +1265,17 @@
                 return;
             }
             alert(`已删除 ${res.data.deleted} 个用户`);
+            loadUsers();
+        }
+        
+        async function clearNonTL3Users() {
+            if (!confirm('⚠️ 确定删除所有非 TL3 用户？此操作不可恢复！')) return;
+            const res = await api('/admin/users/clear-non-tl3', { method: 'POST' });
+            if (!res.ok) {
+                alert(res.data?.error || '删除失败');
+                return;
+            }
+            alert(`已删除 ${res.data.deleted} 个非 TL3 用户`);
             loadUsers();
         }
 

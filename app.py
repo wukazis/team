@@ -1864,6 +1864,18 @@ def clear_all_users():
     log_admin_action('清空所有用户', f'删除 {deleted} 条记录')
     return jsonify({'status': 'ok', 'deleted': deleted})
 
+@app.route('/api/admin/users/clear-non-tl3', methods=['POST'])
+@admin_required
+def clear_non_tl3_users():
+    """删除所有非 TL3 用户"""
+    conn = get_db()
+    cursor = conn.execute('DELETE FROM users WHERE trust_level < 3')
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    log_admin_action('删除非TL3用户', f'删除 {deleted} 条记录')
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
 @app.route('/api/admin/codes/clear-all', methods=['POST'])
 @admin_required
 def clear_all_codes():
