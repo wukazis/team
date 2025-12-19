@@ -1337,8 +1337,8 @@
                             window.location.href = '/';
                             return;
                         }
-                        // 用户未验证，重定向到首页
-                        if (!settings.userVerified) {
+                        // 用户未验证且不在队列中，重定向到首页
+                        if (!settings.userVerified && !settings.userInQueue) {
                             window.location.href = '/';
                             return;
                         }
