@@ -7,7 +7,7 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%232563eb' stroke='%231d4ed8' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>W</text></svg>">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
-    <script src="https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit" async defer></script>
+    <script src="https://js.hcaptcha.com/1/api.js?onload=onHcaptchaLoad&render=explicit" async defer></script>
     <style>
         :root {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -422,8 +422,8 @@
             <!-- 正常状态 -->
             <div id="waitingNormal">
                 <p class="muted" style="margin-bottom: 1rem;">查看车位状态，排队等待发放邀请码</p>
-                <div id="recaptchaContainer" style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
-                    <div id="recaptchaWidget"></div>
+                <div id="hcaptchaContainer" style="display: flex; flex-direction: column; align-items: center; gap: 1rem;">
+                    <div id="hcaptchaWidget"></div>
                     <button id="enterWaitingBtn" onclick="enterWaitingRoom()" class="btn btn-primary" style="display: inline-flex; width: auto; align-items: center; gap: 0.4rem; opacity: 0.5; cursor: not-allowed;" disabled>
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"></path>
@@ -633,13 +633,11 @@
             // 显示候车室入口并检测冷却状态
             document.getElementById('waitingEntry').classList.remove('hidden');
             checkCooldownStatus();
-            // 初始化 reCAPTCHA
-            if (window.grecaptcha && window.grecaptcha.render) {
-                initRecaptcha();
-            } else {
-                // 等待 reCAPTCHA 脚本加载
-                window.onRecaptchaLoad = initRecaptcha;
+            // 初始化 hCaptcha
+            if (window.hcaptcha && window.hcaptcha.render) {
+                initHcaptcha();
             }
+            // hCaptcha 脚本加载完成后会自动调用 onHcaptchaLoad
         }
         
         let countdownTimer = null;
@@ -819,39 +817,43 @@
 
         function logout() { clearToken(); currentUser = null; showLoginPanel(); }
 
-        // ========== reCAPTCHA ==========
-        let recaptchaSiteKey = null;
-        let recaptchaVerified = false;
+        // ========== hCaptcha ==========
+        let hcaptchaSiteKey = null;
+        let hcaptchaVerified = false;
         
-        async function initRecaptcha() {
+        async function initHcaptcha() {
             try {
-                const res = await fetch('/api/recaptcha/site-key');
+                const res = await fetch('/api/hcaptcha/site-key');
                 const data = await res.json();
-                recaptchaSiteKey = data.siteKey;
-                if (recaptchaSiteKey && window.grecaptcha) {
-                    grecaptcha.render('recaptchaWidget', {
-                        sitekey: recaptchaSiteKey,
-                        callback: onRecaptchaSuccess,
-                        'expired-callback': onRecaptchaExpired,
+                hcaptchaSiteKey = data.siteKey;
+                if (hcaptchaSiteKey && window.hcaptcha) {
+                    hcaptcha.render('hcaptchaWidget', {
+                        sitekey: hcaptchaSiteKey,
+                        callback: onHcaptchaSuccess,
+                        'expired-callback': onHcaptchaExpired,
                         theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
                     });
-                } else if (!recaptchaSiteKey) {
-                    // 未配置 reCAPTCHA，直接启用按钮
+                } else if (!hcaptchaSiteKey) {
+                    // 未配置 hCaptcha，直接启用按钮
                     enableWaitingButton();
                 }
             } catch (e) {
-                console.error('reCAPTCHA 初始化失败:', e);
+                console.error('hCaptcha 初始化失败:', e);
                 enableWaitingButton();
             }
         }
         
-        function onRecaptchaSuccess(token) {
-            recaptchaVerified = true;
+        function onHcaptchaLoad() {
+            initHcaptcha();
+        }
+        
+        function onHcaptchaSuccess(token) {
+            hcaptchaVerified = true;
             enableWaitingButton();
         }
         
-        function onRecaptchaExpired() {
-            recaptchaVerified = false;
+        function onHcaptchaExpired() {
+            hcaptchaVerified = false;
             disableWaitingButton();
         }
         
@@ -874,7 +876,7 @@
         }
         
         function enterWaitingRoom() {
-            if (!recaptchaSiteKey || recaptchaVerified) {
+            if (!hcaptchaSiteKey || hcaptchaVerified) {
                 location.href = '/waiting';
             }
         }
