@@ -845,7 +845,8 @@
         }
         
         async function saveWaitingRoomSettings() {
-            const enabled = document.getElementById('waitingRoomEnabled').checked;
+            const checkbox = document.getElementById('waitingRoomEnabled');
+            const enabled = checkbox.checked;
             const maxQueue = Math.max(0, parseInt(document.getElementById('waitingRoomMaxQueue').value) || 0);
             
             const { ok, data } = await api('/admin/waiting-room-settings', {
@@ -856,6 +857,8 @@
             if (ok) {
                 loadWaitingRoomSettings();
             } else {
+                // 保存失败，恢复开关状态
+                checkbox.checked = !enabled;
                 alert(data.error || '保存失败');
             }
         }
