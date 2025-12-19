@@ -424,10 +424,13 @@
                 <p class="muted" style="margin-bottom: 1rem;">查看车位状态，排队等待发放邀请码</p>
                 <div id="hcaptchaWidget" style="display: none;"></div>
                 <button id="enterWaitingBtn" onclick="enterWaitingRoom()" class="btn btn-primary" style="display: inline-flex; width: auto; align-items: center; gap: 0.4rem;">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <svg id="enterWaitingIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M22 17H2a3 3 0 0 0 3-3V9a7 7 0 0 1 14 0v5a3 3 0 0 0 3 3zm-8.27 4a2 2 0 0 1-3.46 0"></path>
                     </svg>
-                    进入候车室
+                    <svg id="enterWaitingSpinner" class="hidden" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="animation: spin 1s linear infinite;">
+                        <circle cx="12" cy="12" r="10" stroke-dasharray="32" stroke-dashoffset="12"></circle>
+                    </svg>
+                    <span id="enterWaitingText">进入候车室</span>
                 </button>
             </div>
             <!-- 候车室关闭状态 -->
@@ -832,6 +835,9 @@
                         size: 'invisible',
                         callback: onHcaptchaSuccess,
                         'expired-callback': onHcaptchaExpired,
+                        'close-callback': resetWaitingButton,
+                        'chalexpired-callback': resetWaitingButton,
+                        'error-callback': resetWaitingButton,
                         theme: document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
                     });
                 }
@@ -850,10 +856,33 @@
         }
         
         function onHcaptchaExpired() {
-            // 验证过期，重置
+            // 验证过期，重置按钮状态
+            resetWaitingButton();
             if (hcaptchaWidgetId !== null && window.hcaptcha) {
                 hcaptcha.reset(hcaptchaWidgetId);
             }
+        }
+        
+        function setWaitingButtonLoading() {
+            const btn = document.getElementById('enterWaitingBtn');
+            const icon = document.getElementById('enterWaitingIcon');
+            const spinner = document.getElementById('enterWaitingSpinner');
+            const text = document.getElementById('enterWaitingText');
+            if (btn) btn.disabled = true;
+            if (icon) icon.classList.add('hidden');
+            if (spinner) spinner.classList.remove('hidden');
+            if (text) text.textContent = '加载中...';
+        }
+        
+        function resetWaitingButton() {
+            const btn = document.getElementById('enterWaitingBtn');
+            const icon = document.getElementById('enterWaitingIcon');
+            const spinner = document.getElementById('enterWaitingSpinner');
+            const text = document.getElementById('enterWaitingText');
+            if (btn) btn.disabled = false;
+            if (icon) icon.classList.remove('hidden');
+            if (spinner) spinner.classList.add('hidden');
+            if (text) text.textContent = '进入候车室';
         }
         
         function enterWaitingRoom() {
@@ -862,6 +891,9 @@
                 location.href = '/waiting';
                 return;
             }
+            
+            // 显示加载状态
+            setWaitingButtonLoading();
             
             // 触发 hCaptcha 验证
             if (window.hcaptcha && hcaptchaWidgetId !== null) {
