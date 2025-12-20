@@ -1075,10 +1075,16 @@
             document.getElementById('maintenanceAllowedUsers').value = (data.allowedUsers || []).join(',');
             
             if (data.endTime) {
-                // 转换 UTC 时间为本地时间显示
+                // 转换 UTC 时间为本地时间显示（datetime-local 需要本地时间格式）
                 const dt = new Date(data.endTime);
                 if (!isNaN(dt.getTime())) {
-                    document.getElementById('maintenanceEndTime').value = dt.toISOString().slice(0, 16);
+                    // 转换为本地时间格式 YYYY-MM-DDTHH:mm
+                    const year = dt.getFullYear();
+                    const month = String(dt.getMonth() + 1).padStart(2, '0');
+                    const day = String(dt.getDate()).padStart(2, '0');
+                    const hours = String(dt.getHours()).padStart(2, '0');
+                    const minutes = String(dt.getMinutes()).padStart(2, '0');
+                    document.getElementById('maintenanceEndTime').value = `${year}-${month}-${day}T${hours}:${minutes}`;
                 }
             } else {
                 document.getElementById('maintenanceEndTime').value = '';
