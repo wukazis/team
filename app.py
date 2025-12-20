@@ -2244,9 +2244,9 @@ def get_waiting_room_settings():
     if scheduled_row:
         st = scheduled_row['scheduled_time']
         if isinstance(st, datetime):
-            scheduled_time = st.isoformat()
-        else:
-            scheduled_time = st
+            scheduled_time = st.isoformat() + 'Z'  # 加 Z 表示 UTC
+        elif isinstance(st, str):
+            scheduled_time = st if st.endswith('Z') else st + 'Z'
     
     # 检查当前用户是否在队列中和是否已验证（如果有 JWT token）
     user_in_queue = False
