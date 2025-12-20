@@ -431,6 +431,16 @@
         </div>
     </div>
 
+    <!-- 维护页面 -->
+    <div id="maintenancePage" class="hidden" style="min-height: 100vh; display: flex; justify-content: center; align-items: center; background: var(--bg); padding: 2rem; position: fixed; top: 0; left: 0; width: 100%; z-index: 9998;">
+        <div style="text-align: center; max-width: 400px;">
+            <img src="/remix.png" alt="维护中" style="width: 120px; height: 120px; margin-bottom: 1rem;">
+            <h1 id="maintenanceMsg" style="font-size: 1.5rem; margin-bottom: 1rem; color: var(--text);">正在修车，请稍后再来</h1>
+            <p id="maintenanceEndTimeText" style="margin-top: 1rem; font-size: 1.1rem;"></p>
+            <p style="color: var(--muted); margin-top: 1.5rem; font-size: 0.9rem;">给您带来不便，敬请谅解</p>
+        </div>
+    </div>
+
     <!-- 登录卡片 -->
     <div id="loginPanel" class="login-center">
         <section class="card login-card">
@@ -625,24 +635,24 @@
             document.getElementById('loadingOverlay').classList.add('fade-out');
             document.getElementById('loginPanel').classList.add('hidden');
             
-            let endTimeText = '';
+            // 设置维护信息
+            document.getElementById('maintenanceMsg').textContent = message || '正在修车，请稍后再来';
+            
+            // 设置预计恢复时间
+            const endTimeEl = document.getElementById('maintenanceEndTimeText');
             if (endTime) {
                 const dt = new Date(endTime);
                 if (!isNaN(dt.getTime())) {
-                    endTimeText = `<p style="margin-top: 1rem; font-size: 1.1rem;">预计恢复时间: <strong>${dt.toLocaleString('zh-CN')}</strong></p>`;
+                    endTimeEl.innerHTML = '预计恢复时间: <strong>' + dt.toLocaleString('zh-CN') + '</strong>';
+                } else {
+                    endTimeEl.textContent = '';
                 }
+            } else {
+                endTimeEl.textContent = '';
             }
             
-            document.body.innerHTML = `
-                <div style="min-height: 100vh; display: flex; justify-content: center; align-items: center; background: var(--bg); padding: 2rem;">
-                    <div style="text-align: center; max-width: 400px;">
-                        <img src="https://img.rewink.asia/remix.png" alt="维护中" style="width: 120px; height: 120px; margin-bottom: 1rem;">
-                        <h1 style="font-size: 1.5rem; margin-bottom: 1rem; color: var(--text);">${message || '正在修车，请稍后再来'}</h1>
-                        ${endTimeText}
-                        <p style="color: var(--muted); margin-top: 1.5rem; font-size: 0.9rem;">给您带来不便，敬请谅解</p>
-                    </div>
-                </div>
-            `;
+            // 显示维护页面
+            document.getElementById('maintenancePage').classList.remove('hidden');
         }
         
         function showTrustLevelError(currentTL) {
@@ -916,8 +926,16 @@
                 const settingsRes = await fetch('/api/admin/waiting-room-settings', {
                     headers: { 'Authorization': 'Bearer ' + getToken() }
                 });
-                if (settingsRes.ok) {
-                    const settings = await settingsRes.json();
+                
+                // 无论 API 是否成功，都尝试解析响应
+                let settings = null;
+                try {
+                    settings = await settingsRes.json();
+                } catch (e) {
+                    console.error('解析候车室设置失败:', e);
+                }
+                
+                if (settings) {
                     if (!settings.enabled && !settings.userInQueue) {
                         // 候车室关闭且用户不在队列中
                         waitingClosed.classList.remove('hidden');
@@ -1025,7 +1043,7 @@
                         }
                         return;
                     }
-                    // 用户在队列中，即使候车室关闭也允许访问
+                    // 用户在队列中或候车室开放，允许访问
                 }
                 
                 // 候车室开放或用户在队列中，恢复样式并显示正常入口
