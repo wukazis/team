@@ -2346,10 +2346,10 @@ def get_waiting_room_settings():
         payload = verify_jwt_token(token)
         if payload:
             user_id = payload.get('user_id')
-            in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = %s', (user_id,)).fetchone()
+            in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
             user_in_queue = in_queue is not None
             # 检查用户是否已验证
-            verified_row = conn.execute('SELECT waiting_verified FROM users WHERE id = %s', (user_id,)).fetchone()
+            verified_row = conn.execute('SELECT waiting_verified FROM users WHERE id = ?', (user_id,)).fetchone()
             user_verified = verified_row and verified_row[0] == 1
     
     conn.close()
@@ -2403,7 +2403,7 @@ def verify_waiting_access():
     
     conn = get_db()
     # 检查用户是否已在队列中
-    in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = %s', (user_id,)).fetchone()
+    in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
     
     # 候车室关闭且用户不在队列中，拒绝访问
     if not WAITING_ROOM_ENABLED and not in_queue:
@@ -2412,7 +2412,7 @@ def verify_waiting_access():
     
     # 标记用户为已验证（如果候车室开放）
     if WAITING_ROOM_ENABLED:
-        conn.execute("UPDATE users SET waiting_verified = 1 WHERE id = %s", (user_id,))
+        conn.execute("UPDATE users SET waiting_verified = 1 WHERE id = ?", (user_id,))
         conn.commit()
     conn.close()
     
@@ -2509,10 +2509,7 @@ def add_scheduled_open():
 def delete_scheduled_open(schedule_id):
     """删除定时开放"""
     conn = get_db()
-    if USE_POSTGRES:
-        conn.execute("DELETE FROM scheduled_opens WHERE id = %s", (schedule_id,))
-    else:
-        conn.execute("DELETE FROM scheduled_opens WHERE id = ?", (schedule_id,))
+    conn.execute("DELETE FROM scheduled_opens WHERE id = ?", (schedule_id,))
     conn.commit()
     conn.close()
     
@@ -2569,16 +2566,10 @@ def waiting_room_events():
                         max_queue = row['max_queue']
                         if max_queue and max_queue > 0:
                             WAITING_ROOM_MAX_QUEUE = int(max_queue)
-                            if USE_POSTGRES:
-                                conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
-                            else:
-                                conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
+                            conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
                             print(f"[SSE] 应用预设人数上限: {WAITING_ROOM_MAX_QUEUE}")
                         # 标记该定时为已执行
-                        if USE_POSTGRES:
-                            conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = %s", (row['id'],))
-                        else:
-                            conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = ?", (row['id'],))
+                        conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = ?", (row['id'],))
                         conn.commit()
                         print(f"[SSE] 候车室已开放 at {now}, 人数上限: {WAITING_ROOM_MAX_QUEUE}")
                         yield f"data: {{\"event\": \"opened\"}}\n\n"
@@ -2637,15 +2628,9 @@ def check_scheduled_open():
                     max_queue = row['max_queue']
                     if max_queue and max_queue > 0:
                         WAITING_ROOM_MAX_QUEUE = int(max_queue)
-                        if USE_POSTGRES:
-                            conn.execute("UPDATE system_settings SET value = %s WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
-                        else:
-                            conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
+                        conn.execute("UPDATE system_settings SET value = ? WHERE key = 'waiting_room_max_queue'", (str(max_queue),))
                     # 标记该定时为已执行
-                    if USE_POSTGRES:
-                        conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = %s", (row['id'],))
-                    else:
-                        conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = ?", (row['id'],))
+                    conn.execute("UPDATE scheduled_opens SET executed = 1 WHERE id = ?", (row['id'],))
                     conn.commit()
                     print(f"[定时开放] 后台线程，候车室已自动开放 at {now}, 人数上限: {WAITING_ROOM_MAX_QUEUE}")
         except Exception as e:
