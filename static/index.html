@@ -594,8 +594,55 @@
             
             if (params.get('token')) { setToken(params.get('token')); history.replaceState({}, '', '/'); }
             try { turnstileSiteKey = (await (await fetch('/api/turnstile/site-key')).json()).siteKey; } catch {}
+            
+            // 检查维护模式
+            const maintenanceOk = await checkMaintenanceMode();
+            if (!maintenanceOk) return;
+            
             getToken() ? await loadUserState() : showLoginPanel();
             loadTeamAccounts();
+        }
+        
+        async function checkMaintenanceMode() {
+            try {
+                const res = await fetch('/api/maintenance/status', {
+                    headers: getToken() ? { 'Authorization': 'Bearer ' + getToken() } : {}
+                });
+                if (!res.ok) return true;
+                const data = await res.json();
+                
+                if (data.enabled && !data.userAllowed) {
+                    showMaintenancePage(data.message, data.endTime);
+                    return false;
+                }
+            } catch (e) {
+                console.error('检查维护模式失败:', e);
+            }
+            return true;
+        }
+        
+        function showMaintenancePage(message, endTime) {
+            document.getElementById('loadingOverlay').classList.add('fade-out');
+            document.getElementById('loginPanel').classList.add('hidden');
+            
+            let endTimeText = '';
+            if (endTime) {
+                const dt = new Date(endTime);
+                if (!isNaN(dt.getTime())) {
+                    endTimeText = `<p style="margin-top: 1rem; font-size: 1.1rem;">预计恢复时间: <strong>${dt.toLocaleString('zh-CN')}</strong></p>`;
+                }
+            }
+            
+            document.body.innerHTML = `
+                <div style="min-height: 100vh; display: flex; justify-content: center; align-items: center; background: var(--bg); padding: 2rem;">
+                    <div style="text-align: center; max-width: 400px;">
+                        <div style="font-size: 4rem; margin-bottom: 1rem;">🔧</div>
+                        <h1 style="font-size: 1.5rem; margin-bottom: 1rem; color: var(--text);">${message || '正在修车，请稍后再来'}</h1>
+                        ${endTimeText}
+                        <p style="color: var(--muted); margin-top: 1.5rem; font-size: 0.9rem;">给您带来不便，敬请谅解</p>
+                    </div>
+                </div>
+            `;
         }
         
         function showTrustLevelError(currentTL) {

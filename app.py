@@ -81,6 +81,12 @@ DISPATCH_MODE = os.environ.get('DISPATCH_MODE', 'auto')  # 默认自动模式
 WAITING_ROOM_ENABLED = False  # 候车室是否开放（默认关闭）
 WAITING_ROOM_MAX_QUEUE = 0    # 排队人数上限，0表示不限制
 
+# 维护模式设置
+MAINTENANCE_MODE = False  # 维护模式是否开启
+MAINTENANCE_MESSAGE = '正在修车，请稍后再来'  # 维护提示信息
+MAINTENANCE_END_TIME = ''  # 维护结束时间
+MAINTENANCE_ALLOWED_USERS = []  # 允许访问的用户ID列表
+
 # JWT 配置
 JWT_SECRET = os.environ.get('JWT_SECRET', secrets.token_hex(32))
 JWT_EXPIRY_HOURS = 24
@@ -715,6 +721,7 @@ def init_db():
 def load_settings():
     """从数据库加载设置到全局变量"""
     global WAITING_ROOM_ENABLED, WAITING_ROOM_MAX_QUEUE, DISPATCH_MODE, SYNC_INTERVAL, INVITE_CODE_EXPIRE, DISPATCH_MIN_PEOPLE
+    global MAINTENANCE_MODE, MAINTENANCE_MESSAGE, MAINTENANCE_END_TIME, MAINTENANCE_ALLOWED_USERS
     try:
         conn = get_db()
         row = conn.execute("SELECT value FROM system_settings WHERE key = 'waiting_room_enabled'").fetchone()
@@ -740,6 +747,23 @@ def load_settings():
         row = conn.execute("SELECT value FROM system_settings WHERE key = 'dispatch_min_people'").fetchone()
         if row:
             DISPATCH_MIN_PEOPLE = int(row[0])
+        
+        # 加载维护模式设置
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'maintenance_mode'").fetchone()
+        if row:
+            MAINTENANCE_MODE = row[0] == 'true'
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'maintenance_message'").fetchone()
+        if row:
+            MAINTENANCE_MESSAGE = row[0]
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'maintenance_end_time'").fetchone()
+        if row:
+            MAINTENANCE_END_TIME = row[0]
+        
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'maintenance_allowed_users'").fetchone()
+        if row and row[0]:
+            MAINTENANCE_ALLOWED_USERS = [int(uid) for uid in row[0].split(',') if uid.strip()]
         
         conn.close()
     except Exception as e:
@@ -2222,6 +2246,71 @@ def set_dispatch_mode():
     DISPATCH_MODE = mode
     save_setting('dispatch_mode', mode)
     return jsonify({'status': 'ok', 'mode': DISPATCH_MODE})
+
+# ========== 维护模式 API ==========
+
+@app.route('/api/admin/maintenance', methods=['GET'])
+@admin_required
+def get_maintenance_settings():
+    """获取维护模式设置"""
+    return jsonify({
+        'enabled': MAINTENANCE_MODE,
+        'message': MAINTENANCE_MESSAGE,
+        'endTime': MAINTENANCE_END_TIME,
+        'allowedUsers': MAINTENANCE_ALLOWED_USERS
+    })
+
+@app.route('/api/admin/maintenance', methods=['POST'])
+@admin_required
+def set_maintenance_settings():
+    """设置维护模式"""
+    global MAINTENANCE_MODE, MAINTENANCE_MESSAGE, MAINTENANCE_END_TIME, MAINTENANCE_ALLOWED_USERS
+    data = request.json or {}
+    
+    if 'enabled' in data:
+        MAINTENANCE_MODE = bool(data['enabled'])
+        save_setting('maintenance_mode', 'true' if MAINTENANCE_MODE else 'false')
+    
+    if 'message' in data:
+        MAINTENANCE_MESSAGE = str(data['message'])
+        save_setting('maintenance_message', MAINTENANCE_MESSAGE)
+    
+    if 'endTime' in data:
+        MAINTENANCE_END_TIME = str(data['endTime']) if data['endTime'] else ''
+        save_setting('maintenance_end_time', MAINTENANCE_END_TIME)
+    
+    if 'allowedUsers' in data:
+        MAINTENANCE_ALLOWED_USERS = [int(uid) for uid in data['allowedUsers'] if uid]
+        save_setting('maintenance_allowed_users', ','.join(map(str, MAINTENANCE_ALLOWED_USERS)))
+    
+    log_admin_action('设置维护模式', f'enabled={MAINTENANCE_MODE}, allowedUsers={MAINTENANCE_ALLOWED_USERS}')
+    return jsonify({
+        'status': 'ok',
+        'enabled': MAINTENANCE_MODE,
+        'message': MAINTENANCE_MESSAGE,
+        'endTime': MAINTENANCE_END_TIME,
+        'allowedUsers': MAINTENANCE_ALLOWED_USERS
+    })
+
+@app.route('/api/maintenance/status', methods=['GET'])
+def get_maintenance_status():
+    """公开接口：获取维护状态（供前端检查）"""
+    # 检查当前用户是否在允许列表中
+    user_allowed = False
+    auth_header = request.headers.get('Authorization', '')
+    if auth_header.startswith('Bearer '):
+        token = auth_header[7:]
+        payload = verify_jwt_token(token)
+        if payload:
+            user_id = payload.get('user_id')
+            user_allowed = user_id in MAINTENANCE_ALLOWED_USERS
+    
+    return jsonify({
+        'enabled': MAINTENANCE_MODE,
+        'message': MAINTENANCE_MESSAGE,
+        'endTime': MAINTENANCE_END_TIME,
+        'userAllowed': user_allowed
+    })
 
 # ========== 候车室设置 API ==========
 

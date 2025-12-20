@@ -721,6 +721,52 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- 维护模式 -->
+                <div class="table-container" style="margin-top: 1rem;">
+                    <div class="table-header">
+                        <span class="title"><i class="bi bi-tools" style="margin-right: 4px;"></i> 维护模式</span>
+                    </div>
+                    <div style="padding: 1.5rem;">
+                        <div style="display: flex; flex-direction: column; gap: 1.5rem; max-width: 500px;">
+                            <div>
+                                <label style="display: flex; align-items: center; gap: 0.75rem; cursor: pointer;">
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="maintenanceEnabled" onchange="saveMaintenanceSettings()">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                    <div>
+                                        <div style="font-weight: 600;">开启维护模式</div>
+                                        <div class="text-muted" style="font-size: 0.85rem;">开启后非白名单用户将看到维护页面</div>
+                                    </div>
+                                </label>
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">维护提示信息</span>
+                                </label>
+                                <input type="text" id="maintenanceMessage" placeholder="正在修车，请稍后再来" style="width: 100%; padding: 0.5rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">预计恢复时间</span>
+                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">上海时间</span>
+                                </label>
+                                <input type="datetime-local" id="maintenanceEndTime" style="padding: 0.5rem;">
+                            </div>
+                            <div>
+                                <label style="display: block; margin-bottom: 0.5rem;">
+                                    <span style="font-weight: 600;">白名单用户</span>
+                                    <span class="text-muted" style="font-size: 0.85rem; margin-left: 0.5rem;">允许访问的用户ID，逗号分隔</span>
+                                </label>
+                                <input type="text" id="maintenanceAllowedUsers" placeholder="123,456,789" style="width: 100%; padding: 0.5rem;">
+                            </div>
+                            <div>
+                                <button class="btn btn-primary" onclick="saveMaintenanceSettings()">保存设置</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -820,7 +866,8 @@
                 loadMonitor(),
                 loadWaitingRoomSettings(),
                 loadScheduledOpen(),
-                loadSyncInterval()
+                loadSyncInterval(),
+                loadMaintenanceSettings()
             ]);
             startMonitorTimer();
         }
@@ -1014,6 +1061,58 @@
                 alert('同步间隔已保存');
                 loadSyncInterval();
             } else {
+                alert(data.error || '保存失败');
+            }
+        }
+
+        // ========== 维护模式 ==========
+        async function loadMaintenanceSettings() {
+            const { ok, data } = await api('/admin/maintenance');
+            if (!ok) return;
+            
+            document.getElementById('maintenanceEnabled').checked = data.enabled;
+            document.getElementById('maintenanceMessage').value = data.message || '';
+            document.getElementById('maintenanceAllowedUsers').value = (data.allowedUsers || []).join(',');
+            
+            if (data.endTime) {
+                // 转换 UTC 时间为本地时间显示
+                const dt = new Date(data.endTime);
+                if (!isNaN(dt.getTime())) {
+                    document.getElementById('maintenanceEndTime').value = dt.toISOString().slice(0, 16);
+                }
+            } else {
+                document.getElementById('maintenanceEndTime').value = '';
+            }
+        }
+        
+        async function saveMaintenanceSettings() {
+            const enabled = document.getElementById('maintenanceEnabled').checked;
+            const message = document.getElementById('maintenanceMessage').value || '正在修车，请稍后再来';
+            const endTimeVal = document.getElementById('maintenanceEndTime').value;
+            const allowedUsersVal = document.getElementById('maintenanceAllowedUsers').value;
+            
+            let endTime = '';
+            if (endTimeVal) {
+                const dt = new Date(endTimeVal);
+                endTime = dt.toISOString();
+            }
+            
+            const allowedUsers = allowedUsersVal
+                .split(',')
+                .map(s => s.trim())
+                .filter(s => s && !isNaN(parseInt(s)))
+                .map(s => parseInt(s));
+            
+            const { ok, data } = await api('/admin/maintenance', {
+                method: 'POST',
+                body: JSON.stringify({ enabled, message, endTime, allowedUsers })
+            });
+            
+            if (ok) {
+                loadMaintenanceSettings();
+            } else {
+                // 恢复开关状态
+                document.getElementById('maintenanceEnabled').checked = !enabled;
                 alert(data.error || '保存失败');
             }
         }
