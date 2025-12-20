@@ -2204,6 +2204,7 @@ def get_monitor_status():
         'testMode': TEST_MODE,
         'dispatchMode': DISPATCH_MODE,
         'databaseType': 'PostgreSQL' if USE_POSTGRES else 'SQLite',
+        'workerPid': os.getpid(),
         'teams': team_status,
         'lastSyncTime': monitor_state.get('last_sync_time'),
         'lastBatchTime': monitor_state.get('last_batch_time')
