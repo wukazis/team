@@ -2342,7 +2342,9 @@ def get_scheduled_opens_public():
     for row in rows:
         scheduled_time = row['scheduled_time']
         if isinstance(scheduled_time, datetime):
-            scheduled_time = scheduled_time.isoformat()
+            scheduled_time = scheduled_time.isoformat() + 'Z'  # 加 Z 表示 UTC
+        elif isinstance(scheduled_time, str) and not scheduled_time.endswith('Z'):
+            scheduled_time = scheduled_time + 'Z'
         schedules.append({
             'scheduledTime': scheduled_time,
             'maxQueue': row['max_queue']
@@ -2368,7 +2370,9 @@ def get_scheduled_open():
     for row in rows:
         scheduled_time = row['scheduled_time']
         if isinstance(scheduled_time, datetime):
-            scheduled_time = scheduled_time.isoformat()
+            scheduled_time = scheduled_time.isoformat() + 'Z'  # 加 Z 表示 UTC
+        elif isinstance(scheduled_time, str) and not scheduled_time.endswith('Z'):
+            scheduled_time = scheduled_time + 'Z'
         schedules.append({
             'id': row['id'],
             'scheduledTime': scheduled_time,
