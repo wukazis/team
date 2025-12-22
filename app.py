@@ -1089,7 +1089,7 @@ def user_heartbeat():
             'avatar': request.user.get('avatar_template', ''),
             'last_seen': time.time()
         }
-    return jsonify({'status': 'ok'})
+    return jsonify({'status': 
 
 @app.route('/api/user/cooldown')
 @jwt_required
