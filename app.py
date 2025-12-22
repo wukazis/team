@@ -356,8 +356,8 @@ def init_db_pool():
     global db_pool
     if USE_POSTGRES and db_pool is None:
         db_pool = psycopg2.pool.ThreadedConnectionPool(
-            minconn=5,
-            maxconn=50,
+            minconn=10,
+            maxconn=100,
             dsn=DATABASE_URL
         )
         print("PostgreSQL 连接池已初始化")
