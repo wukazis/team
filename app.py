@@ -1043,24 +1043,36 @@ def user_state():
         }
     })
 
+# 在线用户清理缓存
+_online_users_cache = {'data': None, 'time': 0}
+ONLINE_CACHE_TTL = 5  # 缓存5秒
+
 @app.route('/api/online-users')
 def get_online_users():
     """获取在线用户列表"""
+    global _online_users_cache
     now = time.time()
+    
+    # 使用缓存避免频繁计算
+    if _online_users_cache['data'] and now - _online_users_cache['time'] < ONLINE_CACHE_TTL:
+        return jsonify(_online_users_cache['data'])
+    
     # 清理过期用户
     expired = [uid for uid, data in online_users.items() if now - data['last_seen'] > ONLINE_TIMEOUT]
     for uid in expired:
         del online_users[uid]
     
-    # 返回在线用户列表
+    # 返回在线用户列表（最多50人）
     users = [
         {'username': data['username'], 'name': data['name'], 'avatar': data['avatar']}
-        for data in online_users.values()
+        for data in list(online_users.values())[:50]
     ]
-    return jsonify({
-        'count': len(users),
+    result = {
+        'count': len(online_users),
         'users': users
-    })
+    }
+    _online_users_cache = {'data': result, 'time': now}
+    return jsonify(result)
 
 @app.route('/api/user/heartbeat', methods=['POST'])
 @jwt_required
