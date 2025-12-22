@@ -1223,8 +1223,16 @@ def join_waiting_queue():
     """加入排队队列（需要登录）"""
     data = request.json or {}
     email = (data.get('email') or '').strip().lower()
+    turnstile_token = data.get('turnstileToken')
     user_id = request.user['user_id']
     trust_level = request.user.get('trust_level', 0)
+    
+    # Turnstile 验证
+    if CF_TURNSTILE_SECRET_KEY:
+        if not turnstile_token:
+            return jsonify({'error': '请完成人机验证'}), 400
+        if not verify_turnstile(turnstile_token, get_client_ip()):
+            return jsonify({'error': '人机验证失败，请重试'}), 400
     
     # 信任级别检查：需要 TL3 及以上
     if trust_level < 3:

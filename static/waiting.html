@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>候车室 - Team Invite</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%232563eb' stroke='%231d4ed8' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'>W</text></svg>">
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <style>
         :root {
             font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -612,10 +613,11 @@
             <!-- 排队表单 -->
             <div id="queueForm" class="hidden">
                 <p class="muted" style="margin-bottom: 1rem;">留下邮箱，有空位时自动发送邀请码到您的邮箱</p>
-                <div style="display: flex; gap: 0.75rem;">
+                <div style="display: flex; gap: 0.75rem; margin-bottom: 0.75rem;">
                     <input type="email" id="queueEmail" placeholder="请输入邮箱" required style="flex: 1; padding: 0.7rem 1rem; border: 1px solid var(--border); border-radius: 8px; font-size: 0.95rem; background: var(--card); color: var(--text);">
-                    <button id="joinQueueBtn" onclick="joinQueue()" class="btn btn-primary">排队</button>
                 </div>
+                <div id="queueTurnstileContainer" style="margin-bottom: 0.75rem;"></div>
+                <button id="joinQueueBtn" onclick="joinQueue()" class="btn btn-primary" style="width: 100%;">排队</button>
                 <p id="queueStatus" class="muted" style="margin-top: 0.75rem; font-size: 0.85rem;"></p>
             </div>
             <!-- 已排队状态 -->
@@ -996,6 +998,8 @@
 
         // ========== 登录检查 ==========
         let jwtToken = localStorage.getItem('token') || '';
+        let turnstileSiteKey = null;
+        let queueTurnstileWidgetId = null;
 
         async function checkLogin() {
             if (!jwtToken) {
@@ -1045,6 +1049,19 @@
         }
 
         // ========== 排队功能 ==========
+        function initQueueTurnstile() {
+            if (!turnstileSiteKey || !window.turnstile) return;
+            const container = document.getElementById('queueTurnstileContainer');
+            if (!container) return;
+            
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            queueTurnstileWidgetId = window.turnstile.render(container, {
+                sitekey: turnstileSiteKey,
+                theme: isDark ? 'dark' : 'light',
+                size: 'flexible'
+            });
+        }
+        
         async function joinQueue() {
             const email = document.getElementById('queueEmail').value.trim();
             const btn = document.getElementById('joinQueueBtn');
@@ -1053,6 +1070,16 @@
             if (!email || !email.includes('@')) {
                 document.getElementById('queueStatus').textContent = '请输入有效的邮箱地址';
                 return;
+            }
+            
+            // Turnstile 验证
+            let turnstileToken = null;
+            if (turnstileSiteKey && window.turnstile && queueTurnstileWidgetId !== null) {
+                turnstileToken = window.turnstile.getResponse(queueTurnstileWidgetId);
+                if (!turnstileToken) {
+                    document.getElementById('queueStatus').textContent = '请完成人机验证';
+                    return;
+                }
             }
 
             // 禁用按钮防止重复点击
@@ -1066,7 +1093,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${jwtToken}`
                     },
-                    body: JSON.stringify({ email })
+                    body: JSON.stringify({ email, turnstileToken })
                 });
                 const data = await res.json();
                 
@@ -1076,6 +1103,10 @@
                     document.getElementById('queueStatus').textContent = data.error || '排队失败';
                     btn.disabled = false;
                     btn.textContent = '排队';
+                    // 重置 Turnstile
+                    if (window.turnstile && queueTurnstileWidgetId !== null) {
+                        window.turnstile.reset(queueTurnstileWidgetId);
+                    }
                 }
             } catch (err) {
                 document.getElementById('queueStatus').textContent = '网络错误，请重试';
@@ -1333,6 +1364,15 @@
 
         // 初始化：先检查登录状态和候车室开放状态
         (async () => {
+            // 获取 Turnstile site key
+            try {
+                const keyRes = await fetch('/api/turnstile/site-key');
+                if (keyRes.ok) {
+                    const keyData = await keyRes.json();
+                    turnstileSiteKey = keyData.siteKey;
+                }
+            } catch (e) {}
+            
             const loggedIn = await checkLogin();
             if (loggedIn) {
                 // 检查候车室是否开放和用户是否已验证
@@ -1370,6 +1410,9 @@
                 startScheduleTimer();
                 // 每 30 秒自动刷新
                 refreshTimer = setInterval(loadTeamStatus, 30000);
+                
+                // 初始化 Turnstile
+                initQueueTurnstile();
             }
             hideLoading();
         })();
