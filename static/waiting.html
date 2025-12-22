@@ -978,6 +978,15 @@
             html.setAttribute('data-theme', isDark ? '' : 'dark');
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
             updateThemeIcon();
+            // 重新渲染 Turnstile 以匹配主题
+            if (turnstileSiteKey && window.turnstile && queueTurnstileWidgetId !== null) {
+                window.turnstile.remove(queueTurnstileWidgetId);
+                queueTurnstileWidgetId = window.turnstile.render(document.getElementById('queueTurnstileContainer'), {
+                    sitekey: turnstileSiteKey,
+                    theme: isDark ? 'light' : 'dark',  // isDark 是切换前的状态
+                    size: 'flexible'
+                });
+            }
         }
         
         function updateThemeIcon() {
