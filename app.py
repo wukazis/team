@@ -113,7 +113,6 @@ GLOBAL_RATE_LIMITS = {
 # 在线用户追踪 {user_id: {'username': str, 'name': str, 'avatar': str, 'last_seen': timestamp}}
 online_users = {}
 ONLINE_TIMEOUT = 60  # 60秒无活动视为离线
-}
 
 def get_client_ip():
     """获取客户端真实IP"""
