@@ -2410,12 +2410,17 @@ def get_waiting_room_settings():
     # 检查当前用户是否在队列中和是否已验证（如果有 JWT token）
     user_in_queue = False
     user_verified = False
+    is_admin_user = False
     auth_header = request.headers.get('Authorization', '')
     if auth_header.startswith('Bearer '):
         token = auth_header[7:]
         payload = verify_jwt_token(token)
         if payload:
             user_id = payload.get('user_id')
+            username = payload.get('username', '')
+            # 检查是否是管理员用户
+            if username == 'wukazi':
+                is_admin_user = True
             in_queue = conn.execute('SELECT 1 FROM waiting_queue WHERE user_id = ?', (user_id,)).fetchone()
             user_in_queue = in_queue is not None
             # 检查用户是否已验证
@@ -2431,7 +2436,8 @@ def get_waiting_room_settings():
         'scheduledTime': scheduled_time,
         'scheduledMaxQueue': scheduled_max_queue,
         'userInQueue': user_in_queue,
-        'userVerified': user_verified
+        'userVerified': user_verified,
+        'isAdmin': is_admin_user
     })
 
 @app.route('/api/admin/waiting-room-settings', methods=['POST'])
