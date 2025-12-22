@@ -107,7 +107,7 @@ RATE_LIMITS = {
 # 全局限流（针对高并发场景）
 global_rate_limit = {'queue_join': [], 'lock': threading.Lock()}
 GLOBAL_RATE_LIMITS = {
-    'queue_join': (1, 50),    # 每秒最多处理50个排队请求
+    'queue_join': (1, 150),    # 每秒最多处理150个排队请求
 }
 
 # 在线用户追踪 {user_id: {'username': str, 'name': str, 'avatar': str, 'last_seen': timestamp}}
