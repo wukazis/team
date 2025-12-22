@@ -110,6 +110,11 @@ GLOBAL_RATE_LIMITS = {
     'queue_join': (1, 50),    # 每秒最多处理50个排队请求
 }
 
+# 在线用户追踪 {user_id: {'username': str, 'name': str, 'avatar': str, 'last_seen': timestamp}}
+online_users = {}
+ONLINE_TIMEOUT = 60  # 60秒无活动视为离线
+}
+
 def get_client_ip():
     """获取客户端真实IP"""
     if request.headers.get('X-Forwarded-For'):
@@ -1020,6 +1025,14 @@ def user_state():
     if not user:
         return jsonify({'error': '用户不存在'}), 404
     
+    # 更新在线状态
+    online_users[user_id] = {
+        'username': user['username'],
+        'name': user['name'] or user['username'],
+        'avatar': user['avatar_template'],
+        'last_seen': time.time()
+    }
+    
     return jsonify({
         'user': {
             'user_id': user['id'],
@@ -1030,6 +1043,42 @@ def user_state():
             'hasUsed': bool(user['has_used'])
         }
     })
+
+@app.route('/api/online-users')
+def get_online_users():
+    """获取在线用户列表"""
+    now = time.time()
+    # 清理过期用户
+    expired = [uid for uid, data in online_users.items() if now - data['last_seen'] > ONLINE_TIMEOUT]
+    for uid in expired:
+        del online_users[uid]
+    
+    # 返回在线用户列表
+    users = [
+        {'username': data['username'], 'name': data['name'], 'avatar': data['avatar']}
+        for data in online_users.values()
+    ]
+    return jsonify({
+        'count': len(users),
+        'users': users
+    })
+
+@app.route('/api/user/heartbeat', methods=['POST'])
+@jwt_required
+def user_heartbeat():
+    """用户心跳，保持在线状态"""
+    user_id = request.user['user_id']
+    if user_id in online_users:
+        online_users[user_id]['last_seen'] = time.time()
+    else:
+        # 如果不在列表中，重新添加
+        online_users[user_id] = {
+            'username': request.user.get('username', ''),
+            'name': request.user.get('name', '') or request.user.get('username', ''),
+            'avatar': request.user.get('avatar_template', ''),
+            'last_seen': time.time()
+        }
+    return jsonify({'status': 'ok'})
 
 @app.route('/api/user/cooldown')
 @jwt_required
