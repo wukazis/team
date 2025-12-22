@@ -2388,14 +2388,16 @@ def get_waiting_room_settings():
     max_queue = int(max_queue_row[0]) if max_queue_row else 0
     
     # 从 scheduled_opens 表获取最近的定时开放
-    scheduled_row = conn.execute("SELECT scheduled_time FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC LIMIT 1").fetchone()
+    scheduled_row = conn.execute("SELECT scheduled_time, max_queue FROM scheduled_opens WHERE executed = 0 ORDER BY scheduled_time ASC LIMIT 1").fetchone()
     scheduled_time = None
+    scheduled_max_queue = 0
     if scheduled_row:
         st = scheduled_row['scheduled_time']
         if isinstance(st, datetime):
             scheduled_time = st.isoformat() + 'Z'  # 加 Z 表示 UTC
         elif isinstance(st, str):
             scheduled_time = st if st.endswith('Z') else st + 'Z'
+        scheduled_max_queue = scheduled_row['max_queue'] or 0
     
     # 检查当前用户是否在队列中和是否已验证（如果有 JWT token）
     user_in_queue = False
@@ -2419,6 +2421,7 @@ def get_waiting_room_settings():
         'maxQueue': max_queue,
         'currentQueue': queue_count,
         'scheduledTime': scheduled_time,
+        'scheduledMaxQueue': scheduled_max_queue,
         'userInQueue': user_in_queue,
         'userVerified': user_verified
     })

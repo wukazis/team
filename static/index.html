@@ -611,6 +611,7 @@
                     候车室暂不开放
                 </p>
                 <p id="waitingCountdown" style="font-weight: 600; font-size: 1.1rem; transition: color 0.3s;"></p>
+                <p id="waitingMaxQueue" class="hidden" style="color: var(--muted); font-size: 0.9rem; margin-top: 0.3rem;"></p>
             </div>
             <!-- 冷却状态 -->
             <div id="waitingCooldown" class="hidden">
@@ -1113,6 +1114,15 @@
                             isCountdownRefreshing = false;
                             // 隐藏"候车室暂不开放"文字
                             document.getElementById('waitingClosedText').classList.add('hidden');
+                            
+                            // 显示开放位置数量
+                            const maxQueueEl = document.getElementById('waitingMaxQueue');
+                            if (settings.scheduledMaxQueue && settings.scheduledMaxQueue > 0) {
+                                maxQueueEl.textContent = `本次开放 ${settings.scheduledMaxQueue} 个位置`;
+                                maxQueueEl.classList.remove('hidden');
+                            } else {
+                                maxQueueEl.classList.add('hidden');
+                            }
                             
                             let sseSource = null;
                             
