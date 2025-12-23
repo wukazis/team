@@ -923,8 +923,8 @@ def oauth_callback():
     avatar_template = user_data.get('avatar_template', '')
     trust_level = user_data.get('trust_level', 0)
     
-    # 信任级别检查：需要 TL2 及以上才能登录
-    if trust_level < 2:
+    # 信任级别检查：需要 TL3 及以上才能登录
+    if trust_level < 3:
         return redirect(f'{APP_BASE_URL}?error=trust_level&tl={trust_level}')
     
     # 保存/更新用户
@@ -1452,13 +1452,16 @@ def credit_notify():
         print(f"[Credit Notify] 订单已处理: {out_trade_no}")
         return 'success'
     
-    # 验证金额
-    if str(order['amount']) != str(money):
+    # 验证金额 - 转换为相同格式比较
+    order_amount = f"{float(order['amount']):.2f}"
+    callback_amount = f"{float(money):.2f}"
+    if order_amount != callback_amount:
         conn.close()
-        print(f"[Credit Notify] 金额不匹配: 订单={order['amount']}, 回调={money}")
+        print(f"[Credit Notify] 金额不匹配: 订单={order_amount}, 回调={callback_amount}")
         return 'fail', 400
     
-    # 查找可用车位
+    # 测试模式：跳过车位检查，直接生成邀请码
+    # 查找可用车位（如果有的话用于绑定）
     available_account = conn.execute('''
         SELECT * FROM team_accounts 
         WHERE enabled = 1 AND seats_in_use < max_seats
@@ -1466,10 +1469,7 @@ def credit_notify():
         LIMIT 1
     ''').fetchone()
     
-    if not available_account:
-        conn.close()
-        print(f"[Credit Notify] 没有可用车位")
-        return 'fail', 400
+    team_account_id = available_account['id'] if available_account else None
     
     # 生成邀请码
     invite_code = generate_code()
@@ -1479,7 +1479,7 @@ def credit_notify():
         conn.execute('''
             INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
             VALUES (%s, %s, %s, 1)
-        ''', (invite_code, available_account['id'], order['user_id']))
+        ''', (invite_code, team_account_id, order['user_id']))
         conn.execute('''
             UPDATE credit_orders SET status = 'paid', invite_code = %s, paid_at = NOW()
             WHERE order_id = %s
@@ -1488,7 +1488,7 @@ def credit_notify():
         conn.execute('''
             INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
             VALUES (?, ?, ?, 1)
-        ''', (invite_code, available_account['id'], order['user_id']))
+        ''', (invite_code, team_account_id, order['user_id']))
         conn.execute('''
             UPDATE credit_orders SET status = 'paid', invite_code = ?, paid_at = datetime('now')
             WHERE order_id = ?
