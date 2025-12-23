@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>幸运抽奖 - Team Invite</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23f59e0b' stroke='%23d97706' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>🎰</text></svg>">
+    <title>幸运开箱 - Team Invite</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>📦</text></svg>">
     <style>
         :root {
             --bg: #0f172a;
@@ -16,6 +16,8 @@
             --primary-hover: #d97706;
             --success: #22c55e;
             --danger: #ef4444;
+            --epic: #a855f7;
+            --rare: #3b82f6;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -28,20 +30,15 @@
             align-items: center;
             padding: 2rem 1rem;
         }
-        .container {
-            max-width: 500px;
-            width: 100%;
-        }
-        .header {
-            text-align: center;
-            margin-bottom: 2rem;
-        }
+        .container { max-width: 500px; width: 100%; }
+        .header { text-align: center; margin-bottom: 2rem; }
         .header h1 {
             font-size: 2rem;
             margin-bottom: 0.5rem;
             background: linear-gradient(135deg, #f59e0b, #fbbf24);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         .header p { color: var(--muted); }
         .card {
@@ -59,12 +56,7 @@
             border-bottom: 1px solid var(--border);
             margin-bottom: 1.5rem;
         }
-        .user-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            background: var(--primary);
-        }
+        .user-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--primary); }
         .user-name { font-weight: 600; }
         .user-meta { color: var(--muted); font-size: 0.85rem; }
         .stats {
@@ -74,79 +66,115 @@
             text-align: center;
             margin-bottom: 1.5rem;
         }
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
-        .stat-label {
-            font-size: 0.8rem;
-            color: var(--muted);
-        }
-        .lottery-wheel {
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+        .stat-label { font-size: 0.8rem; color: var(--muted); }
+        
+        /* 开箱区域 */
+        .box-container {
             position: relative;
-            width: 280px;
-            height: 280px;
-            margin: 0 auto 2rem;
+            width: 200px;
+            height: 200px;
+            margin: 2rem auto;
+            perspective: 1000px;
         }
-        .wheel {
+        .box {
             width: 100%;
             height: 100%;
-            border-radius: 50%;
-            background: conic-gradient(
-                #22c55e 0deg 72deg,
-                #ef4444 72deg 144deg,
-                #22c55e 144deg 216deg,
-                #ef4444 216deg 288deg,
-                #22c55e 288deg 360deg
-            );
-            border: 8px solid var(--primary);
-            box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);
-            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+            position: relative;
+            transform-style: preserve-3d;
+            transition: transform 0.8s ease;
         }
-        .wheel-center {
+        .box.opening {
+            animation: shake 0.5s ease, openBox 0.8s ease 0.5s forwards;
+        }
+        .box-body {
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 60px;
-            height: 60px;
-            background: var(--card);
-            border-radius: 50%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(145deg, #4a5568, #2d3748);
+            border-radius: 12px;
             border: 4px solid var(--primary);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
+            font-size: 5rem;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 -5px 20px rgba(0,0,0,0.3);
+        }
+        .box-lid {
+            position: absolute;
+            width: 110%;
+            height: 40px;
+            left: -5%;
+            top: -20px;
+            background: linear-gradient(145deg, #f59e0b, #d97706);
+            border-radius: 8px 8px 0 0;
+            transform-origin: bottom;
+            transition: transform 0.8s ease;
+            box-shadow: 0 -5px 20px rgba(245, 158, 11, 0.3);
+        }
+        .box.opening .box-lid {
+            animation: openLid 0.8s ease 0.5s forwards;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0) rotate(0); }
+            20% { transform: translateX(-10px) rotate(-5deg); }
+            40% { transform: translateX(10px) rotate(5deg); }
+            60% { transform: translateX(-10px) rotate(-5deg); }
+            80% { transform: translateX(10px) rotate(5deg); }
+        }
+        @keyframes openLid {
+            0% { transform: rotateX(0); }
+            100% { transform: rotateX(-120deg); }
+        }
+        @keyframes openBox {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+        
+        /* 奖品弹出 */
+        .prize-popup {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0);
+            font-size: 4rem;
+            opacity: 0;
             z-index: 10;
         }
-        .wheel-pointer {
+        .prize-popup.show {
+            animation: prizeAppear 0.5s ease 1.2s forwards;
+        }
+        @keyframes prizeAppear {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            50% { transform: translate(-50%, -150%) scale(1.5); opacity: 1; }
+            100% { transform: translate(-50%, -120%) scale(1); opacity: 1; }
+        }
+        
+        /* 粒子效果 */
+        .particles {
             position: absolute;
-            top: -15px;
+            top: 50%;
             left: 50%;
-            transform: translateX(-50%);
             width: 0;
             height: 0;
-            border-left: 15px solid transparent;
-            border-right: 15px solid transparent;
-            border-top: 30px solid var(--primary);
-            z-index: 20;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        }
-        .wheel-labels {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
             pointer-events: none;
         }
-        .wheel-label {
+        .particle {
             position: absolute;
-            font-weight: 700;
-            font-size: 0.9rem;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            opacity: 0;
         }
+        .particles.active .particle {
+            animation: particleBurst 1s ease forwards;
+        }
+        @keyframes particleBurst {
+            0% { transform: translate(0, 0) scale(1); opacity: 1; }
+            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        }
+        
         .btn {
             display: block;
             width: 100%;
@@ -166,19 +194,13 @@
             transform: translateY(-2px);
             box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
         }
-        .btn-primary:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
         .btn-outline {
             background: transparent;
             border: 2px solid var(--border);
             color: var(--text);
         }
-        .btn-outline:hover {
-            border-color: var(--primary);
-            color: var(--primary);
-        }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
         .price-tag {
             display: inline-flex;
             align-items: center;
@@ -189,13 +211,13 @@
             margin-bottom: 1rem;
             font-size: 0.9rem;
         }
+        
+        /* 结果弹窗 */
         .result-modal {
             display: none;
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
             background: rgba(0,0,0,0.8);
             z-index: 1000;
             align-items: center;
@@ -215,14 +237,8 @@
             from { transform: scale(0.8); opacity: 0; }
             to { transform: scale(1); opacity: 1; }
         }
-        .result-icon {
-            font-size: 4rem;
-            margin-bottom: 1rem;
-        }
-        .result-title {
-            font-size: 1.5rem;
-            margin-bottom: 0.5rem;
-        }
+        .result-icon { font-size: 4rem; margin-bottom: 1rem; }
+        .result-title { font-size: 1.5rem; margin-bottom: 0.5rem; }
         .result-code {
             background: var(--bg);
             padding: 1rem;
@@ -233,10 +249,7 @@
             color: var(--success);
             margin: 1rem 0;
         }
-        .history {
-            max-height: 200px;
-            overflow-y: auto;
-        }
+        .history { max-height: 200px; overflow-y: auto; }
         .history-item {
             display: flex;
             justify-content: space-between;
@@ -253,28 +266,23 @@
         }
         .badge-win { background: rgba(34, 197, 94, 0.2); color: var(--success); }
         .badge-lose { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
-        .login-prompt {
-            text-align: center;
-            padding: 3rem 1rem;
-        }
+        .login-prompt { text-align: center; padding: 3rem 1rem; }
         .hidden { display: none !important; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎰 幸运抽奖</h1>
-            <p>试试手气，赢取邀请码！</p>
+            <h1>📦 幸运开箱</h1>
+            <p>开启神秘宝箱，赢取邀请码！</p>
         </div>
 
-        <!-- 未登录 -->
         <div id="loginPrompt" class="card login-prompt hidden">
             <p style="font-size: 1.2rem; margin-bottom: 1rem;">请先登录</p>
-            <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与抽奖</p>
+            <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与开箱</p>
             <button onclick="goToLogin()" class="btn btn-primary" style="display: inline-block; width: auto; padding: 0.75rem 2rem;">前往登录</button>
         </div>
 
-        <!-- 已登录 -->
         <div id="mainContent" class="hidden">
             <div class="card">
                 <div class="user-info">
@@ -292,51 +300,53 @@
                     </div>
                     <div>
                         <div class="stat-value" id="totalDraws">-</div>
-                        <div class="stat-label">累计抽奖</div>
+                        <div class="stat-label">累计开箱</div>
                     </div>
                     <div>
                         <div class="stat-value" id="totalWins">-</div>
-                        <div class="stat-label">中奖次数</div>
+                        <div class="stat-label">获得奖品</div>
                     </div>
                 </div>
 
-                <div class="lottery-wheel">
-                    <div class="wheel-pointer"></div>
-                    <div id="wheel" class="wheel"></div>
-                    <div class="wheel-center">🎯</div>
+                <div class="box-container">
+                    <div id="box" class="box">
+                        <div class="box-lid"></div>
+                        <div class="box-body">🎁</div>
+                    </div>
+                    <div id="prize" class="prize-popup">🎫</div>
+                    <div id="particles" class="particles"></div>
                 </div>
 
                 <div style="text-align: center;">
-                    <div class="price-tag">
+                    <div class="price-tag" id="priceTag">
                         <span>💰</span>
-                        <span>每次抽奖消耗 <strong>2 Credit</strong></span>
+                        <span>每次开箱消耗 <strong>2 Credit</strong></span>
                     </div>
                 </div>
 
                 <button id="drawBtn" class="btn btn-primary" onclick="startDraw()">
-                    🎲 开始抽奖
+                    🔓 开启宝箱
                 </button>
                 <p id="drawStatus" style="text-align: center; margin-top: 0.75rem; color: var(--muted); font-size: 0.85rem;"></p>
             </div>
 
             <div class="card">
-                <h3 style="margin-bottom: 1rem;">📜 抽奖记录</h3>
+                <h3 style="margin-bottom: 1rem;">📜 开箱记录</h3>
                 <div id="historyList" class="history">
                     <p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>
                 </div>
             </div>
 
             <div style="text-align: center; margin-top: 1rem;">
-                <a href="/" class="btn btn-outline" style="display: inline-block; width: auto; padding: 0.5rem 1.5rem; text-decoration: none;">返回首页</a>
+                <a href="https://www.6666727.xyz/" class="btn btn-outline" style="display: inline-block; width: auto; padding: 0.5rem 1.5rem; text-decoration: none;">返回首页</a>
             </div>
         </div>
     </div>
 
-    <!-- 结果弹窗 -->
     <div id="resultModal" class="result-modal">
         <div class="result-content">
             <div id="resultIcon" class="result-icon">🎉</div>
-            <div id="resultTitle" class="result-title">恭喜中奖！</div>
+            <div id="resultTitle" class="result-title">恭喜获得！</div>
             <div id="resultDesc" style="color: var(--muted); margin-bottom: 1rem;">您获得了一个邀请码</div>
             <div id="resultCode" class="result-code hidden">-</div>
             <button onclick="closeResult()" class="btn btn-primary" style="margin-top: 1rem;">确定</button>
@@ -347,16 +357,14 @@
         let jwtToken = localStorage.getItem('token') || '';
         let currentUser = null;
         let isDrawing = false;
-        let wheelRotation = 0;
 
-        // 检查 URL 参数中的 token（从 www 域名跳转过来）
+        // 检查 URL 参数中的 token
         (function checkUrlToken() {
             const params = new URLSearchParams(window.location.search);
             const urlToken = params.get('token');
             if (urlToken) {
                 localStorage.setItem('token', urlToken);
                 jwtToken = urlToken;
-                // 清除 URL 中的 token 参数
                 const newUrl = window.location.pathname + (params.get('order_id') ? `?order_id=${params.get('order_id')}` : '');
                 history.replaceState({}, '', newUrl || '/');
             }
@@ -367,7 +375,6 @@
                 document.getElementById('loginPrompt').classList.remove('hidden');
                 return false;
             }
-            
             try {
                 const res = await fetch('/api/user/state', {
                     headers: { 'Authorization': `Bearer ${jwtToken}` }
@@ -387,18 +394,14 @@
         }
 
         function goToLogin() {
-            // 跳转到 www 域名登录，带上回调地址
-            const returnUrl = encodeURIComponent(window.location.href);
-            window.location.href = `https://www.6666727.xyz/?lottery_return=${returnUrl}`;
+            window.location.href = '/auth/linuxdo';
         }
 
         function renderUser() {
             if (!currentUser) return;
-            
             const avatar = currentUser.avatar_template 
                 ? currentUser.avatar_template.replace('{size}', '96')
                 : `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%23f59e0b"/><text x="50" y="65" font-size="50" fill="white" text-anchor="middle">${currentUser.username[0].toUpperCase()}</text></svg>`;
-            
             document.getElementById('userAvatar').src = avatar;
             document.getElementById('userName').textContent = currentUser.name || currentUser.username;
             document.getElementById('userMeta').textContent = `@${currentUser.username} · TL${currentUser.trust_level}`;
@@ -414,6 +417,9 @@
                     document.getElementById('todayChances').textContent = data.todayRemaining || 0;
                     document.getElementById('totalDraws').textContent = data.totalDraws || 0;
                     document.getElementById('totalWins').textContent = data.totalWins || 0;
+                    if (data.isAdmin) {
+                        document.getElementById('priceTag').innerHTML = '<span>👑</span><span>管理员 <strong>免费开箱</strong></span>';
+                    }
                 }
             } catch (err) {
                 console.error('加载统计失败:', err);
@@ -440,23 +446,65 @@
                 container.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>';
                 return;
             }
-            
             container.innerHTML = records.slice(0, 20).map(r => `
                 <div class="history-item">
                     <span>${new Date(r.createdAt).toLocaleString('zh-CN')}</span>
-                    <span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎉 中奖' : '未中奖'}</span>
+                    <span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎫 邀请码' : '📦 空箱'}</span>
                 </div>
             `).join('');
         }
 
+        function createParticles() {
+            const container = document.getElementById('particles');
+            container.innerHTML = '';
+            const colors = ['#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ef4444'];
+            for (let i = 0; i < 20; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.setProperty('--tx', `${(Math.random() - 0.5) * 200}px`);
+                particle.style.setProperty('--ty', `${(Math.random() - 0.5) * 200}px`);
+                particle.style.animationDelay = `${Math.random() * 0.3}s`;
+                container.appendChild(particle);
+            }
+        }
+
+        async function playOpenAnimation(won) {
+            const box = document.getElementById('box');
+            const prize = document.getElementById('prize');
+            const particles = document.getElementById('particles');
+            
+            createParticles();
+            box.classList.add('opening');
+            
+            await new Promise(r => setTimeout(r, 1300));
+            
+            prize.textContent = won ? '🎫' : '💨';
+            prize.classList.add('show');
+            if (won) particles.classList.add('active');
+            
+            await new Promise(r => setTimeout(r, 800));
+        }
+
+        function resetBox() {
+            const box = document.getElementById('box');
+            const prize = document.getElementById('prize');
+            const particles = document.getElementById('particles');
+            box.classList.remove('opening');
+            prize.classList.remove('show');
+            particles.classList.remove('active');
+        }
+
         async function startDraw() {
             if (isDrawing) return;
+            isDrawing = true;
             
             const btn = document.getElementById('drawBtn');
             const status = document.getElementById('drawStatus');
             
             btn.disabled = true;
             status.textContent = '正在处理...';
+            resetBox();
             
             try {
                 const res = await fetch('/api/lottery/draw', {
@@ -469,15 +517,16 @@
                 const data = await res.json();
                 
                 if (!res.ok) {
-                    status.textContent = data.error || '抽奖失败';
+                    status.textContent = data.error || '开箱失败';
                     btn.disabled = false;
+                    isDrawing = false;
                     return;
                 }
                 
-                // 管理员免费抽奖，直接显示结果
+                // 管理员免费开箱
                 if (data.free) {
-                    status.textContent = '';
-                    await spinWheel(data.won);
+                    status.textContent = '开箱中...';
+                    await playOpenAnimation(data.won);
                     showResult(data.won, data.inviteCode);
                     return;
                 }
@@ -490,6 +539,7 @@
             } catch (err) {
                 status.textContent = '网络错误，请重试';
                 btn.disabled = false;
+                isDrawing = false;
             }
         }
 
@@ -498,7 +548,6 @@
             form.method = 'POST';
             form.action = gateway;
             form.style.display = 'none';
-            
             for (const [key, value] of Object.entries(params)) {
                 const input = document.createElement('input');
                 input.type = 'hidden';
@@ -506,36 +555,8 @@
                 input.value = value;
                 form.appendChild(input);
             }
-            
             document.body.appendChild(form);
             form.submit();
-        }
-
-        function spinWheel(won) {
-            isDrawing = true;
-            const wheel = document.getElementById('wheel');
-            
-            // 计算目标角度
-            // 中奖区域: 0-72, 144-216, 288-360 (绿色)
-            // 未中奖: 72-144, 216-288 (红色)
-            let targetAngle;
-            if (won) {
-                // 随机落在绿色区域
-                const greenZones = [[10, 62], [154, 206], [298, 350]];
-                const zone = greenZones[Math.floor(Math.random() * greenZones.length)];
-                targetAngle = zone[0] + Math.random() * (zone[1] - zone[0]);
-            } else {
-                // 随机落在红色区域
-                const redZones = [[82, 134], [226, 278]];
-                const zone = redZones[Math.floor(Math.random() * redZones.length)];
-                targetAngle = zone[0] + Math.random() * (zone[1] - zone[0]);
-            }
-            
-            // 多转几圈
-            wheelRotation += 360 * 5 + (360 - targetAngle);
-            wheel.style.transform = `rotate(${wheelRotation}deg)`;
-            
-            return new Promise(resolve => setTimeout(resolve, 4000));
         }
 
         function showResult(won, code) {
@@ -547,19 +568,18 @@
             
             if (won) {
                 icon.textContent = '🎉';
-                title.textContent = '恭喜中奖！';
+                title.textContent = '恭喜获得！';
                 title.style.color = 'var(--success)';
-                desc.textContent = '您获得了一个邀请码';
+                desc.textContent = '您获得了一个 ChatGPT Team 邀请码';
                 codeEl.textContent = code;
                 codeEl.classList.remove('hidden');
             } else {
-                icon.textContent = '😢';
-                title.textContent = '很遗憾';
-                title.style.color = 'var(--danger)';
-                desc.textContent = '未能中奖，下次好运！';
+                icon.textContent = '📦';
+                title.textContent = '空箱子';
+                title.style.color = 'var(--muted)';
+                desc.textContent = '很遗憾，这是个空箱子，下次好运！';
                 codeEl.classList.add('hidden');
             }
-            
             modal.classList.add('show');
         }
 
@@ -568,25 +588,24 @@
             isDrawing = false;
             document.getElementById('drawBtn').disabled = false;
             document.getElementById('drawStatus').textContent = '';
+            resetBox();
             loadStats();
             loadHistory();
         }
 
-        // 检查支付回调
         async function checkPaymentResult() {
             const params = new URLSearchParams(window.location.search);
             const orderId = params.get('order_id') || params.get('out_trade_no');
             
             if (orderId && orderId.startsWith('LOT')) {
-                // 清除 URL 参数
                 history.replaceState({}, '', '/lottery.html');
                 
                 const btn = document.getElementById('drawBtn');
                 const status = document.getElementById('drawStatus');
                 btn.disabled = true;
-                status.textContent = '正在查询抽奖结果...';
+                isDrawing = true;
+                status.textContent = '正在查询结果...';
                 
-                // 轮询查询抽奖结果（最多等待 10 秒）
                 let attempts = 0;
                 const maxAttempts = 20;
                 
@@ -598,31 +617,30 @@
                         if (res.ok) {
                             const data = await res.json();
                             if (data.status === 'completed') {
-                                await spinWheel(data.won);
+                                status.textContent = '开箱中...';
+                                await playOpenAnimation(data.won);
                                 showResult(data.won, data.inviteCode);
                                 return;
                             } else if (data.status === 'pending' && attempts < maxAttempts) {
                                 attempts++;
-                                status.textContent = `正在等待支付确认... (${attempts}/${maxAttempts})`;
+                                status.textContent = `等待支付确认... (${attempts}/${maxAttempts})`;
                                 setTimeout(pollResult, 500);
                                 return;
                             }
                         }
-                        // 超时或失败
-                        status.textContent = '支付确认超时，请刷新页面查看结果';
+                        status.textContent = '查询超时，请刷新页面';
                         btn.disabled = false;
+                        isDrawing = false;
                     } catch (err) {
-                        console.error('查询结果失败:', err);
                         status.textContent = '查询失败，请刷新页面';
                         btn.disabled = false;
+                        isDrawing = false;
                     }
                 };
-                
                 pollResult();
             }
         }
 
-        // 初始化
         (async () => {
             const loggedIn = await checkLogin();
             if (loggedIn) {
