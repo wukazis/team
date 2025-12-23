@@ -383,6 +383,7 @@
                                 <option value="">不绑定车位</option>
                             </select>
                             <button class="btn btn-primary" onclick="generateCodes()">生成</button>
+                            <button class="btn btn-warning" onclick="clearUnusedCodes()">删除未使用</button>
                             <button class="btn btn-danger" onclick="clearAllCodes()">删除所有</button>
                             <button class="btn btn-ghost" onclick="loadCodes()">刷新</button>
                         </div>
@@ -1663,6 +1664,18 @@
                 return;
             }
             alert(`已删除 ${res.data.deleted} 个邀请码`);
+            loadCodes();
+            loadStats();
+        }
+
+        async function clearUnusedCodes() {
+            if (!confirm('确定删除所有未使用的邀请码？')) return;
+            const res = await api('/admin/codes/clear-unused', { method: 'POST' });
+            if (!res.ok) {
+                alert(res.data?.error || '删除失败');
+                return;
+            }
+            alert(`已删除 ${res.data.deleted} 个未使用的邀请码`);
             loadCodes();
             loadStats();
         }

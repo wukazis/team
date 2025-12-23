@@ -1206,6 +1206,14 @@ def create_credit_order():
     
     conn = get_db()
     
+    # 检查用户是否已购买过（限购1个）
+    bought = conn.execute('''
+        SELECT COUNT(*) FROM credit_orders WHERE user_id = ? AND status = 'paid'
+    ''', (user_id,)).fetchone()[0]
+    if bought > 0:
+        conn.close()
+        return jsonify({'error': '每位用户限购1个邀请码'}), 403
+    
     # 检查用户是否已使用过邀请（28天冷却期）
     user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     if user and user['has_used']:
@@ -2303,6 +2311,18 @@ def clear_all_codes():
     conn.commit()
     conn.close()
     log_admin_action('清空所有邀请码', f'删除 {deleted} 条记录')
+    return jsonify({'status': 'ok', 'deleted': deleted})
+
+@app.route('/api/admin/codes/clear-unused', methods=['POST'])
+@admin_required
+def clear_unused_codes():
+    """删除所有未使用的邀请码"""
+    conn = get_db()
+    cursor = conn.execute('DELETE FROM invite_codes WHERE used = 0')
+    deleted = cursor.rowcount
+    conn.commit()
+    conn.close()
+    log_admin_action('删除未使用邀请码', f'删除 {deleted} 条记录')
     return jsonify({'status': 'ok', 'deleted': deleted})
 
 # ========== 冷却用户管理 ==========
