@@ -923,8 +923,8 @@ def oauth_callback():
     avatar_template = user_data.get('avatar_template', '')
     trust_level = user_data.get('trust_level', 0)
     
-    # 信任级别检查：需要 TL3 及以上才能登录
-    if trust_level < 3:
+    # 信任级别检查：需要 TL2 及以上才能登录
+    if trust_level < 2:
         return redirect(f'{APP_BASE_URL}?error=trust_level&tl={trust_level}')
     
     # 保存/更新用户
