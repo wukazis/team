@@ -692,10 +692,17 @@
             // 处理从抽奖页面跳转过来的登录请求
             const lotteryReturn = params.get('lottery_return');
             if (lotteryReturn) {
+                // 如果已经登录，直接带 token 跳回去
+                const existingToken = getToken();
+                if (existingToken) {
+                    const separator = lotteryReturn.includes('?') ? '&' : '?';
+                    window.location.href = lotteryReturn + separator + 'token=' + existingToken;
+                    return;
+                }
+                // 未登录，保存回调地址，等登录后跳回
                 localStorage.setItem('lottery_return', lotteryReturn);
                 params.delete('lottery_return');
-                const newSearch = params.toString();
-                history.replaceState({}, '', '/' + (newSearch ? '?' + newSearch : ''));
+                history.replaceState({}, '', '/');
             }
             
             if (params.get('token')) {
