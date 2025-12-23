@@ -57,6 +57,11 @@ LINUXDO_AUTHORIZE_URL = 'https://connect.linux.do/oauth2/authorize'
 LINUXDO_TOKEN_URL = 'https://connect.linux.do/oauth2/token'
 LINUXDO_USERINFO_URL = 'https://connect.linux.do/api/user'
 
+# RDS 抽奖域名 OAuth 配置
+RDS_CLIENT_ID = os.environ.get('RDS_CLIENT_ID', '')
+RDS_CLIENT_SECRET = os.environ.get('RDS_CLIENT_SECRET', '')
+RDS_REDIRECT_URI = os.environ.get('RDS_REDIRECT_URI', 'https://rds.6666727.xyz/api/oauth/callback')
+
 # Cloudflare Turnstile 配置
 CF_TURNSTILE_SITE_KEY = os.environ.get('CF_TURNSTILE_SITE_KEY', '')
 CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
@@ -887,27 +892,72 @@ def admin_page():
 def waiting_page():
     return send_from_directory('static', 'waiting.html')
 
+@app.route('/lottery.html')
+def lottery_page():
+    """抽奖页面 - 只允许 rds 域名访问"""
+    host = request.host.split(':')[0]
+    if not host.startswith('rds.'):
+        return redirect('https://rds.6666727.xyz/')
+    return send_from_directory('static', 'lottery.html')
+
 # ========== OAuth API ==========
+
+@app.route('/auth/linuxdo')
+@rate_limit('oauth')
+def auth_linuxdo_redirect():
+    """直接跳转 LinuxDO OAuth 授权页面"""
+    # 根据请求域名选择 OAuth 配置
+    host = request.host.split(':')[0]
+    is_rds = host.startswith('rds.')
+    
+    client_id = RDS_CLIENT_ID if is_rds else LINUXDO_CLIENT_ID
+    redirect_uri = RDS_REDIRECT_URI if is_rds else LINUXDO_REDIRECT_URI
+    
+    if not client_id:
+        return "OAuth 未配置", 500
+    
+    state = secrets.token_urlsafe(32)
+    state_key = f"{'rds' if is_rds else 'www'}:{state}"
+    oauth_states[state_key] = time.time() + 600
+    
+    params = {
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
+        'response_type': 'code',
+        'scope': 'read',
+        'state': state_key
+    }
+    auth_url = f"{LINUXDO_AUTHORIZE_URL}?{urlencode(params)}"
+    return redirect(auth_url)
 
 @app.route('/api/oauth/login')
 @rate_limit('oauth')
 def oauth_login():
-    """发起 LinuxDO OAuth 登录"""
-    if not LINUXDO_CLIENT_ID:
+    """发起 LinuxDO OAuth 登录（返回 JSON）"""
+    # 根据请求域名选择 OAuth 配置
+    host = request.host.split(':')[0]
+    is_rds = host.startswith('rds.')
+    
+    client_id = RDS_CLIENT_ID if is_rds else LINUXDO_CLIENT_ID
+    redirect_uri = RDS_REDIRECT_URI if is_rds else LINUXDO_REDIRECT_URI
+    
+    if not client_id:
         return jsonify({'error': 'OAuth 未配置'}), 500
     
     state = secrets.token_urlsafe(32)
-    oauth_states[state] = time.time() + 600  # 10分钟过期
+    # 在 state 中标记来源域名
+    state_key = f"{'rds' if is_rds else 'www'}:{state}"
+    oauth_states[state_key] = time.time() + 600  # 10分钟过期
     
     params = {
-        'client_id': LINUXDO_CLIENT_ID,
-        'redirect_uri': LINUXDO_REDIRECT_URI,
+        'client_id': client_id,
+        'redirect_uri': redirect_uri,
         'response_type': 'code',
         'scope': 'read',
-        'state': state
+        'state': state_key
     }
     auth_url = f"{LINUXDO_AUTHORIZE_URL}?{urlencode(params)}"
-    return jsonify({'authUrl': auth_url, 'state': state})
+    return jsonify({'authUrl': auth_url, 'state': state_key})
 
 @app.route('/api/oauth/callback')
 def oauth_callback():
@@ -918,17 +968,24 @@ def oauth_callback():
     if not code or not state:
         return redirect(f'{APP_BASE_URL}?error=missing_params')
     
-    # 验证 state
+    # 验证 state 并获取来源
     expiry = oauth_states.pop(state, None)
     if not expiry or time.time() > expiry:
         return redirect(f'{APP_BASE_URL}?error=invalid_state')
     
+    # 解析来源域名
+    is_rds = state.startswith('rds:')
+    client_id = RDS_CLIENT_ID if is_rds else LINUXDO_CLIENT_ID
+    client_secret = RDS_CLIENT_SECRET if is_rds else LINUXDO_CLIENT_SECRET
+    redirect_uri = RDS_REDIRECT_URI if is_rds else LINUXDO_REDIRECT_URI
+    return_base = 'https://rds.6666727.xyz' if is_rds else APP_BASE_URL
+    
     # 交换 token
     try:
         token_resp = requests.post(LINUXDO_TOKEN_URL, data={
-            'client_id': LINUXDO_CLIENT_ID,
-            'client_secret': LINUXDO_CLIENT_SECRET,
-            'redirect_uri': LINUXDO_REDIRECT_URI,
+            'client_id': client_id,
+            'client_secret': client_secret,
+            'redirect_uri': redirect_uri,
             'grant_type': 'authorization_code',
             'code': code
         }, timeout=10)
@@ -937,7 +994,7 @@ def oauth_callback():
         access_token = token_data.get('access_token')
     except Exception as e:
         print(f"Token exchange failed: {e}")
-        return redirect(f'{APP_BASE_URL}?error=token_failed')
+        return redirect(f'{return_base}?error=token_failed')
     
     # 获取用户信息
     try:
@@ -948,7 +1005,7 @@ def oauth_callback():
         user_data = user_resp.json()
     except Exception as e:
         print(f"User info fetch failed: {e}")
-        return redirect(f'{APP_BASE_URL}?error=userinfo_failed')
+        return redirect(f'{return_base}?error=userinfo_failed')
     
     # 提取用户信息
     user_id = user_data.get('id')
@@ -957,9 +1014,9 @@ def oauth_callback():
     avatar_template = user_data.get('avatar_template', '')
     trust_level = user_data.get('trust_level', 0)
     
-    # 信任级别检查：需要 TL3 及以上才能登录
-    if trust_level < 3:
-        return redirect(f'{APP_BASE_URL}?error=trust_level&tl={trust_level}')
+    # 信任级别检查：需要 TL2 及以上才能登录
+    if trust_level < 2:
+        return redirect(f'{return_base}?error=trust_level&tl={trust_level}')
     
     # 保存/更新用户
     conn = get_db()
@@ -977,13 +1034,13 @@ def oauth_callback():
         conn.commit()
     except Exception as e:
         print(f"OAuth 用户创建失败: {e}")
-        return redirect(f'{APP_BASE_URL}?error=db_error')
+        return redirect(f'{return_base}?error=db_error')
     finally:
         conn.close()
     
     # 生成 JWT
     jwt_token = create_jwt_token(user_id, username, name, avatar_template, trust_level)
-    return redirect(f'{APP_BASE_URL}?token={jwt_token}')
+    return redirect(f'{return_base}?token={jwt_token}')
 
 @app.route('/api/user/state')
 @jwt_required
@@ -1757,7 +1814,7 @@ def lottery_draw():
         'name': '幸运抽奖',
         'money': money_str,
         'notify_url': f"{APP_BASE_URL}/notify",
-        'return_url': f"{APP_BASE_URL}/lottery.html?order_id={order_id}"
+        'return_url': f"https://rds.6666727.xyz/lottery.html?order_id={order_id}"
     }
     pay_params['sign'] = generate_epay_sign(pay_params)
     pay_params['sign_type'] = 'MD5'
