@@ -65,19 +65,10 @@ CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 HCAPTCHA_SITE_KEY = os.environ.get('HCAPTCHA_SITE_KEY', '')
 HCAPTCHA_SECRET_KEY = os.environ.get('HCAPTCHA_SECRET_KEY', '')
 
-# Microsoft Graph API 邮件配置
-MS_TENANT_ID = os.environ.get('MS_TENANT_ID', '')
-MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
-MS_CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '')
-MS_MAIL_FROM = os.environ.get('MS_MAIL_FROM', '')  # 发件人邮箱
-
-# AWS SES 邮件配置
-AWS_SES_REGION = os.environ.get('AWS_SES_REGION', 'us-east-1')
-AWS_SES_FROM = os.environ.get('AWS_SES_FROM', '')  # SES 发件人邮箱
-# AWS 凭证使用 IAM Role 或环境变量 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
-
-# 邮件发送方式: 'ses' 或 'msgraph'
-EMAIL_PROVIDER = os.environ.get('EMAIL_PROVIDER', 'msgraph')
+# LinuxDO 集市配置（Credit 购买）
+LINUXDO_MARKET_CLIENT_ID = os.environ.get('LINUXDO_MARKET_CLIENT_ID', '')
+LINUXDO_MARKET_CLIENT_SECRET = os.environ.get('LINUXDO_MARKET_CLIENT_SECRET', '')
+INVITE_CODE_PRICE = int(os.environ.get('INVITE_CODE_PRICE', '100'))  # 邀请码价格（Credit）
 
 # 测试模式（跳过真实发送 ChatGPT 邀请）
 TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
@@ -597,6 +588,20 @@ def init_db():
             )
         ''')
         
+        # Credit 购买订单表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS credit_orders (
+                id SERIAL PRIMARY KEY,
+                order_id TEXT UNIQUE NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                amount INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                invite_code TEXT,
+                created_at TIMESTAMP DEFAULT NOW(),
+                paid_at TIMESTAMP
+            )
+        ''')
+        
         # 添加新字段（如果不存在）
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0')
@@ -610,6 +615,8 @@ def init_db():
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_credit_orders_user ON credit_orders(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_credit_orders_status ON credit_orders(status)')
         
         # 初始化默认设置
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false') ON CONFLICT (key) DO NOTHING")
@@ -718,6 +725,23 @@ def init_db():
                 created_at TEXT DEFAULT (datetime('now'))
             )
         ''')
+        
+        # Credit 购买订单表
+        conn.execute('''
+            CREATE TABLE IF NOT EXISTS credit_orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id TEXT UNIQUE NOT NULL,
+                user_id INTEGER REFERENCES users(id),
+                amount INTEGER NOT NULL,
+                status TEXT DEFAULT 'pending',
+                invite_code TEXT,
+                created_at TEXT DEFAULT (datetime('now')),
+                paid_at TEXT
+            )
+        ''')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_credit_orders_user ON credit_orders(user_id)')
+        conn.execute('CREATE INDEX IF NOT EXISTS idx_credit_orders_status ON credit_orders(status)')
+        
         conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false')")
         conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('waiting_room_max_queue', '0')")
         conn.execute("INSERT OR IGNORE INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto')")
@@ -805,135 +829,6 @@ def parse_datetime(value):
         # SQLite 返回的是字符串
         return datetime.fromisoformat(value.replace('Z', '+00:00').replace(' ', 'T')).replace(tzinfo=None)
     return None
-
-# ========== Microsoft Graph API 邮件 ==========
-
-# Token 缓存
-_ms_token_cache = {
-    'token': None,
-    'expires_at': 0
-}
-
-def get_ms_access_token() -> str:
-    """获取 Microsoft Graph API 访问令牌（带缓存）"""
-    global _ms_token_cache
-    
-    # 检查缓存是否有效（提前5分钟刷新）
-    if _ms_token_cache['token'] and time.time() < _ms_token_cache['expires_at'] - 300:
-        return _ms_token_cache['token']
-    
-    url = f"https://login.microsoftonline.com/{MS_TENANT_ID}/oauth2/v2.0/token"
-    data = {
-        'client_id': MS_CLIENT_ID,
-        'client_secret': MS_CLIENT_SECRET,
-        'scope': 'https://graph.microsoft.com/.default',
-        'grant_type': 'client_credentials'
-    }
-    resp = requests.post(url, data=data, timeout=10)
-    resp.raise_for_status()
-    result = resp.json()
-    
-    # 缓存 token（默认有效期3600秒）
-    _ms_token_cache['token'] = result['access_token']
-    _ms_token_cache['expires_at'] = time.time() + result.get('expires_in', 3600)
-    
-    return _ms_token_cache['token']
-
-# ========== AWS SES 邮件 ==========
-
-def send_email_ses(to_email: str, subject: str, html_content: str) -> bool:
-    """通过 AWS SES 发送邮件"""
-    if not AWS_SES_FROM:
-        print("AWS SES 未配置")
-        return False
-    
-    try:
-        import boto3
-        from botocore.exceptions import ClientError
-        
-        client = boto3.client('ses', region_name=AWS_SES_REGION)
-        
-        response = client.send_email(
-            Source=AWS_SES_FROM,
-            Destination={'ToAddresses': [to_email]},
-            Message={
-                'Subject': {'Data': subject, 'Charset': 'UTF-8'},
-                'Body': {'Html': {'Data': html_content, 'Charset': 'UTF-8'}}
-            }
-        )
-        print(f"SES 邮件发送成功: {response['MessageId']}")
-        return True
-    except Exception as e:
-        print(f"SES 发送邮件失败: {e}")
-        return False
-
-def send_email(to_email: str, subject: str, html_content: str) -> bool:
-    """发送邮件（根据配置选择 SES 或 Microsoft Graph）"""
-    if EMAIL_PROVIDER == 'ses':
-        return send_email_ses(to_email, subject, html_content)
-    else:
-        return send_email_msgraph(to_email, subject, html_content)
-
-def send_email_msgraph(to_email: str, subject: str, html_content: str) -> bool:
-    """通过 Microsoft Graph API 发送邮件"""
-    if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
-        print("Microsoft Graph API 未配置")
-        return False
-    
-    try:
-        token = get_ms_access_token()
-        url = f"https://graph.microsoft.com/v1.0/users/{MS_MAIL_FROM}/sendMail"
-        
-        payload = {
-            "message": {
-                "subject": subject,
-                "body": {
-                    "contentType": "HTML",
-                    "content": html_content
-                },
-                "toRecipients": [
-                    {"emailAddress": {"address": to_email}}
-                ]
-            },
-            "saveToSentItems": "true"
-        }
-        
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json"
-        }
-        
-        resp = requests.post(url, json=payload, headers=headers, timeout=15)
-        
-        if resp.status_code == 202:
-            return True
-        else:
-            print(f"发送邮件失败: {resp.status_code} {resp.text}")
-            return False
-    except Exception as e:
-        print(f"发送邮件失败: {e}")
-        return False
-
-def send_invite_code_email(to_email: str, invite_code: str, team_name: str) -> bool:
-    """发送带邀请码的邮件"""
-    subject = '您的 Team 邀请码'
-    html_content = f'''
-    <div style="font-family: system-ui, sans-serif; max-width: 500px; margin: 0 auto; padding: 20px;">
-        <h2 style="color: #2563eb;">🎉 Team 上车</h2>
-        <p>您好！</p>
-        <p>您在候车室排队等待的车位现已空出，这是您的专属邀请码：</p>
-        <div style="background: #f0f9ff; border: 2px dashed #2563eb; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0;">
-            <p style="color: #64748b; font-size: 14px; margin: 0 0 8px 0;">邀请码</p>
-            <p style="font-size: 28px; font-weight: bold; color: #2563eb; letter-spacing: 3px; margin: 0;">{invite_code}</p>
-            <p style="color: #64748b; font-size: 13px; margin: 12px 0 0 0;">绑定车位: {team_name}</p>
-        </div>
-        <p>请前往首页填写邀请码和您的上车邮箱完成领取：</p>
-        <p><a href="{APP_BASE_URL}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; border-radius: 8px; text-decoration: none;">立即上车</a></p>
-        <p style="color: #dc2626; font-size: 14px; margin-top: 20px;">⚠️ 此邀请码仅限您本人使用，请勿分享给他人。</p>
-        <p style="color: #64748b; font-size: 13px;">邀请码有效期为邮件发出后的半小时，逾期未用将自动作废。</p>
-    </div>
-    '''
-    return send_email(to_email, subject, html_content)
 
 def admin_required(f):
     @wraps(f)
@@ -1256,6 +1151,270 @@ def team_accounts_status():
     
     conn.close()
     return jsonify({'accounts': result})
+
+# ========== Credit 购买 API ==========
+
+@app.route('/api/credit/price')
+def get_credit_price():
+    """获取邀请码价格"""
+    return jsonify({
+        'price': INVITE_CODE_PRICE,
+        'currency': 'Credit'
+    })
+
+@app.route('/api/credit/create-order', methods=['POST'])
+@jwt_required
+def create_credit_order():
+    """创建 Credit 购买订单"""
+    user_id = request.user['user_id']
+    username = request.user.get('username', '')
+    trust_level = request.user.get('trust_level', 0)
+    
+    # 信任级别检查
+    if trust_level < 1:
+        return jsonify({'error': f'需要信任级别 1 才能购买，您当前为 TL{trust_level}'}), 403
+    
+    conn = get_db()
+    
+    # 检查用户是否已使用过邀请（28天冷却期）
+    user = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    if user and user['has_used']:
+        now = datetime.utcnow()
+        last_used = conn.execute('''
+            SELECT used_at FROM invite_codes WHERE user_id = ? ORDER BY used_at DESC LIMIT 1
+        ''', (user_id,)).fetchone()
+        
+        cooldown_start = None
+        if last_used and last_used['used_at']:
+            cooldown_start = parse_datetime(last_used['used_at'])
+        elif user['updated_at']:
+            cooldown_start = parse_datetime(user['updated_at'])
+        
+        if cooldown_start:
+            cooldown_end = cooldown_start + timedelta(days=28)
+            if now < cooldown_end:
+                days_left = (cooldown_end - now).days + 1
+                conn.close()
+                return jsonify({
+                    'error': f'您已使用过邀请，需等待 {days_left} 天后才能购买',
+                    'cooldownEnd': cooldown_end.strftime('%Y-%m-%d'),
+                    'daysLeft': days_left
+                }), 403
+    
+    # 检查是否有未完成的订单
+    pending = conn.execute('''
+        SELECT * FROM credit_orders WHERE user_id = ? AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1
+    ''', (user_id,)).fetchone()
+    
+    if pending:
+        # 检查订单是否过期（30分钟）
+        created_at = parse_datetime(pending['created_at'])
+        if created_at and datetime.utcnow() - created_at < timedelta(minutes=30):
+            conn.close()
+            return jsonify({
+                'orderId': pending['order_id'],
+                'amount': pending['amount'],
+                'message': '您有未完成的订单'
+            })
+        else:
+            # 过期订单标记为取消
+            conn.execute("UPDATE credit_orders SET status = 'cancelled' WHERE id = ?", (pending['id'],))
+            conn.commit()
+    
+    # 检查是否有可用车位
+    available_account = conn.execute('''
+        SELECT * FROM team_accounts 
+        WHERE enabled = 1 AND seats_in_use < max_seats
+        ORDER BY (max_seats - seats_in_use) DESC
+        LIMIT 1
+    ''').fetchone()
+    
+    if not available_account:
+        conn.close()
+        return jsonify({'error': '当前没有可用车位，请稍后再试'}), 400
+    
+    # 生成订单号
+    order_id = f"INV{int(time.time())}{secrets.token_hex(4).upper()}"
+    
+    # 创建订单
+    if USE_POSTGRES:
+        conn.execute('''
+            INSERT INTO credit_orders (order_id, user_id, amount, status)
+            VALUES (%s, %s, %s, 'pending')
+        ''', (order_id, user_id, INVITE_CODE_PRICE))
+    else:
+        conn.execute('''
+            INSERT INTO credit_orders (order_id, user_id, amount, status)
+            VALUES (?, ?, ?, 'pending')
+        ''', (order_id, user_id, INVITE_CODE_PRICE))
+    
+    conn.commit()
+    conn.close()
+    
+    return jsonify({
+        'orderId': order_id,
+        'amount': INVITE_CODE_PRICE,
+        'message': '订单创建成功，请完成支付'
+    })
+
+@app.route('/api/credit/order-status')
+@jwt_required
+def get_order_status():
+    """查询订单状态"""
+    user_id = request.user['user_id']
+    order_id = request.args.get('orderId')
+    
+    conn = get_db()
+    
+    if order_id:
+        order = conn.execute('''
+            SELECT * FROM credit_orders WHERE order_id = ? AND user_id = ?
+        ''', (order_id, user_id)).fetchone()
+    else:
+        order = conn.execute('''
+            SELECT * FROM credit_orders WHERE user_id = ?
+            ORDER BY created_at DESC LIMIT 1
+        ''', (user_id,)).fetchone()
+    
+    conn.close()
+    
+    if not order:
+        return jsonify({'error': '订单不存在'}), 404
+    
+    return jsonify({
+        'orderId': order['order_id'],
+        'amount': order['amount'],
+        'status': order['status'],
+        'inviteCode': order['invite_code'] if order['status'] == 'paid' else None,
+        'createdAt': str(order['created_at']),
+        'paidAt': str(order['paid_at']) if order['paid_at'] else None
+    })
+
+@app.route('/notify', methods=['POST'])
+def credit_notify():
+    """LinuxDO 集市支付回调"""
+    # 验证签名
+    if not LINUXDO_MARKET_CLIENT_SECRET:
+        print("集市 Client Secret 未配置")
+        return jsonify({'error': 'Not configured'}), 500
+    
+    # 获取请求数据
+    data = request.json or {}
+    print(f"[Credit Notify] 收到回调: {data}")
+    
+    # 验证必要字段
+    order_id = data.get('order_id') or data.get('orderId')
+    user_id = data.get('user_id') or data.get('userId')
+    amount = data.get('amount')
+    signature = data.get('signature') or data.get('sign')
+    
+    if not order_id or not user_id:
+        return jsonify({'error': 'Missing required fields'}), 400
+    
+    # 验证签名（如果有）
+    if signature:
+        # 根据 LinuxDO 集市的签名规则验证
+        expected_sign = hmac.new(
+            LINUXDO_MARKET_CLIENT_SECRET.encode(),
+            f"{order_id}{user_id}{amount}".encode(),
+            hashlib.sha256
+        ).hexdigest()
+        if not hmac.compare_digest(signature, expected_sign):
+            print(f"[Credit Notify] 签名验证失败")
+            return jsonify({'error': 'Invalid signature'}), 403
+    
+    conn = get_db()
+    
+    # 查找订单
+    order = conn.execute('''
+        SELECT * FROM credit_orders WHERE order_id = ?
+    ''', (order_id,)).fetchone()
+    
+    if not order:
+        conn.close()
+        print(f"[Credit Notify] 订单不存在: {order_id}")
+        return jsonify({'error': 'Order not found'}), 404
+    
+    if order['status'] == 'paid':
+        conn.close()
+        return jsonify({'message': 'Already processed', 'inviteCode': order['invite_code']})
+    
+    # 查找可用车位
+    available_account = conn.execute('''
+        SELECT * FROM team_accounts 
+        WHERE enabled = 1 AND seats_in_use < max_seats
+        ORDER BY (max_seats - seats_in_use) DESC
+        LIMIT 1
+    ''').fetchone()
+    
+    if not available_account:
+        conn.close()
+        print(f"[Credit Notify] 没有可用车位")
+        return jsonify({'error': 'No available seats'}), 400
+    
+    # 生成邀请码
+    invite_code = generate_code()
+    
+    # 创建邀请码记录
+    if USE_POSTGRES:
+        conn.execute('''
+            INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+            VALUES (%s, %s, %s, 1)
+        ''', (invite_code, available_account['id'], order['user_id']))
+    else:
+        conn.execute('''
+            INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+            VALUES (?, ?, ?, 1)
+        ''', (invite_code, available_account['id'], order['user_id']))
+    
+    # 更新订单状态
+    if USE_POSTGRES:
+        conn.execute('''
+            UPDATE credit_orders SET status = 'paid', invite_code = %s, paid_at = NOW()
+            WHERE order_id = %s
+        ''', (invite_code, order_id))
+    else:
+        conn.execute('''
+            UPDATE credit_orders SET status = 'paid', invite_code = ?, paid_at = datetime('now')
+            WHERE order_id = ?
+        ''', (invite_code, order_id))
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"[Credit Notify] 订单 {order_id} 支付成功，邀请码: {invite_code}")
+    
+    return jsonify({
+        'message': 'Success',
+        'inviteCode': invite_code
+    })
+
+@app.route('/api/credit/my-orders')
+@jwt_required
+def get_my_orders():
+    """获取我的订单列表"""
+    user_id = request.user['user_id']
+    
+    conn = get_db()
+    orders = conn.execute('''
+        SELECT * FROM credit_orders WHERE user_id = ?
+        ORDER BY created_at DESC LIMIT 20
+    ''', (user_id,)).fetchall()
+    conn.close()
+    
+    result = []
+    for order in orders:
+        result.append({
+            'orderId': order['order_id'],
+            'amount': order['amount'],
+            'status': order['status'],
+            'inviteCode': order['invite_code'] if order['status'] == 'paid' else None,
+            'createdAt': str(order['created_at']),
+            'paidAt': str(order['paid_at']) if order['paid_at'] else None
+        })
+    
+    return jsonify({'orders': result})
 
 # ========== 排队通知 API ==========
 
