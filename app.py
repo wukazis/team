@@ -1240,13 +1240,13 @@ def create_credit_order():
     if pending:
         created_at = parse_datetime(pending['created_at'])
         if created_at and datetime.utcnow() - created_at < timedelta(minutes=30):
-            # 返回已有订单的支付参数
+            # 返回已有订单的支付参数 - money 必须是两位小数格式
             pay_params = {
                 'pid': CREDIT_PID,
                 'type': 'epay',
                 'out_trade_no': pending['order_id'],
                 'name': 'Team邀请码',
-                'money': str(pending['amount']),
+                'money': f"{pending['amount']:.2f}",
                 'notify_url': f"{APP_BASE_URL}/notify",
                 'return_url': f"{APP_BASE_URL}/waiting"
             }
@@ -1295,13 +1295,14 @@ def create_credit_order():
     conn.commit()
     conn.close()
     
-    # 构建支付参数
+    # 构建支付参数 - money 必须是两位小数格式
+    money_str = f"{INVITE_CODE_PRICE:.2f}"
     pay_params = {
         'pid': CREDIT_PID,
         'type': 'epay',
         'out_trade_no': order_id,
         'name': 'Team邀请码',
-        'money': str(INVITE_CODE_PRICE),
+        'money': money_str,
         'notify_url': f"{APP_BASE_URL}/notify",
         'return_url': f"{APP_BASE_URL}/waiting"
     }
@@ -1351,7 +1352,7 @@ def get_order_status():
             'type': 'epay',
             'out_trade_no': order['order_id'],
             'name': 'Team邀请码',
-            'money': str(order['amount']),
+            'money': f"{order['amount']:.2f}",
             'notify_url': f"{APP_BASE_URL}/notify",
             'return_url': f"{APP_BASE_URL}/waiting"
         }
