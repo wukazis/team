@@ -1302,6 +1302,8 @@ def create_credit_order():
     pay_params['sign'] = generate_epay_sign(pay_params)
     pay_params['sign_type'] = 'MD5'
     
+    print(f"[Credit] 创建订单 {order_id}, 支付参数: {pay_params}")
+    
     return jsonify({
         'orderId': order_id,
         'amount': INVITE_CODE_PRICE,
