@@ -618,20 +618,27 @@ def init_db():
         # 添加新字段（如果不存在）
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0')
-        except:
-            pass  # 字段已存在，忽略错误
+            raw_conn.commit()
+        except Exception:
+            raw_conn.rollback()  # 回滚这个失败的语句，但表已经创建了
         
-        raw_conn.commit()  # 提交之前的所有更改
-        
-        # 创建索引
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_credit_orders_user ON credit_orders(user_id)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_credit_orders_status ON credit_orders(status)')
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_lottery_records_user ON lottery_records(user_id)')
+        # 创建索引（每个单独 try-catch 避免一个失败影响其他）
+        for idx_sql in [
+            'CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)',
+            'CREATE INDEX IF NOT EXISTS idx_invite_codes_team_used ON invite_codes(team_account_id, used)',
+            'CREATE INDEX IF NOT EXISTS idx_invite_codes_auto ON invite_codes(auto_generated, used)',
+            'CREATE INDEX IF NOT EXISTS idx_waiting_queue_notified ON waiting_queue(notified)',
+            'CREATE INDEX IF NOT EXISTS idx_users_has_used ON users(has_used)',
+            'CREATE INDEX IF NOT EXISTS idx_credit_orders_user ON credit_orders(user_id)',
+            'CREATE INDEX IF NOT EXISTS idx_credit_orders_status ON credit_orders(status)',
+            'CREATE INDEX IF NOT EXISTS idx_lottery_records_user ON lottery_records(user_id)',
+        ]:
+            try:
+                cursor.execute(idx_sql)
+                raw_conn.commit()
+            except Exception as e:
+                raw_conn.rollback()
+                print(f"索引创建跳过: {e}")
         
         # 初始化默认设置
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('waiting_room_enabled', 'false') ON CONFLICT (key) DO NOTHING")
