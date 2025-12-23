@@ -456,7 +456,7 @@
             const status = document.getElementById('drawStatus');
             
             btn.disabled = true;
-            status.textContent = '正在跳转支付...';
+            status.textContent = '正在处理...';
             
             try {
                 const res = await fetch('/api/lottery/draw', {
@@ -474,8 +474,17 @@
                     return;
                 }
                 
-                // 跳转支付
+                // 管理员免费抽奖，直接显示结果
+                if (data.free) {
+                    status.textContent = '';
+                    await spinWheel(data.won);
+                    showResult(data.won, data.inviteCode);
+                    return;
+                }
+                
+                // 普通用户跳转支付
                 if (data.payParams && data.payGateway) {
+                    status.textContent = '正在跳转支付...';
                     submitPayForm(data.payGateway, data.payParams);
                 }
             } catch (err) {

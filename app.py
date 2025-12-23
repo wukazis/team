@@ -1707,6 +1707,12 @@ LOTTERY_DAILY_LIMIT = 2  # 每天限购2次
 def lottery_stats():
     """获取抽奖统计"""
     user_id = request.user['user_id']
+    username = request.user.get('username', '')
+    
+    # 管理员特权
+    is_admin = username == 'wukazi'
+    daily_limit = 10000 if is_admin else LOTTERY_DAILY_LIMIT
+    
     conn = get_db()
     
     # 今日已抽奖次数
@@ -1730,11 +1736,12 @@ def lottery_stats():
     conn.close()
     
     return jsonify({
-        'todayRemaining': max(0, LOTTERY_DAILY_LIMIT - today_count),
+        'todayRemaining': max(0, daily_limit - today_count),
         'totalDraws': total_draws,
         'totalWins': total_wins,
-        'price': LOTTERY_PRICE,
-        'dailyLimit': LOTTERY_DAILY_LIMIT
+        'price': 0 if is_admin else LOTTERY_PRICE,
+        'dailyLimit': daily_limit,
+        'isAdmin': is_admin
     })
 
 @app.route('/api/lottery/history')
@@ -1766,10 +1773,16 @@ def lottery_history():
 @jwt_required
 def lottery_draw():
     """创建抽奖订单"""
-    if not CREDIT_PID or not CREDIT_KEY:
+    user_id = request.user['user_id']
+    username = request.user.get('username', '')
+    
+    # 管理员特权：wukazi 免费抽奖
+    is_admin = username == 'wukazi'
+    daily_limit = 10000 if is_admin else LOTTERY_DAILY_LIMIT
+    
+    if not is_admin and (not CREDIT_PID or not CREDIT_KEY):
         return jsonify({'error': 'Credit 支付未配置'}), 500
     
-    user_id = request.user['user_id']
     conn = get_db()
     
     # 检查今日次数（包括 pending 状态的订单）
@@ -1784,14 +1797,63 @@ def lottery_draw():
             WHERE user_id = ? AND date(created_at) = date('now')
         ''', (user_id,)).fetchone()[0]
     
-    if today_count >= LOTTERY_DAILY_LIMIT:
+    if today_count >= daily_limit:
         conn.close()
-        return jsonify({'error': f'今日抽奖次数已用完（每天限{LOTTERY_DAILY_LIMIT}次）'}), 400
+        return jsonify({'error': f'今日抽奖次数已用完（每天限{daily_limit}次）'}), 400
     
     # 生成订单号
     order_id = f"LOT{int(time.time())}{secrets.token_hex(4).upper()}"
     
-    # 先创建 pending 状态的抽奖记录（保存 user_id，won=-1 表示 pending）
+    # 管理员直接抽奖，不需要支付
+    if is_admin:
+        import random
+        won = random.random() < LOTTERY_WIN_RATE
+        invite_code = None
+        
+        if won:
+            available_account = conn.execute('''
+                SELECT * FROM team_accounts 
+                WHERE enabled = 1 AND seats_in_use < max_seats
+                ORDER BY (max_seats - seats_in_use) DESC
+                LIMIT 1
+            ''').fetchone()
+            team_account_id = available_account['id'] if available_account else None
+            invite_code = generate_code()
+            
+            if USE_POSTGRES:
+                conn.execute('''
+                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                    VALUES (%s, %s, %s, 1)
+                ''', (invite_code, team_account_id, user_id))
+            else:
+                conn.execute('''
+                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                    VALUES (?, ?, ?, 1)
+                ''', (invite_code, team_account_id, user_id))
+        
+        # 直接记录结果
+        if USE_POSTGRES:
+            conn.execute('''
+                INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
+                VALUES (%s, %s, %s, %s, NOW())
+            ''', (order_id, user_id, 1 if won else 0, invite_code))
+        else:
+            conn.execute('''
+                INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
+                VALUES (?, ?, ?, ?, datetime('now'))
+            ''', (order_id, user_id, 1 if won else 0, invite_code))
+        conn.commit()
+        conn.close()
+        
+        print(f"[Lottery Admin] 管理员 {username} 免费抽奖，中奖: {won}")
+        return jsonify({
+            'orderId': order_id,
+            'free': True,
+            'won': won,
+            'inviteCode': invite_code
+        })
+    
+    # 普通用户：创建 pending 状态的抽奖记录，需要支付
     if USE_POSTGRES:
         conn.execute('''
             INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
