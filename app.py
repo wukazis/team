@@ -1166,7 +1166,13 @@ def generate_epay_sign(params: dict) -> str:
     # 末尾追加密钥
     sign_str = f"{query_string}{CREDIT_KEY}"
     # MD5 小写
-    return hashlib.md5(sign_str.encode()).hexdigest()
+    sign = hashlib.md5(sign_str.encode()).hexdigest()
+    # 调试日志
+    print(f"[Credit签名] 参数: {filtered}")
+    print(f"[Credit签名] 排序后: {sorted_keys}")
+    print(f"[Credit签名] 待签名串: {query_string}{{KEY}}")
+    print(f"[Credit签名] 签名结果: {sign}")
+    return sign
 
 def verify_epay_sign(params: dict) -> bool:
     """验证易支付签名"""
@@ -1363,35 +1369,6 @@ def get_order_status():
         'createdAt': str(order['created_at']),
         'paidAt': str(order['paid_at']) if order['paid_at'] else None
     })
-
-@app.route('/api/credit/cancel-order', methods=['POST'])
-@jwt_required
-def cancel_my_order():
-    """用户取消自己的订单"""
-    user_id = request.user['user_id']
-    order_id = request.args.get('orderId')
-    
-    if not order_id:
-        return jsonify({'error': '缺少订单号'}), 400
-    
-    conn = get_db()
-    order = conn.execute('''
-        SELECT * FROM credit_orders WHERE order_id = ? AND user_id = ?
-    ''', (order_id, user_id)).fetchone()
-    
-    if not order:
-        conn.close()
-        return jsonify({'error': '订单不存在'}), 404
-    
-    if order['status'] != 'pending':
-        conn.close()
-        return jsonify({'error': '只能取消待支付订单'}), 400
-    
-    conn.execute("UPDATE credit_orders SET status = 'cancelled' WHERE order_id = ?", (order_id,))
-    conn.commit()
-    conn.close()
-    
-    return jsonify({'status': 'ok', 'message': '订单已取消'})
 
 @app.route('/notify', methods=['GET', 'POST'])
 def credit_notify():
