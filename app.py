@@ -618,9 +618,10 @@ def init_db():
         # 添加新字段（如果不存在）
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0')
-            raw_conn.commit()
         except:
-            raw_conn.rollback()
+            pass  # 字段已存在，忽略错误
+        
+        raw_conn.commit()  # 提交之前的所有更改
         
         # 创建索引
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_invite_codes_used ON invite_codes(used)')
