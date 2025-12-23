@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>幸运抽奖 - Team Invite</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23f59e0b' stroke='%23d97706' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>🎰</text></svg>">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: #334155;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --primary: #f59e0b;
+            --primary-hover: #d97706;
+            --success: #22c55e;
+            --danger: #ef4444;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem 1rem;
+        }
+        .container {
+            max-width: 500px;
+            width: 100%;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(135deg, #f59e0b, #fbbf24);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p { color: var(--muted); }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 1.5rem;
+        }
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary);
+        }
+        .user-name { font-weight: 600; }
+        .user-meta { color: var(--muted); font-size: 0.85rem; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+        .lottery-wheel {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 0 auto 2rem;
+        }
+        .wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: conic-gradient(
+                #22c55e 0deg 72deg,
+                #ef4444 72deg 144deg,
+                #22c55e 144deg 216deg,
+                #ef4444 216deg 288deg,
+                #22c55e 288deg 360deg
+            );
+            border: 8px solid var(--primary);
+            box-shadow: 0 0 30px rgba(245, 158, 11, 0.3);
+            transition: transform 4s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+        .wheel-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60px;
+            height: 60px;
+            background: var(--card);
+            border-radius: 50%;
+            border: 4px solid var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            z-index: 10;
+        }
+        .wheel-pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 30px solid var(--primary);
+            z-index: 20;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        .wheel-labels {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        .wheel-label {
+            position: absolute;
+            font-weight: 700;
+            font-size: 0.9rem;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            color: white;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
+        }
+        .btn-primary:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 2px solid var(--border);
+            color: var(--text);
+        }
+        .btn-outline:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+        .price-tag {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(245, 158, 11, 0.1);
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            margin-bottom: 1rem;
+            font-size: 0.9rem;
+        }
+        .result-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+        .result-modal.show { display: flex; }
+        .result-content {
+            background: var(--card);
+            border-radius: 20px;
+            padding: 2.5rem;
+            text-align: center;
+            max-width: 400px;
+            width: 90%;
+            animation: popIn 0.3s ease;
+        }
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        .result-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        .result-title {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+        .result-code {
+            background: var(--bg);
+            padding: 1rem;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 1.3rem;
+            letter-spacing: 2px;
+            color: var(--success);
+            margin: 1rem 0;
+        }
+        .history {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+        }
+        .history-item:last-child { border-bottom: none; }
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-win { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+        .badge-lose { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .login-prompt {
+            text-align: center;
+            padding: 3rem 1rem;
+        }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎰 幸运抽奖</h1>
+            <p>试试手气，赢取邀请码！</p>
+        </div>
+
+        <!-- 未登录 -->
+        <div id="loginPrompt" class="card login-prompt hidden">
+            <p style="font-size: 1.2rem; margin-bottom: 1rem;">请先登录</p>
+            <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与抽奖</p>
+            <a href="/" class="btn btn-primary" style="display: inline-block; width: auto; padding: 0.75rem 2rem; text-decoration: none;">前往登录</a>
+        </div>
+
+        <!-- 已登录 -->
+        <div id="mainContent" class="hidden">
+            <div class="card">
+                <div class="user-info">
+                    <img id="userAvatar" class="user-avatar" src="" alt="">
+                    <div>
+                        <div id="userName" class="user-name">-</div>
+                        <div id="userMeta" class="user-meta">-</div>
+                    </div>
+                </div>
+                
+                <div class="stats">
+                    <div>
+                        <div class="stat-value" id="todayChances">-</div>
+                        <div class="stat-label">今日剩余</div>
+                    </div>
+                    <div>
+                        <div class="stat-value" id="totalDraws">-</div>
+                        <div class="stat-label">累计抽奖</div>
+                    </div>
+                    <div>
+                        <div class="stat-value" id="totalWins">-</div>
+                        <div class="stat-label">中奖次数</div>
+                    </div>
+                </div>
+
+                <div class="lottery-wheel">
+                    <div class="wheel-pointer"></div>
+                    <div id="wheel" class="wheel"></div>
+                    <div class="wheel-center">🎯</div>
+                </div>
+
+                <div style="text-align: center;">
+                    <div class="price-tag">
+                        <span>💰</span>
+                        <span>每次抽奖消耗 <strong>2 Credit</strong></span>
+                    </div>
+                </div>
+
+                <button id="drawBtn" class="btn btn-primary" onclick="startDraw()">
+                    🎲 开始抽奖
+                </button>
+                <p id="drawStatus" style="text-align: center; margin-top: 0.75rem; color: var(--muted); font-size: 0.85rem;"></p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-bottom: 1rem;">📜 抽奖记录</h3>
+                <div id="historyList" class="history">
+                    <p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 1rem;">
+                <a href="/" class="btn btn-outline" style="display: inline-block; width: auto; padding: 0.5rem 1.5rem; text-decoration: none;">返回首页</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 结果弹窗 -->
+    <div id="resultModal" class="result-modal">
+        <div class="result-content">
+            <div id="resultIcon" class="result-icon">🎉</div>
+            <div id="resultTitle" class="result-title">恭喜中奖！</div>
+            <div id="resultDesc" style="color: var(--muted); margin-bottom: 1rem;">您获得了一个邀请码</div>
+            <div id="resultCode" class="result-code hidden">-</div>
+            <button onclick="closeResult()" class="btn btn-primary" style="margin-top: 1rem;">确定</button>
+        </div>
+    </div>
+
+    <script>
+        let jwtToken = localStorage.getItem('token') || '';
+        let currentUser = null;
+        let isDrawing = false;
+        let wheelRotation = 0;
+
+        async function checkLogin() {
+            if (!jwtToken) {
+                document.getElementById('loginPrompt').classList.remove('hidden');
+                return false;
+            }
+            
+            try {
+                const res = await fetch('/api/user/state', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (!res.ok) {
+                    localStorage.removeItem('token');
+                    document.getElementById('loginPrompt').classList.remove('hidden');
+                    return false;
+                }
+                const data = await res.json();
+                currentUser = data.user;
+                return true;
+            } catch (err) {
+                document.getElementById('loginPrompt').classList.remove('hidden');
+                return false;
+            }
+        }
+
+        function renderUser() {
+            if (!currentUser) return;
+            
+            const avatar = currentUser.avatar_template 
+                ? currentUser.avatar_template.replace('{size}', '96')
+                : `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%23f59e0b"/><text x="50" y="65" font-size="50" fill="white" text-anchor="middle">${currentUser.username[0].toUpperCase()}</text></svg>`;
+            
+            document.getElementById('userAvatar').src = avatar;
+            document.getElementById('userName').textContent = currentUser.name || currentUser.username;
+            document.getElementById('userMeta').textContent = `@${currentUser.username} · TL${currentUser.trust_level}`;
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/lottery/stats', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('todayChances').textContent = data.todayRemaining || 0;
+                    document.getElementById('totalDraws').textContent = data.totalDraws || 0;
+                    document.getElementById('totalWins').textContent = data.totalWins || 0;
+                }
+            } catch (err) {
+                console.error('加载统计失败:', err);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const res = await fetch('/api/lottery/history', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    renderHistory(data.records || []);
+                }
+            } catch (err) {
+                console.error('加载历史失败:', err);
+            }
+        }
+
+        function renderHistory(records) {
+            const container = document.getElementById('historyList');
+            if (!records.length) {
+                container.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>';
+                return;
+            }
+            
+            container.innerHTML = records.slice(0, 20).map(r => `
+                <div class="history-item">
+                    <span>${new Date(r.createdAt).toLocaleString('zh-CN')}</span>
+                    <span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎉 中奖' : '未中奖'}</span>
+                </div>
+            `).join('');
+        }
+
+        async function startDraw() {
+            if (isDrawing) return;
+            
+            const btn = document.getElementById('drawBtn');
+            const status = document.getElementById('drawStatus');
+            
+            btn.disabled = true;
+            status.textContent = '正在跳转支付...';
+            
+            try {
+                const res = await fetch('/api/lottery/draw', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    status.textContent = data.error || '抽奖失败';
+                    btn.disabled = false;
+                    return;
+                }
+                
+                // 跳转支付
+                if (data.payParams && data.payGateway) {
+                    submitPayForm(data.payGateway, data.payParams);
+                }
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+                btn.disabled = false;
+            }
+        }
+
+        function submitPayForm(gateway, params) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = gateway;
+            form.style.display = 'none';
+            
+            for (const [key, value] of Object.entries(params)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
+            }
+            
+            document.body.appendChild(form);
+            form.submit();
+        }
+
+        function spinWheel(won) {
+            isDrawing = true;
+            const wheel = document.getElementById('wheel');
+            
+            // 计算目标角度
+            // 中奖区域: 0-72, 144-216, 288-360 (绿色)
+            // 未中奖: 72-144, 216-288 (红色)
+            let targetAngle;
+            if (won) {
+                // 随机落在绿色区域
+                const greenZones = [[10, 62], [154, 206], [298, 350]];
+                const zone = greenZones[Math.floor(Math.random() * greenZones.length)];
+                targetAngle = zone[0] + Math.random() * (zone[1] - zone[0]);
+            } else {
+                // 随机落在红色区域
+                const redZones = [[82, 134], [226, 278]];
+                const zone = redZones[Math.floor(Math.random() * redZones.length)];
+                targetAngle = zone[0] + Math.random() * (zone[1] - zone[0]);
+            }
+            
+            // 多转几圈
+            wheelRotation += 360 * 5 + (360 - targetAngle);
+            wheel.style.transform = `rotate(${wheelRotation}deg)`;
+            
+            return new Promise(resolve => setTimeout(resolve, 4000));
+        }
+
+        function showResult(won, code) {
+            const modal = document.getElementById('resultModal');
+            const icon = document.getElementById('resultIcon');
+            const title = document.getElementById('resultTitle');
+            const desc = document.getElementById('resultDesc');
+            const codeEl = document.getElementById('resultCode');
+            
+            if (won) {
+                icon.textContent = '🎉';
+                title.textContent = '恭喜中奖！';
+                title.style.color = 'var(--success)';
+                desc.textContent = '您获得了一个邀请码';
+                codeEl.textContent = code;
+                codeEl.classList.remove('hidden');
+            } else {
+                icon.textContent = '😢';
+                title.textContent = '很遗憾';
+                title.style.color = 'var(--danger)';
+                desc.textContent = '未能中奖，下次好运！';
+                codeEl.classList.add('hidden');
+            }
+            
+            modal.classList.add('show');
+        }
+
+        function closeResult() {
+            document.getElementById('resultModal').classList.remove('show');
+            isDrawing = false;
+            document.getElementById('drawBtn').disabled = false;
+            document.getElementById('drawStatus').textContent = '';
+            loadStats();
+            loadHistory();
+        }
+
+        // 检查支付回调
+        async function checkPaymentResult() {
+            const params = new URLSearchParams(window.location.search);
+            const orderId = params.get('order_id') || params.get('out_trade_no');
+            
+            if (orderId && orderId.startsWith('LOT')) {
+                // 清除 URL 参数
+                history.replaceState({}, '', '/lottery.html');
+                
+                const btn = document.getElementById('drawBtn');
+                const status = document.getElementById('drawStatus');
+                btn.disabled = true;
+                status.textContent = '正在查询抽奖结果...';
+                
+                // 轮询查询抽奖结果（最多等待 10 秒）
+                let attempts = 0;
+                const maxAttempts = 20;
+                
+                const pollResult = async () => {
+                    try {
+                        const res = await fetch(`/api/lottery/result?orderId=${orderId}`, {
+                            headers: { 'Authorization': `Bearer ${jwtToken}` }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.status === 'completed') {
+                                await spinWheel(data.won);
+                                showResult(data.won, data.inviteCode);
+                                return;
+                            } else if (data.status === 'pending' && attempts < maxAttempts) {
+                                attempts++;
+                                status.textContent = `正在等待支付确认... (${attempts}/${maxAttempts})`;
+                                setTimeout(pollResult, 500);
+                                return;
+                            }
+                        }
+                        // 超时或失败
+                        status.textContent = '支付确认超时，请刷新页面查看结果';
+                        btn.disabled = false;
+                    } catch (err) {
+                        console.error('查询结果失败:', err);
+                        status.textContent = '查询失败，请刷新页面';
+                        btn.disabled = false;
+                    }
+                };
+                
+                pollResult();
+            }
+        }
+
+        // 初始化
+        (async () => {
+            const loggedIn = await checkLogin();
+            if (loggedIn) {
+                document.getElementById('mainContent').classList.remove('hidden');
+                renderUser();
+                loadStats();
+                loadHistory();
+                checkPaymentResult();
+            }
+        })();
+    </script>
+</body>
+</html>
