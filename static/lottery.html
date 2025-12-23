@@ -271,7 +271,7 @@
         <div id="loginPrompt" class="card login-prompt hidden">
             <p style="font-size: 1.2rem; margin-bottom: 1rem;">请先登录</p>
             <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与抽奖</p>
-            <a href="/" class="btn btn-primary" style="display: inline-block; width: auto; padding: 0.75rem 2rem; text-decoration: none;">前往登录</a>
+            <button onclick="goToLogin()" class="btn btn-primary" style="display: inline-block; width: auto; padding: 0.75rem 2rem;">前往登录</button>
         </div>
 
         <!-- 已登录 -->
@@ -349,6 +349,19 @@
         let isDrawing = false;
         let wheelRotation = 0;
 
+        // 检查 URL 参数中的 token（从 www 域名跳转过来）
+        (function checkUrlToken() {
+            const params = new URLSearchParams(window.location.search);
+            const urlToken = params.get('token');
+            if (urlToken) {
+                localStorage.setItem('token', urlToken);
+                jwtToken = urlToken;
+                // 清除 URL 中的 token 参数
+                const newUrl = window.location.pathname + (params.get('order_id') ? `?order_id=${params.get('order_id')}` : '');
+                history.replaceState({}, '', newUrl || '/');
+            }
+        })();
+
         async function checkLogin() {
             if (!jwtToken) {
                 document.getElementById('loginPrompt').classList.remove('hidden');
@@ -371,6 +384,12 @@
                 document.getElementById('loginPrompt').classList.remove('hidden');
                 return false;
             }
+        }
+
+        function goToLogin() {
+            // 跳转到 www 域名登录，带上回调地址
+            const returnUrl = encodeURIComponent(window.location.href);
+            window.location.href = `https://www.6666727.xyz/?lottery_return=${returnUrl}`;
         }
 
         function renderUser() {

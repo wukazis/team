@@ -689,7 +689,29 @@
                 return;
             }
             
-            if (params.get('token')) { setToken(params.get('token')); history.replaceState({}, '', '/'); }
+            // 处理从抽奖页面跳转过来的登录请求
+            const lotteryReturn = params.get('lottery_return');
+            if (lotteryReturn) {
+                localStorage.setItem('lottery_return', lotteryReturn);
+                params.delete('lottery_return');
+                const newSearch = params.toString();
+                history.replaceState({}, '', '/' + (newSearch ? '?' + newSearch : ''));
+            }
+            
+            if (params.get('token')) {
+                setToken(params.get('token'));
+                history.replaceState({}, '', '/');
+                
+                // 如果有抽奖页面回调，带 token 跳回去
+                const returnUrl = localStorage.getItem('lottery_return');
+                if (returnUrl) {
+                    localStorage.removeItem('lottery_return');
+                    const token = getToken();
+                    const separator = returnUrl.includes('?') ? '&' : '?';
+                    window.location.href = returnUrl + separator + 'token=' + token;
+                    return;
+                }
+            }
             try { turnstileSiteKey = (await (await fetch('/api/turnstile/site-key')).json()).siteKey; } catch {}
             
             // 检查维护模式
