@@ -2599,7 +2599,7 @@ def admin_get_orders():
     orders = conn.execute('''
         SELECT co.*, u.username, u.name as user_display_name
         FROM credit_orders co
-        LEFT JOIN users u ON co.user_id = u.user_id
+        LEFT JOIN users u ON co.user_id = u.id
         ORDER BY co.created_at DESC
         LIMIT 100
     ''').fetchall()
