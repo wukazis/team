@@ -71,6 +71,14 @@ MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '')
 MS_CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '')
 MS_MAIL_FROM = os.environ.get('MS_MAIL_FROM', '')  # 发件人邮箱
 
+# AWS SES 邮件配置
+AWS_SES_REGION = os.environ.get('AWS_SES_REGION', 'us-east-1')
+AWS_SES_FROM = os.environ.get('AWS_SES_FROM', '')  # SES 发件人邮箱
+# AWS 凭证使用 IAM Role 或环境变量 AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY
+
+# 邮件发送方式: 'ses' 或 'msgraph'
+EMAIL_PROVIDER = os.environ.get('EMAIL_PROVIDER', 'msgraph')
+
 # 测试模式（跳过真实发送 ChatGPT 邀请）
 TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 
@@ -831,7 +839,42 @@ def get_ms_access_token() -> str:
     
     return _ms_token_cache['token']
 
+# ========== AWS SES 邮件 ==========
+
+def send_email_ses(to_email: str, subject: str, html_content: str) -> bool:
+    """通过 AWS SES 发送邮件"""
+    if not AWS_SES_FROM:
+        print("AWS SES 未配置")
+        return False
+    
+    try:
+        import boto3
+        from botocore.exceptions import ClientError
+        
+        client = boto3.client('ses', region_name=AWS_SES_REGION)
+        
+        response = client.send_email(
+            Source=AWS_SES_FROM,
+            Destination={'ToAddresses': [to_email]},
+            Message={
+                'Subject': {'Data': subject, 'Charset': 'UTF-8'},
+                'Body': {'Html': {'Data': html_content, 'Charset': 'UTF-8'}}
+            }
+        )
+        print(f"SES 邮件发送成功: {response['MessageId']}")
+        return True
+    except Exception as e:
+        print(f"SES 发送邮件失败: {e}")
+        return False
+
 def send_email(to_email: str, subject: str, html_content: str) -> bool:
+    """发送邮件（根据配置选择 SES 或 Microsoft Graph）"""
+    if EMAIL_PROVIDER == 'ses':
+        return send_email_ses(to_email, subject, html_content)
+    else:
+        return send_email_msgraph(to_email, subject, html_content)
+
+def send_email_msgraph(to_email: str, subject: str, html_content: str) -> bool:
     """通过 Microsoft Graph API 发送邮件"""
     if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
         print("Microsoft Graph API 未配置")
