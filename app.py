@@ -1334,11 +1334,28 @@ def get_order_status():
     if not order:
         return jsonify({'error': '订单不存在'}), 404
     
+    # 如果是 pending 状态，生成支付链接
+    pay_url = None
+    if order['status'] == 'pending':
+        pay_params = {
+            'pid': CREDIT_PID,
+            'type': 'epay',
+            'out_trade_no': order['order_id'],
+            'name': 'Team邀请码',
+            'money': str(order['amount']),
+            'notify_url': f"{APP_BASE_URL}/notify",
+            'return_url': f"{APP_BASE_URL}/waiting"
+        }
+        pay_params['sign'] = generate_epay_sign(pay_params)
+        pay_params['sign_type'] = 'MD5'
+        pay_url = f"{CREDIT_GATEWAY}/pay/submit.php?{urlencode(pay_params)}"
+    
     return jsonify({
         'orderId': order['order_id'],
         'amount': order['amount'],
         'status': order['status'],
         'inviteCode': order['invite_code'] if order['status'] == 'paid' else None,
+        'payUrl': pay_url,
         'createdAt': str(order['created_at']),
         'paidAt': str(order['paid_at']) if order['paid_at'] else None
     })
