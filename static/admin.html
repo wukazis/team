@@ -320,6 +320,7 @@
             <div class="tabs">
                 <button class="tab active" onclick="switchTab('accounts')"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="vertical-align: -2px; margin-right: 2px;"><path d="M22.2819 9.8211a5.9847 5.9847 0 0 0-.5157-4.9108 6.0462 6.0462 0 0 0-6.5098-2.9A6.0651 6.0651 0 0 0 4.9807 4.1818a5.9847 5.9847 0 0 0-3.9977 2.9 6.0462 6.0462 0 0 0 .7427 7.0966 5.98 5.98 0 0 0 .511 4.9107 6.051 6.051 0 0 0 6.5146 2.9001A5.9847 5.9847 0 0 0 13.2599 24a6.0557 6.0557 0 0 0 5.7718-4.2058 5.9894 5.9894 0 0 0 3.9977-2.9001 6.0557 6.0557 0 0 0-.7475-7.0729zm-9.022 12.6081a4.4755 4.4755 0 0 1-2.8764-1.0408l.1419-.0804 4.7783-2.7582a.7948.7948 0 0 0 .3927-.6813v-6.7369l2.02 1.1686a.071.071 0 0 1 .038.052v5.5826a4.504 4.504 0 0 1-4.4945 4.4944zm-9.6607-4.1254a4.4708 4.4708 0 0 1-.5346-3.0137l.142.0852 4.783 2.7582a.7712.7712 0 0 0 .7806 0l5.8428-3.3685v2.3324a.0804.0804 0 0 1-.0332.0615L9.74 19.9502a4.4992 4.4992 0 0 1-6.1408-1.6464zM2.3408 7.8956a4.485 4.485 0 0 1 2.3655-1.9728V11.6a.7664.7664 0 0 0 .3879.6765l5.8144 3.3543-2.0201 1.1685a.0757.0757 0 0 1-.071 0l-4.8303-2.7865A4.504 4.504 0 0 1 2.3408 7.872zm16.5963 3.8558L13.1038 8.364 15.1192 7.2a.0757.0757 0 0 1 .071 0l4.8303 2.7913a4.4944 4.4944 0 0 1-.6765 8.1042v-5.6772a.79.79 0 0 0-.407-.667zm2.0107-3.0231l-.142-.0852-4.7735-2.7818a.7759.7759 0 0 0-.7854 0L9.409 9.2297V6.8974a.0662.0662 0 0 1 .0284-.0615l4.8303-2.7866a4.4992 4.4992 0 0 1 6.6802 4.66zM8.3065 12.863l-2.02-1.1638a.0804.0804 0 0 1-.038-.0567V6.0742a4.4992 4.4992 0 0 1 7.3757-3.4537l-.142.0805L8.704 5.459a.7948.7948 0 0 0-.3927.6813zm1.0976-2.3654l2.602-1.4998 2.6069 1.4998v2.9994l-2.5974 1.4997-2.6067-1.4997Z"/></svg> Team 车账号</button>
                 <button class="tab" onclick="switchTab('codes')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 2px;"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg> 邀请码</button>
+                <button class="tab" onclick="switchTab('orders')"><i class="bi bi-receipt" style="margin-right: 2px;"></i> 订单</button>
                 <button class="tab" onclick="switchTab('users')"><i class="bi bi-people" style="margin-right: 2px;"></i> 用户</button>
                 <button class="tab" onclick="switchTab('queue')"><i class="bi bi-hourglass-split" style="margin-right: 2px;"></i> 队列</button>
                 <button class="tab" onclick="switchTab('cooldown')"><i class="bi bi-clock-history" style="margin-right: 2px;"></i> 冷却</button>
@@ -399,6 +400,53 @@
                             </tr>
                         </thead>
                         <tbody id="codeList"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Credit 订单管理 -->
+            <div id="ordersSection" class="section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">总订单</div>
+                        <div class="value" id="statOrderTotal">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">待支付</div>
+                        <div class="value" id="statOrderPending" style="color: var(--warning);">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">已完成</div>
+                        <div class="value" id="statOrderPaid" style="color: var(--success);">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">已取消</div>
+                        <div class="value" id="statOrderCancelled" style="color: var(--muted);">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="title">订单列表</span>
+                        <div class="table-actions">
+                            <button class="btn btn-danger" onclick="clearCancelledOrders()">清除已取消</button>
+                            <button class="btn btn-ghost" onclick="loadOrders()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>用户</th>
+                                <th>金额</th>
+                                <th>状态</th>
+                                <th>邀请码</th>
+                                <th>创建时间</th>
+                                <th>支付时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orderList"></tbody>
                     </table>
                 </div>
             </div>
@@ -860,6 +908,7 @@
                 loadAccounts(),
                 loadCodes(),
                 loadStats(),
+                loadOrders(),
                 loadUsers(),
                 loadQueue(),
                 loadCooldownUsers(),
@@ -1348,6 +1397,96 @@
             await api(`/admin/codes/${id}`, { method: 'DELETE' });
             loadCodes();
             loadStats();
+        }
+
+        async function clearAllCodes() {
+            if (!confirm('确定删除所有邀请码？此操作不可恢复！')) return;
+            await api('/admin/codes/clear', { method: 'POST' });
+            loadCodes();
+            loadStats();
+        }
+
+        // ========== Credit 订单 ==========
+        async function loadOrders() {
+            const { ok, data } = await api('/admin/orders');
+            
+            if (!ok) {
+                document.getElementById('orderList').innerHTML = '<tr><td colspan="8" class="empty-state">加载失败</td></tr>';
+                return;
+            }
+            
+            // 更新统计
+            const stats = data.stats || {};
+            document.getElementById('statOrderTotal').textContent = stats.total || 0;
+            document.getElementById('statOrderPending').textContent = stats.pending || 0;
+            document.getElementById('statOrderPaid').textContent = stats.paid || 0;
+            document.getElementById('statOrderCancelled').textContent = stats.cancelled || 0;
+            
+            const tbody = document.getElementById('orderList');
+            const orders = data.orders || [];
+            
+            if (orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无订单</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = orders.map(o => {
+                const statusBadge = {
+                    'pending': '<span class="badge" style="background:#fef3c7;color:#92400e;">待支付</span>',
+                    'paid': '<span class="badge available">已完成</span>',
+                    'cancelled': '<span class="badge disabled">已取消</span>'
+                }[o.status] || o.status;
+                
+                const actions = [];
+                if (o.status === 'pending') {
+                    actions.push(`<button class="btn btn-danger btn-sm" onclick="cancelOrder('${o.order_id}')">取消</button>`);
+                }
+                actions.push(`<button class="btn btn-ghost btn-sm" onclick="deleteOrder('${o.order_id}')">删除</button>`);
+                
+                return `
+                    <tr>
+                        <td><span class="code" style="font-size:0.8rem;">${o.order_id}</span></td>
+                        <td>${o.username || o.user_display_name || o.user_id}</td>
+                        <td>${o.amount} Credit</td>
+                        <td>${statusBadge}</td>
+                        <td>${o.invite_code ? `<span class="code">${o.invite_code}</span>` : '-'}</td>
+                        <td class="text-muted">${formatTime(o.created_at)}</td>
+                        <td class="text-muted">${o.paid_at ? formatTime(o.paid_at) : '-'}</td>
+                        <td>${actions.join(' ')}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function cancelOrder(orderId) {
+            if (!confirm('确定取消此订单？')) return;
+            const { ok, data } = await api(`/admin/orders/${orderId}/cancel`, { method: 'POST' });
+            if (!ok) {
+                alert(data?.error || '取消失败');
+                return;
+            }
+            loadOrders();
+        }
+
+        async function deleteOrder(orderId) {
+            if (!confirm('确定删除此订单？')) return;
+            const { ok, data } = await api(`/admin/orders/${orderId}`, { method: 'DELETE' });
+            if (!ok) {
+                alert(data?.error || '删除失败');
+                return;
+            }
+            loadOrders();
+        }
+
+        async function clearCancelledOrders() {
+            if (!confirm('确定清除所有已取消的订单？')) return;
+            const { ok, data } = await api('/admin/orders/clear-cancelled', { method: 'POST' });
+            if (ok) {
+                alert(`已清除 ${data.deleted || 0} 个订单`);
+                loadOrders();
+            } else {
+                alert('清除失败');
+            }
         }
 
         // ========== 用户 ==========

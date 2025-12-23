@@ -1186,7 +1186,7 @@ def get_credit_price():
 @app.route('/api/credit/create-order', methods=['POST'])
 @jwt_required
 def create_credit_order():
-    """创建 Credit 购买订单，返回支付跳转 URL"""
+    """创建 Credit 购买订单，返回支付表单参数"""
     if not CREDIT_PID or not CREDIT_KEY:
         return jsonify({'error': 'Credit 支付未配置'}), 500
     
@@ -1234,7 +1234,7 @@ def create_credit_order():
     if pending:
         created_at = parse_datetime(pending['created_at'])
         if created_at and datetime.utcnow() - created_at < timedelta(minutes=30):
-            # 返回已有订单的支付链接
+            # 返回已有订单的支付参数
             pay_params = {
                 'pid': CREDIT_PID,
                 'type': 'epay',
@@ -1246,13 +1246,13 @@ def create_credit_order():
             }
             pay_params['sign'] = generate_epay_sign(pay_params)
             pay_params['sign_type'] = 'MD5'
-            pay_url = f"{CREDIT_GATEWAY}/pay/submit.php?{urlencode(pay_params)}"
             
             conn.close()
             return jsonify({
                 'orderId': pending['order_id'],
                 'amount': pending['amount'],
-                'payUrl': pay_url,
+                'payParams': pay_params,
+                'payGateway': f"{CREDIT_GATEWAY}/pay/submit.php",
                 'message': '您有未完成的订单'
             })
         else:
@@ -1301,12 +1301,12 @@ def create_credit_order():
     }
     pay_params['sign'] = generate_epay_sign(pay_params)
     pay_params['sign_type'] = 'MD5'
-    pay_url = f"{CREDIT_GATEWAY}/pay/submit.php?{urlencode(pay_params)}"
     
     return jsonify({
         'orderId': order_id,
         'amount': INVITE_CODE_PRICE,
-        'payUrl': pay_url,
+        'payParams': pay_params,
+        'payGateway': f"{CREDIT_GATEWAY}/pay/submit.php",
         'message': '订单创建成功，请完成支付'
     })
 
@@ -1334,8 +1334,9 @@ def get_order_status():
     if not order:
         return jsonify({'error': '订单不存在'}), 404
     
-    # 如果是 pending 状态，生成支付链接
-    pay_url = None
+    # 如果是 pending 状态，生成支付参数
+    pay_params = None
+    pay_gateway = None
     if order['status'] == 'pending':
         pay_params = {
             'pid': CREDIT_PID,
@@ -1348,14 +1349,15 @@ def get_order_status():
         }
         pay_params['sign'] = generate_epay_sign(pay_params)
         pay_params['sign_type'] = 'MD5'
-        pay_url = f"{CREDIT_GATEWAY}/pay/submit.php?{urlencode(pay_params)}"
+        pay_gateway = f"{CREDIT_GATEWAY}/pay/submit.php"
     
     return jsonify({
         'orderId': order['order_id'],
         'amount': order['amount'],
         'status': order['status'],
         'inviteCode': order['invite_code'] if order['status'] == 'paid' else None,
-        'payUrl': pay_url,
+        'payParams': pay_params,
+        'payGateway': pay_gateway,
         'createdAt': str(order['created_at']),
         'paidAt': str(order['paid_at']) if order['paid_at'] else None
     })
@@ -2537,6 +2539,88 @@ def get_maintenance_status():
         'endTime': MAINTENANCE_END_TIME,
         'userAllowed': user_allowed
     })
+
+# ========== Credit 订单管理 API ==========
+
+@app.route('/api/admin/orders', methods=['GET'])
+@admin_required
+def admin_get_orders():
+    """获取所有订单"""
+    conn = get_db()
+    
+    # 获取统计
+    stats = {
+        'total': conn.execute('SELECT COUNT(*) FROM credit_orders').fetchone()[0],
+        'pending': conn.execute("SELECT COUNT(*) FROM credit_orders WHERE status = 'pending'").fetchone()[0],
+        'paid': conn.execute("SELECT COUNT(*) FROM credit_orders WHERE status = 'paid'").fetchone()[0],
+        'cancelled': conn.execute("SELECT COUNT(*) FROM credit_orders WHERE status = 'cancelled'").fetchone()[0]
+    }
+    
+    # 获取订单列表（最近100条）
+    orders = conn.execute('''
+        SELECT co.*, u.username, u.name as user_display_name
+        FROM credit_orders co
+        LEFT JOIN users u ON co.user_id = u.user_id
+        ORDER BY co.created_at DESC
+        LIMIT 100
+    ''').fetchall()
+    conn.close()
+    
+    return jsonify({
+        'stats': stats,
+        'orders': [dict(o) for o in orders]
+    })
+
+@app.route('/api/admin/orders/<order_id>', methods=['DELETE'])
+@admin_required
+def admin_delete_order(order_id):
+    """删除订单"""
+    conn = get_db()
+    order = conn.execute('SELECT * FROM credit_orders WHERE order_id = ?', (order_id,)).fetchone()
+    if not order:
+        conn.close()
+        return jsonify({'error': '订单不存在'}), 404
+    
+    conn.execute('DELETE FROM credit_orders WHERE order_id = ?', (order_id,))
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('删除订单', f'order_id={order_id}')
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/admin/orders/<order_id>/cancel', methods=['POST'])
+@admin_required
+def admin_cancel_order(order_id):
+    """取消订单"""
+    conn = get_db()
+    order = conn.execute('SELECT * FROM credit_orders WHERE order_id = ?', (order_id,)).fetchone()
+    if not order:
+        conn.close()
+        return jsonify({'error': '订单不存在'}), 404
+    
+    if order['status'] != 'pending':
+        conn.close()
+        return jsonify({'error': '只能取消待支付订单'}), 400
+    
+    conn.execute("UPDATE credit_orders SET status = 'cancelled' WHERE order_id = ?", (order_id,))
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('取消订单', f'order_id={order_id}')
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/admin/orders/clear-cancelled', methods=['POST'])
+@admin_required
+def admin_clear_cancelled_orders():
+    """清除所有已取消订单"""
+    conn = get_db()
+    result = conn.execute("DELETE FROM credit_orders WHERE status = 'cancelled'")
+    count = result.rowcount
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('清除已取消订单', f'count={count}')
+    return jsonify({'status': 'ok', 'deleted': count})
 
 # ========== 候车室设置 API ==========
 
