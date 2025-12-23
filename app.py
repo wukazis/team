@@ -1197,12 +1197,6 @@ def create_credit_order():
         return jsonify({'error': 'Credit 支付未配置'}), 500
     
     user_id = request.user['user_id']
-    username = request.user.get('username', '')
-    trust_level = request.user.get('trust_level', 0)
-    
-    # 信任级别检查（TL2）
-    if trust_level < 2:
-        return jsonify({'error': f'需要信任级别 2 才能购买，您当前为 TL{trust_level}'}), 403
     
     conn = get_db()
     
