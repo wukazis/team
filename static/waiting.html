@@ -1092,7 +1092,12 @@
                 
                 if (res.ok) {
                     currentOrderId = data.orderId;
-                    showPendingOrder(data.orderId, data.amount);
+                    // 直接跳转到支付页面
+                    if (data.payUrl) {
+                        window.location.href = data.payUrl;
+                    } else {
+                        showPendingOrder(data.orderId, data.amount, null);
+                    }
                 } else {
                     if (data.daysLeft) {
                         showCooldown(data.daysLeft);
@@ -1146,7 +1151,7 @@
                     showBuySuccess(data.inviteCode);
                 } else if (data.status === 'pending') {
                     currentOrderId = data.orderId;
-                    showPendingOrder(data.orderId, data.amount);
+                    showPendingOrder(data.orderId, data.amount, data.payUrl);
                 } else {
                     // 检查冷却期
                     await checkUserCooldown();
@@ -1194,15 +1199,17 @@
             btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="9" cy="21" r="1"></circle><circle cx="20" cy="21" r="1"></circle><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path></svg> 立即购买`;
         }
 
-        function showPendingOrder(orderId, amount) {
+        function showPendingOrder(orderId, amount, payUrl) {
             document.getElementById('queueCooldown').classList.add('hidden');
             document.getElementById('buyForm').classList.add('hidden');
             document.getElementById('pendingOrder').classList.remove('hidden');
             document.getElementById('buySuccess').classList.add('hidden');
             document.getElementById('pendingOrderId').textContent = orderId;
             document.getElementById('pendingAmount').textContent = amount;
-            // 设置支付链接（LinuxDO 集市支付页面）
-            document.getElementById('payLink').href = `https://linux.do/pay/${orderId}`;
+            // 设置支付链接
+            if (payUrl) {
+                document.getElementById('payLink').href = payUrl;
+            }
         }
 
         function showBuySuccess(inviteCode) {

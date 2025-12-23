@@ -65,9 +65,10 @@ CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 HCAPTCHA_SITE_KEY = os.environ.get('HCAPTCHA_SITE_KEY', '')
 HCAPTCHA_SECRET_KEY = os.environ.get('HCAPTCHA_SECRET_KEY', '')
 
-# LinuxDO 集市配置（Credit 购买）
-LINUXDO_MARKET_CLIENT_ID = os.environ.get('LINUXDO_MARKET_CLIENT_ID', '')
-LINUXDO_MARKET_CLIENT_SECRET = os.environ.get('LINUXDO_MARKET_CLIENT_SECRET', '')
+# LinuxDO Credit 易支付配置
+CREDIT_PID = os.environ.get('CREDIT_PID', '')  # Client ID
+CREDIT_KEY = os.environ.get('CREDIT_KEY', '')  # Client Secret
+CREDIT_GATEWAY = 'https://credit.linux.do/epay'
 INVITE_CODE_PRICE = int(os.environ.get('INVITE_CODE_PRICE', '100'))  # 邀请码价格（Credit）
 
 # 测试模式（跳过真实发送 ChatGPT 邀请）
@@ -1152,20 +1153,43 @@ def team_accounts_status():
     conn.close()
     return jsonify({'accounts': result})
 
-# ========== Credit 购买 API ==========
+# ========== Credit 易支付 API ==========
+
+def generate_epay_sign(params: dict) -> str:
+    """生成易支付签名"""
+    # 排除 sign 和 sign_type，过滤空值
+    filtered = {k: v for k, v in params.items() if k not in ('sign', 'sign_type') and v}
+    # 按 ASCII 升序排列
+    sorted_keys = sorted(filtered.keys())
+    # 拼接成 k1=v1&k2=v2
+    query_string = '&'.join(f"{k}={filtered[k]}" for k in sorted_keys)
+    # 末尾追加密钥
+    sign_str = f"{query_string}{CREDIT_KEY}"
+    # MD5 小写
+    return hashlib.md5(sign_str.encode()).hexdigest()
+
+def verify_epay_sign(params: dict) -> bool:
+    """验证易支付签名"""
+    sign = params.get('sign', '')
+    expected = generate_epay_sign(params)
+    return hmac.compare_digest(sign.lower(), expected.lower())
 
 @app.route('/api/credit/price')
 def get_credit_price():
     """获取邀请码价格"""
     return jsonify({
         'price': INVITE_CODE_PRICE,
-        'currency': 'Credit'
+        'currency': 'Credit',
+        'configured': bool(CREDIT_PID and CREDIT_KEY)
     })
 
 @app.route('/api/credit/create-order', methods=['POST'])
 @jwt_required
 def create_credit_order():
-    """创建 Credit 购买订单"""
+    """创建 Credit 购买订单，返回支付跳转 URL"""
+    if not CREDIT_PID or not CREDIT_KEY:
+        return jsonify({'error': 'Credit 支付未配置'}), 500
+    
     user_id = request.user['user_id']
     username = request.user.get('username', '')
     trust_level = request.user.get('trust_level', 0)
@@ -1208,17 +1232,30 @@ def create_credit_order():
     ''', (user_id,)).fetchone()
     
     if pending:
-        # 检查订单是否过期（30分钟）
         created_at = parse_datetime(pending['created_at'])
         if created_at and datetime.utcnow() - created_at < timedelta(minutes=30):
+            # 返回已有订单的支付链接
+            pay_params = {
+                'pid': CREDIT_PID,
+                'type': 'epay',
+                'out_trade_no': pending['order_id'],
+                'name': 'Team邀请码',
+                'money': str(pending['amount']),
+                'notify_url': f"{APP_BASE_URL}/notify",
+                'return_url': f"{APP_BASE_URL}/waiting"
+            }
+            pay_params['sign'] = generate_epay_sign(pay_params)
+            pay_params['sign_type'] = 'MD5'
+            pay_url = f"{CREDIT_GATEWAY}/pay/submit.php?{urlencode(pay_params)}"
+            
             conn.close()
             return jsonify({
                 'orderId': pending['order_id'],
                 'amount': pending['amount'],
+                'payUrl': pay_url,
                 'message': '您有未完成的订单'
             })
         else:
-            # 过期订单标记为取消
             conn.execute("UPDATE credit_orders SET status = 'cancelled' WHERE id = ?", (pending['id'],))
             conn.commit()
     
@@ -1252,9 +1289,24 @@ def create_credit_order():
     conn.commit()
     conn.close()
     
+    # 构建支付参数
+    pay_params = {
+        'pid': CREDIT_PID,
+        'type': 'epay',
+        'out_trade_no': order_id,
+        'name': 'Team邀请码',
+        'money': str(INVITE_CODE_PRICE),
+        'notify_url': f"{APP_BASE_URL}/notify",
+        'return_url': f"{APP_BASE_URL}/waiting"
+    }
+    pay_params['sign'] = generate_epay_sign(pay_params)
+    pay_params['sign_type'] = 'MD5'
+    pay_url = f"{CREDIT_GATEWAY}/pay/submit.php?{urlencode(pay_params)}"
+    
     return jsonify({
         'orderId': order_id,
         'amount': INVITE_CODE_PRICE,
+        'payUrl': pay_url,
         'message': '订单创建成功，请完成支付'
     })
 
@@ -1291,54 +1343,59 @@ def get_order_status():
         'paidAt': str(order['paid_at']) if order['paid_at'] else None
     })
 
-@app.route('/notify', methods=['POST'])
+@app.route('/notify', methods=['GET', 'POST'])
 def credit_notify():
-    """LinuxDO 集市支付回调"""
-    # 验证签名
-    if not LINUXDO_MARKET_CLIENT_SECRET:
-        print("集市 Client Secret 未配置")
-        return jsonify({'error': 'Not configured'}), 500
+    """LinuxDO Credit 易支付异步回调"""
+    # GET 请求用于异步通知
+    if request.method == 'GET':
+        params = request.args.to_dict()
+    else:
+        params = request.form.to_dict() or request.json or {}
     
-    # 获取请求数据
-    data = request.json or {}
-    print(f"[Credit Notify] 收到回调: {data}")
+    print(f"[Credit Notify] 收到回调: {params}")
     
     # 验证必要字段
-    order_id = data.get('order_id') or data.get('orderId')
-    user_id = data.get('user_id') or data.get('userId')
-    amount = data.get('amount')
-    signature = data.get('signature') or data.get('sign')
+    trade_no = params.get('trade_no', '')
+    out_trade_no = params.get('out_trade_no', '')
+    trade_status = params.get('trade_status', '')
+    money = params.get('money', '')
     
-    if not order_id or not user_id:
-        return jsonify({'error': 'Missing required fields'}), 400
+    if not out_trade_no:
+        print("[Credit Notify] 缺少 out_trade_no")
+        return 'fail', 400
     
-    # 验证签名（如果有）
-    if signature:
-        # 根据 LinuxDO 集市的签名规则验证
-        expected_sign = hmac.new(
-            LINUXDO_MARKET_CLIENT_SECRET.encode(),
-            f"{order_id}{user_id}{amount}".encode(),
-            hashlib.sha256
-        ).hexdigest()
-        if not hmac.compare_digest(signature, expected_sign):
-            print(f"[Credit Notify] 签名验证失败")
-            return jsonify({'error': 'Invalid signature'}), 403
+    # 验证签名
+    if not verify_epay_sign(params):
+        print("[Credit Notify] 签名验证失败")
+        return 'fail', 403
+    
+    # 验证交易状态
+    if trade_status != 'TRADE_SUCCESS':
+        print(f"[Credit Notify] 交易状态非成功: {trade_status}")
+        return 'success'  # 返回 success 避免重试
     
     conn = get_db()
     
     # 查找订单
     order = conn.execute('''
         SELECT * FROM credit_orders WHERE order_id = ?
-    ''', (order_id,)).fetchone()
+    ''', (out_trade_no,)).fetchone()
     
     if not order:
         conn.close()
-        print(f"[Credit Notify] 订单不存在: {order_id}")
-        return jsonify({'error': 'Order not found'}), 404
+        print(f"[Credit Notify] 订单不存在: {out_trade_no}")
+        return 'fail', 404
     
     if order['status'] == 'paid':
         conn.close()
-        return jsonify({'message': 'Already processed', 'inviteCode': order['invite_code']})
+        print(f"[Credit Notify] 订单已处理: {out_trade_no}")
+        return 'success'
+    
+    # 验证金额
+    if str(order['amount']) != str(money):
+        conn.close()
+        print(f"[Credit Notify] 金额不匹配: 订单={order['amount']}, 回调={money}")
+        return 'fail', 400
     
     # 查找可用车位
     available_account = conn.execute('''
@@ -1351,44 +1408,37 @@ def credit_notify():
     if not available_account:
         conn.close()
         print(f"[Credit Notify] 没有可用车位")
-        return jsonify({'error': 'No available seats'}), 400
+        return 'fail', 400
     
     # 生成邀请码
     invite_code = generate_code()
     
-    # 创建邀请码记录
+    # 创建邀请码记录并更新订单
     if USE_POSTGRES:
         conn.execute('''
             INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
             VALUES (%s, %s, %s, 1)
         ''', (invite_code, available_account['id'], order['user_id']))
+        conn.execute('''
+            UPDATE credit_orders SET status = 'paid', invite_code = %s, paid_at = NOW()
+            WHERE order_id = %s
+        ''', (invite_code, out_trade_no))
     else:
         conn.execute('''
             INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
             VALUES (?, ?, ?, 1)
         ''', (invite_code, available_account['id'], order['user_id']))
-    
-    # 更新订单状态
-    if USE_POSTGRES:
-        conn.execute('''
-            UPDATE credit_orders SET status = 'paid', invite_code = %s, paid_at = NOW()
-            WHERE order_id = %s
-        ''', (invite_code, order_id))
-    else:
         conn.execute('''
             UPDATE credit_orders SET status = 'paid', invite_code = ?, paid_at = datetime('now')
             WHERE order_id = ?
-        ''', (invite_code, order_id))
+        ''', (invite_code, out_trade_no))
     
     conn.commit()
     conn.close()
     
-    print(f"[Credit Notify] 订单 {order_id} 支付成功，邀请码: {invite_code}")
+    print(f"[Credit Notify] 订单 {out_trade_no} 支付成功，邀请码: {invite_code}")
     
-    return jsonify({
-        'message': 'Success',
-        'inviteCode': invite_code
-    })
+    return 'success'
 
 @app.route('/api/credit/my-orders')
 @jwt_required
