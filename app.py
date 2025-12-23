@@ -1671,126 +1671,15 @@ def get_queue_position_by_user(user_id: int) -> int:
 def notify_waiting_users(available_seats: int, force: bool = False):
     """自动给排队用户发送邀请码（按空位数量和车位分配）
     
+    注意：已改为 Credit 购买模式，此函数保留但不再自动发送邮件
+    
     Args:
         available_seats: 可用空位数（内部会重新计算）
         force: 是否强制发车（跳过人满发车检查）
     """
-    if not MS_TENANT_ID or not MS_CLIENT_ID or not MS_CLIENT_SECRET or not MS_MAIL_FROM:
-        print("Microsoft Graph API 邮件未配置，跳过自动发码")
-        return 0
-    
-    conn = get_db()
-    
-    # 1. 获取各车位的空位数量
-    accounts = conn.execute('''
-        SELECT id, name, seats_entitled, seats_in_use, pending_invites
-        FROM team_accounts WHERE enabled = 1
-    ''').fetchall()
-    
-    # 计算每个车位的可用空位（空位数 = 总席位 - 已用 - 待处理 - 已发出未使用的邀请码）
-    available_slots = []
-    for acc in accounts:
-        # 查询该车位已发出但未使用的邀请码数量（只统计系统自动生成的）
-        pending_codes = conn.execute('''
-            SELECT COUNT(*) FROM invite_codes 
-            WHERE team_account_id = ? AND used = 0 AND auto_generated = 1
-        ''', (acc['id'],)).fetchone()[0]
-        
-        avail = (acc['seats_entitled'] or 0) - (acc['seats_in_use'] or 0) - (acc['pending_invites'] or 0) - pending_codes
-        if avail > 0:
-            for _ in range(avail):
-                available_slots.append({'team_id': acc['id'], 'team_name': acc['name']})
-    
-    if not available_slots:
-        conn.close()
-        return 0
-    
-    # 2. 获取未通知的排队用户数量
-    queue_count = conn.execute('''
-        SELECT COUNT(*) FROM waiting_queue 
-        WHERE notified = 0 AND email IS NOT NULL AND email != ''
-    ''').fetchone()[0]
-    
-    # 发车人数要求：DISPATCH_MIN_PEOPLE=0 表示使用空位数，否则使用设定值
-    min_people = DISPATCH_MIN_PEOPLE if DISPATCH_MIN_PEOPLE > 0 else len(available_slots)
-    
-    # 人满发车：只有排队人数 >= 发车人数要求才发车（强制发车跳过此检查）
-    if not force and queue_count < min_people:
-        print(f"[轮询] 排队 {queue_count} 人，发车要求 {min_people} 人，空位 {len(available_slots)} 个，等待人满发车...")
-        conn.close()
-        return 0
-    
-    # 3. 获取未通知的排队用户（按排队顺序，数量等于空位数）
-    users = conn.execute('''
-        SELECT wq.*, u.username FROM waiting_queue wq
-        LEFT JOIN users u ON wq.user_id = u.id
-        WHERE wq.notified = 0 AND wq.email IS NOT NULL AND wq.email != ''
-        ORDER BY wq.created_at ASC LIMIT ?
-    ''', (len(available_slots),)).fetchall()
-    
-    if not users:
-        conn.close()
-        return 0
-    
-    # 4. 为每个用户生成邀请码并发送
-    sent_count = 0
-    for i, user in enumerate(users):
-        if i >= len(available_slots):
-            break
-        
-        # 检查该用户是否已有未使用的邀请码（防止重复发送）
-        existing_code = conn.execute('''
-            SELECT id FROM invite_codes WHERE user_id = ? AND used = 0 AND auto_generated = 1
-        ''', (user['user_id'],)).fetchone()
-        if existing_code:
-            print(f"[跳过] 用户 {user.get('username', user['user_id'])} 已有未使用的邀请码")
-            continue
-        
-        # 先标记用户为已通知（防止并发重复）
-        conn.execute('''
-            UPDATE waiting_queue SET notified = 1, notified_at = datetime('now') WHERE id = ? AND notified = 0
-        ''', (user['id'],))
-        if conn.rowcount == 0:
-            # 已被其他进程处理
-            print(f"[跳过] 用户 {user.get('username', user['user_id'])} 已被其他进程处理")
-            continue
-        conn.commit()
-        
-        slot = available_slots[i]
-        
-        # 生成邀请码
-        code = generate_code()
-        
-        # 插入邀请码（绑定车位和用户，标记为系统自动生成）
-        conn.execute('''
-            INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated) VALUES (?, ?, ?, 1)
-        ''', (code, slot['team_id'], user['user_id']))
-        
-        # 发送邮件（最多重试3次）
-        max_retries = 3
-        send_success = False
-        for retry in range(max_retries):
-            if send_invite_code_email(user['email'], code, slot['team_name']):
-                send_success = True
-                break
-            else:
-                if retry < max_retries - 1:
-                    print(f"发送邮件到 {user['email']} 失败，第 {retry + 1} 次重试...")
-                    time.sleep(2)  # 等待2秒后重试
-        
-        if send_success:
-            conn.commit()
-            sent_count += 1
-            print(f"已发送邀请码 {code} 到 {user['email']} (车位: {slot['team_name']})")
-        else:
-            # 发送失败，删除刚生成的邀请码，恢复用户未通知状态
-            conn.execute('DELETE FROM invite_codes WHERE code = ?', (code,))
-            conn.execute('UPDATE waiting_queue SET notified = 0, notified_at = NULL WHERE id = ?', (user['id'],))
-            conn.commit()
-            print(f"发送邀请码到 {user['email']} 失败（已重试 {max_retries} 次），已恢复排队状态")
-    
-    conn.close()
-    return sent_count
+    # Credit 购买模式下，不再自动发送邀请码
+    # 用户需要通过购买获取邀请码
+    return 0
 
 @app.route('/api/invite/check', methods=['POST'])
 def check_invite():
