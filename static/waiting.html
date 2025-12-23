@@ -638,12 +638,15 @@
                 <p style="color: var(--warning); font-weight: 500;">⏳ 待支付订单</p>
                 <p class="muted" style="margin-top: 0.5rem;">订单号: <span id="pendingOrderId">-</span></p>
                 <p class="muted" style="margin-top: 0.25rem;">金额: <span id="pendingAmount">-</span> Credit</p>
-                <div style="margin-top: 1rem;">
-                    <button onclick="goToPay()" class="btn btn-primary" style="margin-right: 0.5rem;">
+                <div style="margin-top: 1rem; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+                    <button onclick="goToPay()" class="btn btn-primary">
                         前往支付
                     </button>
                     <button onclick="checkOrderStatus()" class="btn btn-outline">
                         刷新状态
+                    </button>
+                    <button onclick="cancelMyOrder()" class="btn btn-outline" style="color: var(--danger); border-color: var(--danger);">
+                        取消订单
                     </button>
                 </div>
                 <p class="muted" style="margin-top: 0.75rem; font-size: 0.8rem;">支付完成后点击刷新状态</p>
@@ -1150,6 +1153,29 @@
                 }
             } catch (err) {
                 console.error('查询订单状态失败:', err);
+            }
+        }
+
+        async function cancelMyOrder() {
+            if (!currentOrderId) return;
+            if (!confirm('确定要取消此订单吗？')) return;
+            
+            try {
+                const res = await fetch(`/api/credit/cancel-order?orderId=${currentOrderId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    currentOrderId = null;
+                    showBuyForm();
+                    document.getElementById('buyStatus').textContent = '订单已取消';
+                } else {
+                    alert(data.error || '取消失败');
+                }
+            } catch (err) {
+                alert('网络错误，请重试');
             }
         }
 

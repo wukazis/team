@@ -1364,6 +1364,35 @@ def get_order_status():
         'paidAt': str(order['paid_at']) if order['paid_at'] else None
     })
 
+@app.route('/api/credit/cancel-order', methods=['POST'])
+@jwt_required
+def cancel_my_order():
+    """用户取消自己的订单"""
+    user_id = request.user['user_id']
+    order_id = request.args.get('orderId')
+    
+    if not order_id:
+        return jsonify({'error': '缺少订单号'}), 400
+    
+    conn = get_db()
+    order = conn.execute('''
+        SELECT * FROM credit_orders WHERE order_id = ? AND user_id = ?
+    ''', (order_id, user_id)).fetchone()
+    
+    if not order:
+        conn.close()
+        return jsonify({'error': '订单不存在'}), 404
+    
+    if order['status'] != 'pending':
+        conn.close()
+        return jsonify({'error': '只能取消待支付订单'}), 400
+    
+    conn.execute("UPDATE credit_orders SET status = 'cancelled' WHERE order_id = ?", (order_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'status': 'ok', 'message': '订单已取消'})
+
 @app.route('/notify', methods=['GET', 'POST'])
 def credit_notify():
     """LinuxDO Credit 易支付异步回调"""
