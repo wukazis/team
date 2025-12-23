@@ -1200,9 +1200,9 @@ def create_credit_order():
     username = request.user.get('username', '')
     trust_level = request.user.get('trust_level', 0)
     
-    # 信任级别检查
-    if trust_level < 1:
-        return jsonify({'error': f'需要信任级别 1 才能购买，您当前为 TL{trust_level}'}), 403
+    # 信任级别检查（TL2）
+    if trust_level < 2:
+        return jsonify({'error': f'需要信任级别 2 才能购买，您当前为 TL{trust_level}'}), 403
     
     conn = get_db()
     
@@ -1273,17 +1273,18 @@ def create_credit_order():
             conn.execute("UPDATE credit_orders SET status = 'cancelled' WHERE id = ?", (pending['id'],))
             conn.commit()
     
+    # 测试模式：跳过车位检查
     # 检查是否有可用车位
-    available_account = conn.execute('''
-        SELECT * FROM team_accounts 
-        WHERE enabled = 1 AND seats_in_use < max_seats
-        ORDER BY (max_seats - seats_in_use) DESC
-        LIMIT 1
-    ''').fetchone()
-    
-    if not available_account:
-        conn.close()
-        return jsonify({'error': '当前没有可用车位，请稍后再试'}), 400
+    # available_account = conn.execute('''
+    #     SELECT * FROM team_accounts 
+    #     WHERE enabled = 1 AND seats_in_use < max_seats
+    #     ORDER BY (max_seats - seats_in_use) DESC
+    #     LIMIT 1
+    # ''').fetchone()
+    # 
+    # if not available_account:
+    #     conn.close()
+    #     return jsonify({'error': '当前没有可用车位，请稍后再试'}), 400
     
     # 生成订单号
     order_id = f"INV{int(time.time())}{secrets.token_hex(4).upper()}"
