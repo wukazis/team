@@ -127,6 +127,8 @@
         .badge.used { background: #fee2e2; color: #991b1b; }
         .badge.enabled { background: #dbeafe; color: #1e40af; }
         .badge.disabled { background: #f3f4f6; color: #6b7280; }
+        .badge-win { background: rgba(34, 197, 94, 0.2); color: #16a34a; }
+        .badge-lose { background: rgba(220, 38, 38, 0.2); color: #dc2626; }
         
         .code {
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -325,6 +327,7 @@
                 <button class="tab" onclick="switchTab('queue')"><i class="bi bi-hourglass-split" style="margin-right: 2px;"></i> 队列</button>
                 <button class="tab" onclick="switchTab('cooldown')"><i class="bi bi-clock-history" style="margin-right: 2px;"></i> 冷却</button>
                 <button class="tab" onclick="switchTab('monitor')"><i class="bi bi-speedometer2" style="margin-right: 2px;"></i> 监控</button>
+                <button class="tab" onclick="switchTab('lottery')"><i class="bi bi-gift" style="margin-right: 2px;"></i> 抽奖</button>
                 <button class="tab" onclick="switchTab('settings')"><i class="bi bi-gear" style="margin-right: 2px;"></i> 设置</button>
             </div>
 
@@ -688,6 +691,72 @@
                 </div>
             </div>
 
+            <!-- 抽奖管理 -->
+            <div id="lotterySection" class="section">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="label">总抽奖次数</div>
+                        <div class="value" id="statLotteryTotal">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">中奖次数</div>
+                        <div class="value" id="statLotteryWins" style="color: var(--success);">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">中奖率</div>
+                        <div class="value" id="statLotteryRate">-</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">购买订单</div>
+                        <div class="value" id="statLotteryOrders">-</div>
+                    </div>
+                </div>
+
+                <div class="table-container">
+                    <div class="table-header">
+                        <span class="title">抽奖记录</span>
+                        <div class="table-actions">
+                            <button class="btn btn-ghost" onclick="loadLotteryRecords()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>用户</th>
+                                <th>结果</th>
+                                <th>邀请码</th>
+                                <th>时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotteryRecordList"></tbody>
+                    </table>
+                </div>
+
+                <div class="table-container" style="margin-top: 1rem;">
+                    <div class="table-header">
+                        <span class="title">购买订单</span>
+                        <div class="table-actions">
+                            <button class="btn btn-ghost" onclick="loadLotteryOrders()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>用户</th>
+                                <th>数量</th>
+                                <th>金额</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>支付时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotteryOrderList"></tbody>
+                    </table>
+                </div>
+            </div>
+
             <!-- 设置 -->
             <div id="settingsSection" class="section">
                 <div class="table-container">
@@ -917,9 +986,75 @@
                 loadWaitingRoomSettings(),
                 loadScheduledOpen(),
                 loadSyncInterval(),
-                loadMaintenanceSettings()
+                loadMaintenanceSettings(),
+                loadLotteryStats()
             ]);
             startMonitorTimer();
+        }
+
+        // ========== 抽奖管理 ==========
+        async function loadLotteryStats() {
+            const { ok, data } = await api('/admin/lottery/stats');
+            if (!ok) return;
+            
+            document.getElementById('statLotteryTotal').textContent = data.totalDraws || 0;
+            document.getElementById('statLotteryWins').textContent = data.totalWins || 0;
+            document.getElementById('statLotteryRate').textContent = data.winRate || '0%';
+            document.getElementById('statLotteryOrders').textContent = data.totalOrders || 0;
+            
+            loadLotteryRecords();
+            loadLotteryOrders();
+        }
+        
+        async function loadLotteryRecords() {
+            const { ok, data } = await api('/admin/lottery/records');
+            if (!ok) return;
+            
+            const tbody = document.getElementById('lotteryRecordList');
+            if (!data.records || data.records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="empty-state">暂无抽奖记录</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.records.map(r => `
+                <tr>
+                    <td><span class="code">${r.orderId}</span></td>
+                    <td>${r.username || r.userId}</td>
+                    <td><span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎉 中奖' : '未中奖'}</span></td>
+                    <td>${r.inviteCode ? `<span class="code">${r.inviteCode}</span>` : '-'}</td>
+                    <td class="text-muted">${new Date(r.createdAt).toLocaleString('zh-CN')}</td>
+                </tr>
+            `).join('');
+        }
+        
+        async function loadLotteryOrders() {
+            const { ok, data } = await api('/admin/lottery/orders');
+            if (!ok) return;
+            
+            const tbody = document.getElementById('lotteryOrderList');
+            if (!data.orders || data.orders.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="empty-state">暂无购买订单</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.orders.map(o => {
+                let statusBadge = '';
+                if (o.status === 'paid') statusBadge = '<span class="badge available">已支付</span>';
+                else if (o.status === 'pending') statusBadge = '<span class="badge" style="background:#fef3c7;color:#92400e;">待支付</span>';
+                else statusBadge = '<span class="badge disabled">已取消</span>';
+                
+                return `
+                    <tr>
+                        <td><span class="code">${o.orderId}</span></td>
+                        <td>${o.username || o.userId}</td>
+                        <td>${o.quantity}</td>
+                        <td>${o.amount} Credit</td>
+                        <td>${statusBadge}</td>
+                        <td class="text-muted">${new Date(o.createdAt).toLocaleString('zh-CN')}</td>
+                        <td class="text-muted">${o.paidAt ? new Date(o.paidAt).toLocaleString('zh-CN') : '-'}</td>
+                    </tr>
+                `;
+            }).join('');
         }
 
         // ========== 候车室设置 ==========

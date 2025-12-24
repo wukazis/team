@@ -3245,6 +3245,90 @@ def admin_clear_cancelled_orders():
     log_admin_action('清除已取消订单', f'count={count}')
     return jsonify({'status': 'ok', 'deleted': count})
 
+# ========== 抽奖管理 API ==========
+
+@app.route('/api/admin/lottery/stats')
+@admin_required
+def admin_lottery_stats():
+    """获取抽奖统计"""
+    conn = get_db()
+    
+    total_draws = conn.execute('SELECT COUNT(*) FROM lottery_records WHERE won >= 0').fetchone()[0]
+    total_wins = conn.execute('SELECT COUNT(*) FROM lottery_records WHERE won = 1').fetchone()[0]
+    total_orders = conn.execute('SELECT COUNT(*) FROM lottery_orders').fetchone()[0]
+    
+    conn.close()
+    
+    win_rate = f"{(total_wins / total_draws * 100):.1f}%" if total_draws > 0 else "0%"
+    
+    return jsonify({
+        'totalDraws': total_draws,
+        'totalWins': total_wins,
+        'winRate': win_rate,
+        'totalOrders': total_orders
+    })
+
+@app.route('/api/admin/lottery/records')
+@admin_required
+def admin_lottery_records():
+    """获取抽奖记录"""
+    conn = get_db()
+    
+    records = conn.execute('''
+        SELECT lr.*, u.username 
+        FROM lottery_records lr
+        LEFT JOIN users u ON lr.user_id = u.id
+        WHERE lr.won >= 0
+        ORDER BY lr.created_at DESC
+        LIMIT 100
+    ''').fetchall()
+    
+    conn.close()
+    
+    result = []
+    for r in records:
+        result.append({
+            'orderId': r['order_id'],
+            'userId': r['user_id'],
+            'username': r['username'] or f"用户{r['user_id']}",
+            'won': bool(r['won']),
+            'inviteCode': r['invite_code'],
+            'createdAt': str(r['created_at'])
+        })
+    
+    return jsonify({'records': result})
+
+@app.route('/api/admin/lottery/orders')
+@admin_required
+def admin_lottery_orders():
+    """获取抽奖购买订单"""
+    conn = get_db()
+    
+    orders = conn.execute('''
+        SELECT lo.*, u.username 
+        FROM lottery_orders lo
+        LEFT JOIN users u ON lo.user_id = u.id
+        ORDER BY lo.created_at DESC
+        LIMIT 100
+    ''').fetchall()
+    
+    conn.close()
+    
+    result = []
+    for o in orders:
+        result.append({
+            'orderId': o['order_id'],
+            'userId': o['user_id'],
+            'username': o['username'] or f"用户{o['user_id']}",
+            'quantity': o['quantity'],
+            'amount': o['amount'],
+            'status': o['status'],
+            'createdAt': str(o['created_at']),
+            'paidAt': str(o['paid_at']) if o['paid_at'] else None
+        })
+    
+    return jsonify({'orders': result})
+
 # ========== 候车室设置 API ==========
 
 @app.route('/api/admin/waiting-room-settings', methods=['GET'])
