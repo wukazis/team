@@ -76,7 +76,11 @@
         .pending-order-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
         .pending-order-actions { display: flex; gap: 0.5rem; }
         .pending-order-actions .btn { flex: 1; margin: 0; padding: 0.5rem; font-size: 0.9rem; }
-        .history { max-height: 200px; overflow-y: auto; }
+        .history { max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .history::-webkit-scrollbar { width: 6px; }
+        .history::-webkit-scrollbar-track { background: transparent; }
+        .history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .history::-webkit-scrollbar-thumb:hover { background: var(--muted); }
         .history-item { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
         .history-item:last-child { border-bottom: none; }
         .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
