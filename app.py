@@ -1680,8 +1680,8 @@ LOTTERY_PRIZES = [
     {'type': 'redeem_1', 'name': '$1 兑换码', 'amount': 1, 'probability': 0.70},  # 70%
 ]
 
-# 抽奖冷却机制：每 N 人为一个周期，周期内中了大奖后，后续的人不能再中同级别大奖
-LOTTERY_CYCLE_SIZE = 40  # 周期人数
+# 抽奖冷却机制：每 N 次为一个周期，周期内中了大奖后，后续不能再中同级别大奖
+LOTTERY_CYCLE_SIZE = 50  # 周期次数
 lottery_cycle_state = {
     'count': 0,  # 当前周期已抽奖人数
     'team_invite_won': False,  # 本周期是否已有人中 Team 邀请码
@@ -2021,9 +2021,7 @@ def lottery_draw():
     prize_code = None
     
     if prize_type == 'team_invite':
-        # Team 邀请码 - 标记本周期已有人中奖
-        lottery_cycle_state['team_invite_won'] = True
-        
+        # Team 邀请码
         available_account = conn.execute('''
             SELECT * FROM team_accounts 
             WHERE enabled = 1 AND seats_in_use < max_seats
