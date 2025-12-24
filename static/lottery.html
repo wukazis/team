@@ -275,7 +275,7 @@
                 
                 <!-- 购买按钮 -->
                 <button id="buyBtn" class="btn btn-primary hidden" onclick="buyChances()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align: -3px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><text x="12" y="16" font-size="12" font-weight="bold" fill="#000" text-anchor="middle">$</text></svg>购买抽奖次数 (2 Credit/次)
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -3px; margin-right: 4px;"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>购买抽奖次数 (2 Credit/次)
                 </button>
                 
                 <p id="drawStatus" style="text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.2em; margin-top: 0.5rem;"></p>
@@ -591,7 +591,7 @@
             setTimeout(() => {
                 if (prizeType === 'team_invite') {
                     // Team 邀请码 - 大奖
-                    prizeTitle.textContent = '🎉 恭喜中奖';
+                    prizeTitle.innerHTML = '';
                     prizeText.textContent = 'Team 邀请码';
                     prizeText.classList.add('prize-win');
                     prizeCodeEl.textContent = prizeCode;
