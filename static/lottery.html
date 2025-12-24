@@ -95,7 +95,11 @@
         .modal-header h3 { margin: 0; font-size: 1.1rem; }
         .modal-close { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1; }
         .modal-close:hover { color: var(--text); }
-        .modal-body { padding: 1rem 1.5rem; max-height: 60vh; overflow-y: auto; }
+        .modal-body { padding: 1rem 1.5rem; max-height: 60vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .modal-body::-webkit-scrollbar { width: 6px; }
+        .modal-body::-webkit-scrollbar-track { background: transparent; }
+        .modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .modal-body::-webkit-scrollbar-thumb:hover { background: var(--muted); }
         .prize-item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; }
         .prize-item:last-child { margin-bottom: 0; }
         .prize-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
@@ -256,7 +260,10 @@
                 <div class="modal-card" onclick="event.stopPropagation()">
                     <div class="modal-header">
                         <h3>🎁 我的奖品</h3>
-                        <button class="modal-close" onclick="closePrizesModal()">&times;</button>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="btn btn-outline" style="width: auto; padding: 0.3rem 0.6rem; font-size: 0.75rem; margin: 0;" onclick="exportCodes()">导出</button>
+                            <button class="modal-close" onclick="closePrizesModal()">&times;</button>
+                        </div>
                     </div>
                     <div id="prizesContent" class="modal-body">
                         <p style="color: var(--muted); text-align: center;">加载中...</p>
@@ -614,6 +621,45 @@
         function closePrizesModal(event) {
             if (event && event.target !== event.currentTarget) return;
             document.getElementById('prizesModal').classList.add('hidden');
+        }
+        
+        async function exportCodes() {
+            try {
+                const res = await fetch('/api/lottery/history', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const prizes = (data.records || []).filter(r => r.prizeCode);
+                    if (prizes.length === 0) {
+                        alert('暂无可导出的奖品');
+                        return;
+                    }
+                    const text = prizes.map(r => {
+                        const type = r.prizeType === 'team_invite' ? 'Team邀请码' : (r.prizeName || '兑换码');
+                        return `${type}: ${r.prizeCode}`;
+                    }).join('\n');
+                    
+                    // 复制到剪贴板
+                    navigator.clipboard.writeText(text).then(() => {
+                        const status = document.getElementById('drawStatus');
+                        status.textContent = '已导出到剪贴板！';
+                        status.style.color = 'var(--success)';
+                        setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 2000);
+                    }).catch(() => {
+                        // 降级：下载文件
+                        const blob = new Blob([text], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'prizes.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    });
+                }
+            } catch (err) {
+                alert('导出失败');
+            }
         }
 
         async function buyChances() {
