@@ -80,6 +80,10 @@ LOTTERY_CREDIT_PID = os.environ.get('LOTTERY_CREDIT_PID', '')
 LOTTERY_CREDIT_KEY = os.environ.get('LOTTERY_CREDIT_KEY', '')
 INVITE_CODE_PRICE = int(os.environ.get('INVITE_CODE_PRICE', '100'))  # 邀请码价格（Credit）
 
+# CLIProxy 兑换码 API 配置
+CLIPROXY_API_URL = os.environ.get('CLIPROXY_API_URL', 'https://www.wukazi.xyz')
+CLIPROXY_INTERNAL_KEY = os.environ.get('CLIPROXY_INTERNAL_KEY', '')
+
 # 测试模式（跳过真实发送 ChatGPT 邀请）
 TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
 
@@ -620,6 +624,8 @@ def init_db():
                 order_id TEXT,
                 won INTEGER DEFAULT 0,
                 invite_code TEXT,
+                prize_type TEXT,
+                prize_name TEXT,
                 created_at TIMESTAMP DEFAULT NOW()
             )
         ''')
@@ -795,6 +801,8 @@ def init_db():
                 order_id TEXT,
                 won INTEGER DEFAULT 0,
                 invite_code TEXT,
+                prize_type TEXT,
+                prize_name TEXT,
                 created_at TEXT DEFAULT (datetime('now'))
             )
         ''')
@@ -1661,9 +1669,38 @@ def get_my_orders():
 # ========== 抽奖 API ==========
 
 LOTTERY_PRICE = 2  # 每次抽奖价格 2 Credit
-LOTTERY_WIN_RATE = 0.20  # 20% 中奖率
 LOTTERY_FREE_DAILY = 1  # 每天免费次数
 LOTTERY_BUY_LIMIT = 2  # 每天最多购买次数
+
+# 抽奖奖品概率配置
+LOTTERY_PRIZES = [
+    {'type': 'team_invite', 'name': 'Team 邀请码', 'probability': 0.01},  # 1%
+    {'type': 'redeem_10', 'name': '$10 兑换码', 'amount': 10, 'probability': 0.04},  # 4%
+    {'type': 'redeem_5', 'name': '$5 兑换码', 'amount': 5, 'probability': 0.25},  # 25%
+    {'type': 'redeem_1', 'name': '$1 兑换码', 'amount': 1, 'probability': 0.70},  # 70%
+]
+
+def create_redeem_code(amount, expires_in=30):
+    """调用 CLIProxy API 创建兑换码"""
+    if not CLIPROXY_INTERNAL_KEY:
+        print("[Lottery] CLIPROXY_INTERNAL_KEY 未配置")
+        return None
+    try:
+        resp = requests.post(
+            f"{CLIPROXY_API_URL}/internal/create-redeem-code",
+            json={'amount': amount, 'expires_in': expires_in},
+            headers={'X-Internal-Key': CLIPROXY_INTERNAL_KEY},
+            timeout=10
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get('code')
+        else:
+            print(f"[Lottery] 创建兑换码失败: {resp.status_code} {resp.text}")
+            return None
+    except Exception as e:
+        print(f"[Lottery] 创建兑换码异常: {e}")
+        return None
 
 @app.route('/lot_notify', methods=['GET', 'POST'])
 def lottery_notify():
@@ -1856,8 +1893,10 @@ def lottery_history():
     for r in records:
         result.append({
             'orderId': r['order_id'],
-            'won': bool(r['won']),
-            'inviteCode': r['invite_code'] if r['won'] else None,
+            'won': r['won'] == 1,  # won=1 表示 Team 邀请码
+            'prizeType': r.get('prize_type'),
+            'prizeName': r.get('prize_name'),
+            'prizeCode': r['invite_code'],
             'createdAt': str(r['created_at'])
         })
     
@@ -1905,12 +1944,12 @@ def lottery_draw():
     
     conn = get_db()
     
-    # 检查是否已中奖
+    # 检查是否已中过 Team 邀请码（只有 Team 邀请码限制一次）
     if not is_admin:
-        has_won = conn.execute('''
+        has_won_team = conn.execute('''
             SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1
         ''', (user_id,)).fetchone()[0]
-        if has_won > 0:
+        if has_won_team > 0:
             conn.close()
             return jsonify({'error': '您已获得过邀请码，不可再抽奖'}), 400
     
@@ -1941,13 +1980,29 @@ def lottery_draw():
         conn.close()
         return jsonify({'error': '抽奖次数不足，请先购买'}), 400
     
-    # 执行抽奖
+    # 执行抽奖 - 根据概率决定奖品
     import random
     order_id = f"LOT{int(time.time())}{secrets.token_hex(4).upper()}"
-    won = random.random() < LOTTERY_WIN_RATE
-    invite_code = None
     
-    if won:
+    # 按概率抽取奖品
+    rand = random.random()
+    cumulative = 0
+    prize = None
+    for p in LOTTERY_PRIZES:
+        cumulative += p['probability']
+        if rand < cumulative:
+            prize = p
+            break
+    
+    if not prize:
+        prize = LOTTERY_PRIZES[-1]  # 兜底：$1 兑换码
+    
+    prize_type = prize['type']
+    prize_name = prize['name']
+    prize_code = None
+    
+    if prize_type == 'team_invite':
+        # Team 邀请码
         available_account = conn.execute('''
             SELECT * FROM team_accounts 
             WHERE enabled = 1 AND seats_in_use < max_seats
@@ -1955,39 +2010,50 @@ def lottery_draw():
             LIMIT 1
         ''').fetchone()
         team_account_id = available_account['id'] if available_account else None
-        invite_code = generate_code()
+        prize_code = generate_code()
         
         if USE_POSTGRES:
             conn.execute('''
                 INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
                 VALUES (%s, %s, %s, 1)
-            ''', (invite_code, team_account_id, user_id))
+            ''', (prize_code, team_account_id, user_id))
         else:
             conn.execute('''
                 INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
                 VALUES (?, ?, ?, 1)
-            ''', (invite_code, team_account_id, user_id))
+            ''', (prize_code, team_account_id, user_id))
+    else:
+        # 兑换码
+        amount = prize.get('amount', 1)
+        prize_code = create_redeem_code(amount)
+        if not prize_code:
+            conn.close()
+            return jsonify({'error': '奖品生成失败，请重试'}), 500
     
-    # 记录抽奖
+    # 记录抽奖（won=1 表示 Team 邀请码，won=2/3/4 表示不同金额兑换码）
+    won_value = {'team_invite': 1, 'redeem_10': 2, 'redeem_5': 3, 'redeem_1': 4}.get(prize_type, 0)
+    
     if USE_POSTGRES:
         conn.execute('''
-            INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
-            VALUES (%s, %s, %s, %s, NOW())
-        ''', (order_id, user_id, 1 if won else 0, invite_code))
+            INSERT INTO lottery_records (order_id, user_id, won, invite_code, prize_type, prize_name, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, NOW())
+        ''', (order_id, user_id, won_value, prize_code, prize_type, prize_name))
     else:
         conn.execute('''
-            INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
-            VALUES (?, ?, ?, ?, datetime('now'))
-        ''', (order_id, user_id, 1 if won else 0, invite_code))
+            INSERT INTO lottery_records (order_id, user_id, won, invite_code, prize_type, prize_name, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+        ''', (order_id, user_id, won_value, prize_code, prize_type, prize_name))
     
     conn.commit()
     conn.close()
     
-    print(f"[Lottery] 用户 {user_id} 抽奖，中奖: {won}")
+    print(f"[Lottery] 用户 {user_id} 抽奖，奖品: {prize_name}")
     return jsonify({
         'orderId': order_id,
-        'won': won,
-        'inviteCode': invite_code
+        'won': prize_type == 'team_invite',  # 兼容前端：Team 邀请码算"中奖"
+        'prizeType': prize_type,
+        'prizeName': prize_name,
+        'prizeCode': prize_code
     })
 
 @app.route('/api/lottery/buy', methods=['POST'])

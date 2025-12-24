@@ -86,6 +86,7 @@
         .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
         .badge-win { background: rgba(34, 197, 94, 0.2); color: var(--success); }
         .badge-lose { background: rgba(255, 0, 85, 0.2); color: var(--danger); }
+        .badge-redeem { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
         .login-prompt { text-align: center; padding: 3rem 1rem; }
         .hidden { display: none !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -398,12 +399,24 @@
                 container.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>';
                 return;
             }
-            container.innerHTML = records.slice(0, 20).map(r => `
-                <div class="history-item">
-                    <span>${new Date(r.createdAt).toLocaleString('zh-CN')}</span>
-                    <span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎉 中奖' : '未中奖'}</span>
-                </div>
-            `).join('');
+            container.innerHTML = records.slice(0, 20).map(r => {
+                let badge = '';
+                if (r.prizeType === 'team_invite') {
+                    badge = '<span class="badge badge-win">🎉 邀请码</span>';
+                } else if (r.prizeName) {
+                    badge = `<span class="badge badge-redeem">🎁 ${r.prizeName}</span>`;
+                } else if (r.won) {
+                    badge = '<span class="badge badge-win">🎉 中奖</span>';
+                } else {
+                    badge = '<span class="badge badge-lose">未中奖</span>';
+                }
+                return `
+                    <div class="history-item">
+                        <span>${new Date(r.createdAt).toLocaleString('zh-CN')}</span>
+                        ${badge}
+                    </div>
+                `;
+            }).join('');
         }
 
         async function startDraw() {
@@ -443,7 +456,7 @@
                 
                 const chargeTime = 1500 + Math.random() * 1000;
                 setTimeout(() => {
-                    triggerExplosion(data.won, data.inviteCode);
+                    triggerExplosion(data.prizeType, data.prizeName, data.prizeCode);
                 }, chargeTime);
             } catch (err) {
                 status.textContent = '网络错误，请重试';
@@ -451,13 +464,13 @@
             }
         }
 
-        function triggerExplosion(won, inviteCode) {
+        function triggerExplosion(prizeType, prizeName, prizeCode) {
             const reactorBox = document.getElementById('reactorBox');
             const flashOverlay = document.getElementById('flashOverlay');
             const prizeResult = document.getElementById('prizeResult');
             const prizeTitle = document.getElementById('prizeTitle');
             const prizeText = document.getElementById('prizeText');
-            const prizeCode = document.getElementById('prizeCode');
+            const prizeCodeEl = document.getElementById('prizeCode');
             
             // 闪白
             flashOverlay.style.opacity = '1';
@@ -468,17 +481,24 @@
             reactorBox.classList.add('state-exploded');
             
             setTimeout(() => {
-                if (won) {
+                if (prizeType === 'team_invite') {
+                    // Team 邀请码 - 大奖
                     prizeTitle.textContent = '🎉 恭喜中奖';
                     prizeText.textContent = 'Team 邀请码';
                     prizeText.classList.add('prize-win');
-                    prizeCode.textContent = inviteCode;
-                    prizeCode.classList.remove('hidden');
+                    prizeCodeEl.textContent = prizeCode;
+                    prizeCodeEl.classList.remove('hidden');
+                    prizeCodeEl.style.color = 'var(--success)';
+                    prizeCodeEl.style.borderColor = 'var(--success)';
                 } else {
-                    prizeTitle.textContent = '💫 再接再厉';
-                    prizeText.textContent = '未中奖';
+                    // 兑换码
+                    prizeTitle.textContent = '🎁 获得奖励';
+                    prizeText.textContent = prizeName;
                     prizeText.classList.remove('prize-win');
-                    prizeCode.classList.add('hidden');
+                    prizeCodeEl.textContent = prizeCode;
+                    prizeCodeEl.classList.remove('hidden');
+                    prizeCodeEl.style.color = 'var(--warning)';
+                    prizeCodeEl.style.borderColor = 'var(--warning)';
                 }
                 prizeResult.classList.add('show');
             }, 150);
