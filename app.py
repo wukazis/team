@@ -3329,6 +3329,26 @@ def admin_lottery_orders():
     
     return jsonify({'orders': result})
 
+@app.route('/api/admin/lottery/order-stats')
+@admin_required
+def admin_lottery_order_stats():
+    """获取抽奖订单统计"""
+    conn = get_db()
+    
+    total = conn.execute('SELECT COUNT(*) FROM lottery_orders').fetchone()[0]
+    pending = conn.execute("SELECT COUNT(*) FROM lottery_orders WHERE status = 'pending'").fetchone()[0]
+    paid = conn.execute("SELECT COUNT(*) FROM lottery_orders WHERE status = 'paid'").fetchone()[0]
+    cancelled = conn.execute("SELECT COUNT(*) FROM lottery_orders WHERE status = 'cancelled'").fetchone()[0]
+    
+    conn.close()
+    
+    return jsonify({
+        'total': total,
+        'pending': pending,
+        'paid': paid,
+        'cancelled': cancelled
+    })
+
 @app.route('/api/admin/lottery/user-chances')
 @admin_required
 def admin_lottery_user_chances():

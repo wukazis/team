@@ -408,7 +408,7 @@
                 </div>
             </div>
 
-            <!-- Credit 订单管理 -->
+            <!-- 订单管理 -->
             <div id="ordersSection" class="section">
                 <div class="stats-grid">
                     <div class="stat-card">
@@ -433,11 +433,16 @@
                     <div class="table-header">
                         <span class="title">订单列表</span>
                         <div class="table-actions">
+                            <select id="orderTypeSelect" onchange="switchOrderType(this.value)" style="padding: 0.3rem 0.6rem;">
+                                <option value="credit">邀请码购买</option>
+                                <option value="lottery">抽奖次数购买</option>
+                            </select>
                             <button class="btn btn-danger" onclick="clearCancelledOrders()">清除已取消</button>
                             <button class="btn btn-ghost" onclick="loadOrders()">刷新</button>
                         </div>
                     </div>
-                    <table>
+                    <!-- 邀请码购买订单表 -->
+                    <table id="creditOrderTable">
                         <thead>
                             <tr>
                                 <th>订单号</th>
@@ -451,6 +456,21 @@
                             </tr>
                         </thead>
                         <tbody id="orderList"></tbody>
+                    </table>
+                    <!-- 抽奖次数购买订单表 -->
+                    <table id="lotteryOrderTable" class="hidden">
+                        <thead>
+                            <tr>
+                                <th>订单号</th>
+                                <th>用户</th>
+                                <th>数量</th>
+                                <th>金额</th>
+                                <th>状态</th>
+                                <th>创建时间</th>
+                                <th>支付时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="lotteryOrderList"></tbody>
                     </table>
                 </div>
             </div>
@@ -760,29 +780,6 @@
                         <tbody id="lotteryRecordList"></tbody>
                     </table>
                 </div>
-
-                <div class="table-container" style="margin-top: 1rem;">
-                    <div class="table-header">
-                        <span class="title">购买订单</span>
-                        <div class="table-actions">
-                            <button class="btn btn-ghost" onclick="loadLotteryOrders()">刷新</button>
-                        </div>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>订单号</th>
-                                <th>用户</th>
-                                <th>数量</th>
-                                <th>金额</th>
-                                <th>状态</th>
-                                <th>创建时间</th>
-                                <th>支付时间</th>
-                            </tr>
-                        </thead>
-                        <tbody id="lotteryOrderList"></tbody>
-                    </table>
-                </div>
             </div>
 
             <!-- 设置 -->
@@ -1032,7 +1029,6 @@
             
             loadUserChances();
             loadLotteryRecords();
-            loadLotteryOrders();
         }
         
         async function loadUserChances() {
@@ -1652,8 +1648,30 @@
             loadStats();
         }
 
-        // ========== Credit 订单 ==========
+        // ========== 订单管理 ==========
+        let currentOrderType = 'credit';
+        
+        function switchOrderType(type) {
+            currentOrderType = type;
+            document.getElementById('creditOrderTable').classList.toggle('hidden', type !== 'credit');
+            document.getElementById('lotteryOrderTable').classList.toggle('hidden', type !== 'lottery');
+            loadOrders();
+        }
+        
         async function loadOrders() {
+            if (currentOrderType === 'lottery') {
+                loadLotteryOrders();
+                // 加载抽奖订单统计
+                const { ok, data } = await api('/admin/lottery/order-stats');
+                if (ok) {
+                    document.getElementById('statOrderTotal').textContent = data.total || 0;
+                    document.getElementById('statOrderPending').textContent = data.pending || 0;
+                    document.getElementById('statOrderPaid').textContent = data.paid || 0;
+                    document.getElementById('statOrderCancelled').textContent = data.cancelled || 0;
+                }
+                return;
+            }
+            
             const { ok, data } = await api('/admin/orders');
             
             if (!ok) {
