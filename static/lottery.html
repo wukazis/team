@@ -90,10 +90,48 @@
         .hidden { display: none !important; }
         @keyframes spin { to { transform: rotate(360deg); } }
         @keyframes shake { 0%, 100% { transform: translate(1px, 1px) rotate(0deg); } 25% { transform: translate(-2px, -1px) rotate(-1deg); } 50% { transform: translate(-1px, 2px) rotate(1deg); } 75% { transform: translate(2px, 1px) rotate(0deg); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        /* 侧边栏 */
+        .sidebar { position: fixed; width: 180px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 100; max-height: 280px; overflow: hidden; }
+        .sidebar h3 { font-size: 0.9rem; color: var(--primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+        .sidebar-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .sidebar-list::-webkit-scrollbar { width: 4px; }
+        .sidebar-list::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .sidebar-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem; border-radius: 6px; transition: background 0.15s; }
+        .sidebar-item:hover { background: rgba(255,255,255,0.05); }
+        .sidebar-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .sidebar-name { font-size: 0.8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .online-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; flex-shrink: 0; animation: pulse 2s infinite; }
+        .winner-badge { font-size: 0.65rem; color: var(--warning); }
+        .sidebar-empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 0.5rem 0; }
+        .online-sidebar { right: 20px; top: 120px; }
+        .winners-sidebar { right: 20px; top: 420px; }
+        @media (max-width: 1100px) { .sidebar { display: none; } }
 </style>
 </head>
 <body>
     <div class="flash-overlay" id="flashOverlay"></div>
+    
+    <!-- 在线用户侧边栏 -->
+    <div id="onlineSidebar" class="sidebar online-sidebar hidden">
+        <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+            在线 <span id="onlineCount" style="margin-left: auto; font-size: 0.75rem; color: var(--success);">0</span>
+        </h3>
+        <div id="onlineList" class="sidebar-list"><p class="sidebar-empty">暂无</p></div>
+    </div>
+    
+    <!-- 中奖用户侧边栏 -->
+    <div id="winnersSidebar" class="sidebar winners-sidebar hidden">
+        <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+            中奖榜 <span id="winnersCount" style="margin-left: auto; font-size: 0.75rem; color: var(--warning);">0</span>
+        </h3>
+        <div id="winnersList" class="sidebar-list"><p class="sidebar-empty">暂无</p></div>
+    </div>
+    
     <div class="page-container">
         <div class="header">
             <h1>⚡ 抽奖</h1>
@@ -646,6 +684,63 @@
             }
         }
 
+        // 加载在线用户
+        async function loadOnlineUsers() {
+            try {
+                const res = await fetch('/api/online-users');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('onlineCount').textContent = data.count || 0;
+                    const list = document.getElementById('onlineList');
+                    if (data.users && data.users.length > 0) {
+                        list.innerHTML = data.users.map(u => `
+                            <div class="sidebar-item">
+                                <img class="sidebar-avatar" src="${u.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%2300f3ff%22/></svg>'}" alt="">
+                                <span class="sidebar-name">${u.name || u.username}</span>
+                                <span class="online-dot"></span>
+                            </div>
+                        `).join('');
+                    } else {
+                        list.innerHTML = '<p class="sidebar-empty">暂无</p>';
+                    }
+                    document.getElementById('onlineSidebar').classList.remove('hidden');
+                }
+            } catch (err) {}
+        }
+        
+        // 加载中奖用户
+        async function loadWinners() {
+            try {
+                const res = await fetch('/api/lottery/winners');
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('winnersCount').textContent = data.count || 0;
+                    const list = document.getElementById('winnersList');
+                    if (data.winners && data.winners.length > 0) {
+                        list.innerHTML = data.winners.map(w => `
+                            <div class="sidebar-item">
+                                <img class="sidebar-avatar" src="${w.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23f59e0b%22/></svg>'}" alt="">
+                                <span class="sidebar-name">${w.name || w.username}</span>
+                                <span class="winner-badge">🎉</span>
+                            </div>
+                        `).join('');
+                    } else {
+                        list.innerHTML = '<p class="sidebar-empty">暂无</p>';
+                    }
+                    document.getElementById('winnersSidebar').classList.remove('hidden');
+                }
+            } catch (err) {}
+        }
+        
+        // 心跳保持在线
+        function startHeartbeat() {
+            setInterval(async () => {
+                try {
+                    await fetch('/api/heartbeat', { headers: { 'Authorization': `Bearer ${jwtToken}` } });
+                } catch {}
+            }, 30000);
+        }
+
         // 初始化
         (async () => {
             const loggedIn = await checkLogin();
@@ -655,6 +750,15 @@
                 await loadStats();
                 loadHistory();
                 checkBuyOrderResult();
+                
+                // 加载侧边栏
+                loadOnlineUsers();
+                loadWinners();
+                startHeartbeat();
+                
+                // 定时刷新
+                setInterval(loadOnlineUsers, 10000);
+                setInterval(loadWinners, 30000);
             }
         })();
     </script>

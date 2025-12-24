@@ -1863,6 +1863,37 @@ def lottery_history():
     
     return jsonify({'records': result})
 
+@app.route('/api/lottery/winners')
+def lottery_winners():
+    """获取中奖用户列表"""
+    conn = get_db()
+    
+    # 获取最近中奖的用户（最多20人）
+    winners = conn.execute('''
+        SELECT lr.user_id, lr.created_at, u.username, u.name, u.avatar_template
+        FROM lottery_records lr
+        LEFT JOIN users u ON lr.user_id = u.id
+        WHERE lr.won = 1
+        ORDER BY lr.created_at DESC
+        LIMIT 20
+    ''').fetchall()
+    
+    conn.close()
+    
+    result = []
+    for w in winners:
+        avatar = w['avatar_template'].replace('{size}', '48') if w['avatar_template'] else None
+        result.append({
+            'username': w['username'],
+            'name': w['name'] or w['username'],
+            'avatar': avatar
+        })
+    
+    return jsonify({
+        'count': len(result),
+        'winners': result
+    })
+
 @app.route('/api/lottery/draw', methods=['POST'])
 @jwt_required
 def lottery_draw():
