@@ -166,14 +166,6 @@
                     </div>
                 </div>
 
-                <!-- 已中奖邀请码展示 -->
-                <div id="wonCodeCard" class="hidden" style="text-align: center; padding: 1.5rem; background: rgba(34, 197, 94, 0.1); border: 1px solid var(--success); border-radius: 12px; margin-bottom: 1rem;">
-                    <div style="font-size: 1.2rem; margin-bottom: 0.5rem;">🎉 恭喜您中奖！</div>
-                    <div style="color: var(--muted); font-size: 0.9rem; margin-bottom: 1rem;">您的 Team 邀请码</div>
-                    <div id="wonCodeDisplay" style="background: rgba(0,0,0,0.3); padding: 1rem; border-radius: 8px; font-family: monospace; font-size: 1.3rem; letter-spacing: 3px; color: var(--success); border: 1px dashed var(--success); cursor: pointer;" onclick="copyWonCode()"></div>
-                    <div style="color: var(--muted); font-size: 0.8rem; margin-top: 0.75rem;">点击复制邀请码</div>
-                </div>
-
                 <div style="text-align: center; margin-bottom: 1rem;">
                     <div class="info-tag" id="infoTag">
                         <span>🎯</span>
@@ -315,16 +307,17 @@
                 buyBtn.classList.add('hidden');
             } else if (!canDraw) {
                 // 已中奖，显示邀请码
-                reactorWrapper.classList.add('hidden');
-                infoTag.innerHTML = '<span>🎉</span><span>您已获得邀请码</span>';
+                if (wonInviteCode) {
+                    infoTag.innerHTML = `<span>🎉</span><span>您已获得邀请码: <strong style="font-family: monospace; letter-spacing: 1px; cursor: pointer;" onclick="copyWonCode()">${wonInviteCode}</strong></span>`;
+                } else {
+                    infoTag.innerHTML = '<span>🎉</span><span>您已获得邀请码</span>';
+                }
                 infoTag.style.borderColor = 'var(--success)';
                 infoTag.style.background = 'rgba(34, 197, 94, 0.1)';
-                buyBtn.classList.add('hidden');
-                
-                // 显示邀请码详情
-                if (wonInviteCode) {
-                    showWonInviteCode(wonInviteCode);
-                };
+                coreBtn.style.pointerEvents = 'none';
+                coreBtn.style.opacity = '0.5';
+                document.querySelector('.core-text').textContent = '已领取';
+                buyBtn.classList.add('hidden');;
             } else {
                 infoTag.innerHTML = '<span>🎯</span><span>每天 <strong>1</strong> 次免费抽奖</span>';
                 infoTag.style.borderColor = '';
@@ -460,26 +453,16 @@
                 loadHistory();
             }, 300);
         }
-
-        function showWonInviteCode(code) {
-            const wonCard = document.getElementById('wonCodeCard');
-            const wonDisplay = document.getElementById('wonCodeDisplay');
-            wonDisplay.textContent = code;
-            wonCard.classList.remove('hidden');
-        }
         
         function copyWonCode() {
-            const code = document.getElementById('wonCodeDisplay').textContent;
-            navigator.clipboard.writeText(code).then(() => {
+            if (!wonInviteCode) return;
+            navigator.clipboard.writeText(wonInviteCode).then(() => {
                 const status = document.getElementById('drawStatus');
-                status.textContent = '邀请码已复制到剪贴板！';
+                status.textContent = '邀请码已复制！';
                 status.style.color = 'var(--success)';
-                setTimeout(() => {
-                    status.textContent = '';
-                    status.style.color = '';
-                }, 2000);
+                setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 2000);
             }).catch(() => {
-                alert('复制失败，请手动复制: ' + code);
+                alert('复制失败，请手动复制: ' + wonInviteCode);
             });
         }
 
