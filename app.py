@@ -1735,13 +1735,17 @@ def lottery_stats():
     
     conn.close()
     
+    # 普通用户中奖后不可再抽
+    can_draw = is_admin or total_wins == 0
+    
     return jsonify({
-        'todayRemaining': max(0, daily_limit - today_count),
+        'todayRemaining': max(0, daily_limit - today_count) if can_draw else 0,
         'totalDraws': total_draws,
         'totalWins': total_wins,
         'price': 0 if is_admin else LOTTERY_PRICE,
         'dailyLimit': daily_limit,
-        'isAdmin': is_admin
+        'isAdmin': is_admin,
+        'canDraw': can_draw
     })
 
 @app.route('/api/lottery/history')
@@ -1784,6 +1788,15 @@ def lottery_draw():
         return jsonify({'error': 'Credit 支付未配置'}), 500
     
     conn = get_db()
+    
+    # 普通用户：检查是否已经中过奖（只能获取一个邀请码）
+    if not is_admin:
+        has_won = conn.execute('''
+            SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1
+        ''', (user_id,)).fetchone()[0]
+        if has_won > 0:
+            conn.close()
+            return jsonify({'error': '您已获得过邀请码，不可再抽奖'}), 400
     
     # 检查今日次数（包括 pending 状态的订单）
     if USE_POSTGRES:

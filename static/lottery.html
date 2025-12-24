@@ -456,8 +456,20 @@
                     document.getElementById('totalDraws').textContent = data.totalDraws || 0;
                     document.getElementById('totalWins').textContent = data.totalWins || 0;
                     isAdmin = data.isAdmin || false;
+                    
+                    const priceTag = document.getElementById('priceTag');
+                    const coreBtn = document.getElementById('coreBtn');
+                    
                     if (isAdmin) {
-                        document.getElementById('priceTag').innerHTML = '<span>👑</span><span>管理员 <strong>免费抽奖</strong></span>';
+                        priceTag.innerHTML = '<span>👑</span><span>管理员 <strong>免费抽奖</strong></span>';
+                    } else if (!data.canDraw) {
+                        // 已中奖，禁止再抽
+                        priceTag.innerHTML = '<span>🎉</span><span>您已获得邀请码</span>';
+                        priceTag.style.borderColor = 'var(--success)';
+                        priceTag.style.background = 'rgba(34, 197, 94, 0.1)';
+                        coreBtn.style.pointerEvents = 'none';
+                        coreBtn.style.opacity = '0.5';
+                        document.querySelector('.core-text').textContent = 'CLAIMED';
                     }
                 }
             } catch (err) {
