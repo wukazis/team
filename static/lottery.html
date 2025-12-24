@@ -3,60 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>幸运开箱 - Team Invite</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='80' font-size='80'>📦</text></svg>">
+    <title>赛博抽奖 - Team Invite</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%2300f3ff' stroke='%23ff0055' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>⚡</text></svg>">
     <style>
         :root {
-            --bg: #0f172a;
-            --card: #1e293b;
+            --bg: #020205;
+            --card: rgba(26, 26, 46, 0.8);
             --border: #334155;
             --text: #f1f5f9;
             --muted: #94a3b8;
-            --primary: #f59e0b;
-            --primary-hover: #d97706;
+            --primary: #00f3ff;
+            --danger: #ff0055;
             --success: #22c55e;
-            --danger: #ef4444;
-            --epic: #a855f7;
-            --rare: #3b82f6;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: system-ui, -apple-system, sans-serif;
-            background: var(--bg);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            background-color: var(--bg);
+            background-image: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #020205 70%);
             color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        .page-container {
+            max-width: 500px;
+            margin: 0 auto;
+            padding: 1rem;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            padding: 2rem 1rem;
         }
-        .container { max-width: 500px; width: 100%; }
-        .header { text-align: center; margin-bottom: 2rem; }
+        .header {
+            text-align: center;
+            padding: 1.5rem 0;
+        }
         .header h1 {
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-            background: linear-gradient(135deg, #f59e0b, #fbbf24);
+            font-size: 1.8rem;
+            background: linear-gradient(135deg, #00f3ff, #ff0055);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
-            background-clip: text;
+            margin-bottom: 0.5rem;
         }
-        .header p { color: var(--muted); }
+        .header p { color: var(--muted); font-size: 0.9rem; }
         .card {
             background: var(--card);
             border: 1px solid var(--border);
             border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            backdrop-filter: blur(10px);
         }
         .user-info {
             display: flex;
             align-items: center;
             gap: 1rem;
-            padding-bottom: 1.5rem;
+            padding-bottom: 1rem;
             border-bottom: 1px solid var(--border);
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
-        .user-avatar { width: 48px; height: 48px; border-radius: 50%; background: var(--primary); }
+        .user-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            border: 2px solid var(--primary);
+        }
         .user-name { font-weight: 600; }
         .user-meta { color: var(--muted); font-size: 0.85rem; }
         .stats {
@@ -64,225 +74,249 @@
             grid-template-columns: repeat(3, 1fr);
             gap: 1rem;
             text-align: center;
-            margin-bottom: 1.5rem;
+            margin-bottom: 1rem;
         }
-        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
-        .stat-label { font-size: 0.8rem; color: var(--muted); }
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+        .stat-label { font-size: 0.75rem; color: var(--muted); }
         
-        /* 开箱区域 */
-        .box-container {
+        /* 反应堆容器 */
+        .reactor-wrapper {
             position: relative;
-            width: 200px;
-            height: 200px;
-            margin: 2rem auto;
-            perspective: 1000px;
+            width: 280px;
+            height: 280px;
+            margin: 1rem auto;
         }
-        .box {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.8s ease;
-        }
-        .box.opening {
-            animation: shake 0.5s ease, openBox 0.8s ease 0.5s forwards;
-        }
-        .box-body {
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(145deg, #4a5568, #2d3748);
-            border-radius: 12px;
-            border: 4px solid var(--primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 5rem;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.4), inset 0 -5px 20px rgba(0,0,0,0.3);
-        }
-        .box-lid {
-            position: absolute;
-            width: 110%;
-            height: 40px;
-            left: -5%;
-            top: -20px;
-            background: linear-gradient(145deg, #f59e0b, #d97706);
-            border-radius: 8px 8px 0 0;
-            transform-origin: bottom;
-            transition: transform 0.8s ease;
-            box-shadow: 0 -5px 20px rgba(245, 158, 11, 0.3);
-        }
-        .box.opening .box-lid {
-            animation: openLid 0.8s ease 0.5s forwards;
-        }
-        @keyframes shake {
-            0%, 100% { transform: translateX(0) rotate(0); }
-            20% { transform: translateX(-10px) rotate(-5deg); }
-            40% { transform: translateX(10px) rotate(5deg); }
-            60% { transform: translateX(-10px) rotate(-5deg); }
-            80% { transform: translateX(10px) rotate(5deg); }
-        }
-        @keyframes openLid {
-            0% { transform: rotateX(0); }
-            100% { transform: rotateX(-120deg); }
-        }
-        @keyframes openBox {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-        
-        /* 奖品弹出 */
-        .prize-popup {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0);
-            font-size: 4rem;
+        .flash-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #fff;
             opacity: 0;
-            z-index: 10;
+            pointer-events: none;
+            z-index: 999;
+            transition: opacity 0.1s;
         }
-        .prize-popup.show {
-            animation: prizeAppear 0.5s ease 1.2s forwards;
+        .reactor-box {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        @keyframes prizeAppear {
-            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
-            50% { transform: translate(-50%, -150%) scale(1.5); opacity: 1; }
-            100% { transform: translate(-50%, -120%) scale(1); opacity: 1; }
-        }
-        
-        /* 粒子效果 */
-        .particles {
+        .reactor-box svg {
+            width: 100%;
+            height: 100%;
             position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
+            z-index: 5;
+            overflow: visible;
+        }
+        .reactor-part {
+            fill: none;
+            stroke: var(--primary);
+            stroke-width: 1.5;
+            vector-effect: non-scaling-stroke;
+            transition: stroke 0.3s, filter 0.3s;
+        }
+        .ring-outer {
+            transform-origin: 50% 50%;
+            animation: spin 20s linear infinite;
+            stroke: rgba(0, 243, 255, 0.3);
+            stroke-dasharray: 10 10;
+        }
+        .ring-inner {
+            transform-origin: 50% 50%;
+            animation: spin 8s linear infinite reverse;
+            stroke: var(--primary);
+            filter: drop-shadow(0 0 5px var(--primary));
+        }
+        .core-btn-group {
+            cursor: pointer;
+            transform-origin: 50% 50%;
+            transition: transform 0.2s;
+        }
+        .core-btn-group:hover { transform: scale(1.1); }
+        .core-circle {
+            fill: rgba(0, 243, 255, 0.1);
+            stroke: var(--primary);
+            stroke-width: 2;
+        }
+        .core-text {
+            fill: #fff;
+            font-size: 5px;
+            font-weight: bold;
+            text-anchor: middle;
+            user-select: none;
             pointer-events: none;
         }
-        .particle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
+        
+        /* 充能状态 */
+        .state-charging .ring-outer, .state-charging .ring-inner {
+            stroke: var(--danger) !important;
+            filter: drop-shadow(0 0 15px var(--danger)) drop-shadow(0 0 30px #ff0000);
+            animation-duration: 0.2s !important;
+        }
+        .state-charging .core-circle {
+            stroke: #fff;
+            fill: var(--danger);
+        }
+        .state-charging .core-text { display: none; }
+        .state-charging { animation: shake 0.1s infinite; }
+        
+        /* 爆炸状态 */
+        .state-exploded svg {
+            pointer-events: none;
             opacity: 0;
+            transform: scale(5) rotate(90deg);
+            transition: transform 0.5s ease-out, opacity 0.4s ease-out;
+            filter: blur(20px);
         }
-        .particles.active .particle {
-            animation: particleBurst 1s ease forwards;
-        }
-        @keyframes particleBurst {
-            0% { transform: translate(0, 0) scale(1); opacity: 1; }
-            100% { transform: translate(var(--tx), var(--ty)) scale(0); opacity: 0; }
+        .state-idle svg {
+            opacity: 1;
+            transform: scale(1) rotate(0);
+            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s;
+            filter: blur(0);
         }
         
-        .btn {
-            display: block;
+        /* 结果展示 */
+        .prize-container {
+            position: absolute;
+            z-index: 10;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transform: scale(0.8);
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
             width: 100%;
-            padding: 1rem;
-            border: none;
-            border-radius: 12px;
+        }
+        .prize-container.show {
+            opacity: 1;
+            transform: scale(1);
+            pointer-events: auto;
+        }
+        .prize-title {
+            font-size: 14px;
+            letter-spacing: 2px;
+            color: #888;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+        }
+        .prize-name {
+            font-size: 28px;
+            font-weight: 800;
+            margin: 10px 0;
+            background: linear-gradient(to bottom, #fff, #ddd);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            filter: drop-shadow(0 0 10px rgba(255,255,255,0.5));
+        }
+        .prize-win {
+            background: linear-gradient(to bottom, #ffe53b, #ff2525) !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            text-shadow: 0 0 30px #ff0000;
+            font-size: 32px !important;
+        }
+        .prize-code {
+            background: rgba(0,0,0,0.5);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-family: monospace;
             font-size: 1.1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
+            letter-spacing: 2px;
+            color: var(--success);
+            margin: 1rem 0;
+            border: 1px solid var(--success);
         }
-        .btn-primary {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            color: white;
-        }
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(245, 158, 11, 0.4);
-        }
-        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-outline {
-            background: transparent;
-            border: 2px solid var(--border);
-            color: var(--text);
-        }
-        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+        
         .price-tag {
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            background: rgba(245, 158, 11, 0.1);
+            background: rgba(0, 243, 255, 0.1);
             padding: 0.5rem 1rem;
             border-radius: 20px;
-            margin-bottom: 1rem;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            border: 1px solid rgba(0, 243, 255, 0.3);
         }
-        
-        /* 结果弹窗 */
-        .result-modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0;
-            width: 100%; height: 100%;
-            background: rgba(0,0,0,0.8);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-        .result-modal.show { display: flex; }
-        .result-content {
-            background: var(--card);
-            border-radius: 20px;
-            padding: 2.5rem;
-            text-align: center;
-            max-width: 400px;
-            width: 90%;
-            animation: popIn 0.3s ease;
-        }
-        @keyframes popIn {
-            from { transform: scale(0.8); opacity: 0; }
-            to { transform: scale(1); opacity: 1; }
-        }
-        .result-icon { font-size: 4rem; margin-bottom: 1rem; }
-        .result-title { font-size: 1.5rem; margin-bottom: 0.5rem; }
-        .result-code {
-            background: var(--bg);
-            padding: 1rem;
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
             border-radius: 10px;
-            font-family: monospace;
-            font-size: 1.3rem;
-            letter-spacing: 2px;
-            color: var(--success);
-            margin: 1rem 0;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-top: 0.5rem;
         }
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), #0088ff);
+            color: #000;
+        }
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 20px rgba(0, 243, 255, 0.4);
+        }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+        
         .history { max-height: 200px; overflow-y: auto; }
         .history-item {
             display: flex;
             justify-content: space-between;
-            padding: 0.75rem 0;
+            padding: 0.6rem 0;
             border-bottom: 1px solid var(--border);
-            font-size: 0.9rem;
+            font-size: 0.85rem;
         }
         .history-item:last-child { border-bottom: none; }
         .badge {
-            padding: 0.25rem 0.5rem;
+            padding: 0.2rem 0.5rem;
             border-radius: 4px;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 600;
         }
         .badge-win { background: rgba(34, 197, 94, 0.2); color: var(--success); }
-        .badge-lose { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+        .badge-lose { background: rgba(255, 0, 85, 0.2); color: var(--danger); }
+        
         .login-prompt { text-align: center; padding: 3rem 1rem; }
         .hidden { display: none !important; }
+        
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes shake {
+            0%, 100% { transform: translate(1px, 1px) rotate(0deg); }
+            25% { transform: translate(-2px, -1px) rotate(-1deg); }
+            50% { transform: translate(-1px, 2px) rotate(1deg); }
+            75% { transform: translate(2px, 1px) rotate(0deg); }
+        }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="flash-overlay" id="flashOverlay"></div>
+    
+    <div class="page-container">
         <div class="header">
-            <h1>📦 幸运开箱</h1>
-            <p>开启神秘宝箱，赢取邀请码！</p>
+            <h1>⚡ 赛博抽奖</h1>
+            <p>激活核心，赢取邀请码！</p>
         </div>
 
+        <!-- 未登录 -->
         <div id="loginPrompt" class="card login-prompt hidden">
             <p style="font-size: 1.2rem; margin-bottom: 1rem;">请先登录</p>
-            <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与开箱</p>
-            <button onclick="goToLogin()" class="btn btn-primary" style="display: inline-block; width: auto; padding: 0.75rem 2rem;">前往登录</button>
+            <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与抽奖</p>
+            <button onclick="goToLogin()" class="btn btn-primary" style="width: auto; padding: 0.75rem 2rem; margin: 0 auto;">前往登录</button>
         </div>
 
+        <!-- 已登录 -->
         <div id="mainContent" class="hidden">
             <div class="card">
                 <div class="user-info">
@@ -300,56 +334,59 @@
                     </div>
                     <div>
                         <div class="stat-value" id="totalDraws">-</div>
-                        <div class="stat-label">累计开箱</div>
+                        <div class="stat-label">累计抽奖</div>
                     </div>
                     <div>
                         <div class="stat-value" id="totalWins">-</div>
-                        <div class="stat-label">获得奖品</div>
+                        <div class="stat-label">中奖次数</div>
                     </div>
                 </div>
 
-                <div class="box-container">
-                    <div id="box" class="box">
-                        <div class="box-lid"></div>
-                        <div class="box-body">🎁</div>
+                <!-- 反应堆 -->
+                <div class="reactor-wrapper">
+                    <div class="reactor-box state-idle" id="reactorBox">
+                        <div class="prize-container" id="prizeResult">
+                            <div class="prize-title" id="prizeTitle">获得奖励</div>
+                            <div class="prize-name" id="prizeText">???</div>
+                            <div class="prize-code hidden" id="prizeCode"></div>
+                            <button class="btn btn-primary" onclick="collectPrize()" style="width: auto; padding: 0.5rem 2rem; margin: 0 auto;">收下</button>
+                        </div>
+                        <svg viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" stroke="rgba(255,255,255,0.05)" fill="none" stroke-width="0.5"/>
+                            <circle class="reactor-part ring-outer" cx="50" cy="50" r="38"/>
+                            <g class="reactor-part ring-inner">
+                                <rect x="35" y="35" width="30" height="30" rx="2" fill="none" stroke-width="2"/>
+                                <rect x="35" y="35" width="30" height="30" rx="2" fill="none" stroke-width="2" transform="rotate(45, 50, 50)"/>
+                            </g>
+                            <g class="core-btn-group" id="coreBtn" onclick="startDraw()">
+                                <circle class="core-circle" cx="50" cy="50" r="14" />
+                                <circle cx="50" cy="50" r="10" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5" />
+                                <text x="50" y="52" class="core-text">ACTIVATE</text>
+                            </g>
+                        </svg>
                     </div>
-                    <div id="prize" class="prize-popup">🎫</div>
-                    <div id="particles" class="particles"></div>
                 </div>
 
-                <div style="text-align: center;">
+                <div style="text-align: center; margin-bottom: 1rem;">
                     <div class="price-tag" id="priceTag">
                         <span>💰</span>
-                        <span>每次开箱消耗 <strong>2 Credit</strong></span>
+                        <span>每次消耗 <strong>2 Credit</strong></span>
                     </div>
                 </div>
-
-                <button id="drawBtn" class="btn btn-primary" onclick="startDraw()">
-                    🔓 开启宝箱
-                </button>
-                <p id="drawStatus" style="text-align: center; margin-top: 0.75rem; color: var(--muted); font-size: 0.85rem;"></p>
+                
+                <p id="drawStatus" style="text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.2em;"></p>
             </div>
 
             <div class="card">
-                <h3 style="margin-bottom: 1rem;">📜 开箱记录</h3>
+                <h3 style="margin-bottom: 1rem; font-size: 1rem;">📜 抽奖记录</h3>
                 <div id="historyList" class="history">
                     <p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>
                 </div>
             </div>
 
-            <div style="text-align: center; margin-top: 1rem;">
+            <div style="text-align: center; padding: 1rem 0;">
                 <a href="https://www.6666727.xyz/" class="btn btn-outline" style="display: inline-block; width: auto; padding: 0.5rem 1.5rem; text-decoration: none;">返回首页</a>
             </div>
-        </div>
-    </div>
-
-    <div id="resultModal" class="result-modal">
-        <div class="result-content">
-            <div id="resultIcon" class="result-icon">🎉</div>
-            <div id="resultTitle" class="result-title">恭喜获得！</div>
-            <div id="resultDesc" style="color: var(--muted); margin-bottom: 1rem;">您获得了一个邀请码</div>
-            <div id="resultCode" class="result-code hidden">-</div>
-            <button onclick="closeResult()" class="btn btn-primary" style="margin-top: 1rem;">确定</button>
         </div>
     </div>
 
@@ -357,6 +394,7 @@
         let jwtToken = localStorage.getItem('token') || '';
         let currentUser = null;
         let isDrawing = false;
+        let isAdmin = false;
 
         // 检查 URL 参数中的 token
         (function checkUrlToken() {
@@ -401,7 +439,7 @@
             if (!currentUser) return;
             const avatar = currentUser.avatar_template 
                 ? currentUser.avatar_template.replace('{size}', '96')
-                : `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%23f59e0b"/><text x="50" y="65" font-size="50" fill="white" text-anchor="middle">${currentUser.username[0].toUpperCase()}</text></svg>`;
+                : `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%2300f3ff"/><text x="50" y="65" font-size="50" fill="white" text-anchor="middle">${currentUser.username[0].toUpperCase()}</text></svg>`;
             document.getElementById('userAvatar').src = avatar;
             document.getElementById('userName').textContent = currentUser.name || currentUser.username;
             document.getElementById('userMeta').textContent = `@${currentUser.username} · TL${currentUser.trust_level}`;
@@ -417,8 +455,9 @@
                     document.getElementById('todayChances').textContent = data.todayRemaining || 0;
                     document.getElementById('totalDraws').textContent = data.totalDraws || 0;
                     document.getElementById('totalWins').textContent = data.totalWins || 0;
-                    if (data.isAdmin) {
-                        document.getElementById('priceTag').innerHTML = '<span>👑</span><span>管理员 <strong>免费开箱</strong></span>';
+                    isAdmin = data.isAdmin || false;
+                    if (isAdmin) {
+                        document.getElementById('priceTag').innerHTML = '<span>👑</span><span>管理员 <strong>免费抽奖</strong></span>';
                     }
                 }
             } catch (err) {
@@ -449,62 +488,19 @@
             container.innerHTML = records.slice(0, 20).map(r => `
                 <div class="history-item">
                     <span>${new Date(r.createdAt).toLocaleString('zh-CN')}</span>
-                    <span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎫 邀请码' : '📦 空箱'}</span>
+                    <span class="badge ${r.won ? 'badge-win' : 'badge-lose'}">${r.won ? '🎉 中奖' : '未中奖'}</span>
                 </div>
             `).join('');
-        }
-
-        function createParticles() {
-            const container = document.getElementById('particles');
-            container.innerHTML = '';
-            const colors = ['#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ef4444'];
-            for (let i = 0; i < 20; i++) {
-                const particle = document.createElement('div');
-                particle.className = 'particle';
-                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
-                particle.style.setProperty('--tx', `${(Math.random() - 0.5) * 200}px`);
-                particle.style.setProperty('--ty', `${(Math.random() - 0.5) * 200}px`);
-                particle.style.animationDelay = `${Math.random() * 0.3}s`;
-                container.appendChild(particle);
-            }
-        }
-
-        async function playOpenAnimation(won) {
-            const box = document.getElementById('box');
-            const prize = document.getElementById('prize');
-            const particles = document.getElementById('particles');
-            
-            createParticles();
-            box.classList.add('opening');
-            
-            await new Promise(r => setTimeout(r, 1300));
-            
-            prize.textContent = won ? '🎫' : '💨';
-            prize.classList.add('show');
-            if (won) particles.classList.add('active');
-            
-            await new Promise(r => setTimeout(r, 800));
-        }
-
-        function resetBox() {
-            const box = document.getElementById('box');
-            const prize = document.getElementById('prize');
-            const particles = document.getElementById('particles');
-            box.classList.remove('opening');
-            prize.classList.remove('show');
-            particles.classList.remove('active');
         }
 
         async function startDraw() {
             if (isDrawing) return;
             isDrawing = true;
             
-            const btn = document.getElementById('drawBtn');
+            const reactorBox = document.getElementById('reactorBox');
             const status = document.getElementById('drawStatus');
             
-            btn.disabled = true;
             status.textContent = '正在处理...';
-            resetBox();
             
             try {
                 const res = await fetch('/api/lottery/draw', {
@@ -517,30 +513,81 @@
                 const data = await res.json();
                 
                 if (!res.ok) {
-                    status.textContent = data.error || '开箱失败';
-                    btn.disabled = false;
+                    status.textContent = data.error || '抽奖失败';
                     isDrawing = false;
                     return;
                 }
                 
-                // 管理员免费开箱
+                // 管理员免费抽奖或普通用户支付后
                 if (data.free) {
-                    status.textContent = '开箱中...';
-                    await playOpenAnimation(data.won);
-                    showResult(data.won, data.inviteCode);
-                    return;
-                }
-                
-                // 普通用户跳转支付
-                if (data.payParams && data.payGateway) {
+                    status.textContent = '';
+                    // 开始充能动画
+                    reactorBox.classList.remove('state-idle');
+                    reactorBox.classList.add('state-charging');
+                    
+                    const chargeTime = 1500 + Math.random() * 1000;
+                    setTimeout(() => {
+                        triggerExplosion(data.won, data.inviteCode);
+                    }, chargeTime);
+                } else {
+                    // 普通用户跳转支付
                     status.textContent = '正在跳转支付...';
-                    submitPayForm(data.payGateway, data.payParams);
+                    if (data.payParams && data.payGateway) {
+                        submitPayForm(data.payGateway, data.payParams);
+                    }
                 }
             } catch (err) {
                 status.textContent = '网络错误，请重试';
-                btn.disabled = false;
                 isDrawing = false;
             }
+        }
+
+        function triggerExplosion(won, inviteCode) {
+            const reactorBox = document.getElementById('reactorBox');
+            const flashOverlay = document.getElementById('flashOverlay');
+            const prizeResult = document.getElementById('prizeResult');
+            const prizeTitle = document.getElementById('prizeTitle');
+            const prizeText = document.getElementById('prizeText');
+            const prizeCode = document.getElementById('prizeCode');
+            
+            // 闪白
+            flashOverlay.style.opacity = '1';
+            setTimeout(() => { flashOverlay.style.opacity = '0'; }, 100);
+            
+            // 爆炸状态
+            reactorBox.classList.remove('state-charging');
+            reactorBox.classList.add('state-exploded');
+            
+            setTimeout(() => {
+                if (won) {
+                    prizeTitle.textContent = '🎉 恭喜中奖';
+                    prizeText.textContent = 'Team 邀请码';
+                    prizeText.classList.add('prize-win');
+                    prizeCode.textContent = inviteCode;
+                    prizeCode.classList.remove('hidden');
+                } else {
+                    prizeTitle.textContent = '💫 再接再厉';
+                    prizeText.textContent = '未中奖';
+                    prizeText.classList.remove('prize-win');
+                    prizeCode.classList.add('hidden');
+                }
+                prizeResult.classList.add('show');
+            }, 150);
+        }
+
+        function collectPrize() {
+            const reactorBox = document.getElementById('reactorBox');
+            const prizeResult = document.getElementById('prizeResult');
+            
+            prizeResult.classList.remove('show');
+            
+            setTimeout(() => {
+                reactorBox.classList.remove('state-exploded');
+                reactorBox.classList.add('state-idle');
+                isDrawing = false;
+                loadStats();
+                loadHistory();
+            }, 300);
         }
 
         function submitPayForm(gateway, params) {
@@ -559,40 +606,7 @@
             form.submit();
         }
 
-        function showResult(won, code) {
-            const modal = document.getElementById('resultModal');
-            const icon = document.getElementById('resultIcon');
-            const title = document.getElementById('resultTitle');
-            const desc = document.getElementById('resultDesc');
-            const codeEl = document.getElementById('resultCode');
-            
-            if (won) {
-                icon.textContent = '🎉';
-                title.textContent = '恭喜获得！';
-                title.style.color = 'var(--success)';
-                desc.textContent = '您获得了一个 ChatGPT Team 邀请码';
-                codeEl.textContent = code;
-                codeEl.classList.remove('hidden');
-            } else {
-                icon.textContent = '📦';
-                title.textContent = '空箱子';
-                title.style.color = 'var(--muted)';
-                desc.textContent = '很遗憾，这是个空箱子，下次好运！';
-                codeEl.classList.add('hidden');
-            }
-            modal.classList.add('show');
-        }
-
-        function closeResult() {
-            document.getElementById('resultModal').classList.remove('show');
-            isDrawing = false;
-            document.getElementById('drawBtn').disabled = false;
-            document.getElementById('drawStatus').textContent = '';
-            resetBox();
-            loadStats();
-            loadHistory();
-        }
-
+        // 检查支付回调
         async function checkPaymentResult() {
             const params = new URLSearchParams(window.location.search);
             const orderId = params.get('order_id') || params.get('out_trade_no');
@@ -600,10 +614,7 @@
             if (orderId && orderId.startsWith('LOT')) {
                 history.replaceState({}, '', '/lottery.html');
                 
-                const btn = document.getElementById('drawBtn');
                 const status = document.getElementById('drawStatus');
-                btn.disabled = true;
-                isDrawing = true;
                 status.textContent = '正在查询结果...';
                 
                 let attempts = 0;
@@ -617,9 +628,15 @@
                         if (res.ok) {
                             const data = await res.json();
                             if (data.status === 'completed') {
-                                status.textContent = '开箱中...';
-                                await playOpenAnimation(data.won);
-                                showResult(data.won, data.inviteCode);
+                                status.textContent = '';
+                                const reactorBox = document.getElementById('reactorBox');
+                                reactorBox.classList.remove('state-idle');
+                                reactorBox.classList.add('state-charging');
+                                isDrawing = true;
+                                
+                                setTimeout(() => {
+                                    triggerExplosion(data.won, data.inviteCode);
+                                }, 1500);
                                 return;
                             } else if (data.status === 'pending' && attempts < maxAttempts) {
                                 attempts++;
@@ -629,18 +646,16 @@
                             }
                         }
                         status.textContent = '查询超时，请刷新页面';
-                        btn.disabled = false;
-                        isDrawing = false;
                     } catch (err) {
                         status.textContent = '查询失败，请刷新页面';
-                        btn.disabled = false;
-                        isDrawing = false;
                     }
                 };
+                
                 pollResult();
             }
         }
 
+        // 初始化
         (async () => {
             const loggedIn = await checkLogin();
             if (loggedIn) {
