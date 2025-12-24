@@ -261,7 +261,7 @@
                     <div class="modal-header">
                         <h3>🎁 我的奖品</h3>
                         <div style="display: flex; align-items: center; gap: 0.5rem;">
-                            <button class="btn btn-outline" style="width: auto; padding: 0.3rem 0.6rem; font-size: 0.75rem; margin: 0;" onclick="exportCodes()">导出</button>
+                            <button class="btn btn-outline" style="width: auto; padding: 0.3rem 0.6rem; font-size: 0.75rem; margin: 0;" onclick="exportCodes()">批量复制</button>
                             <button class="modal-close" onclick="closePrizesModal()">&times;</button>
                         </div>
                     </div>
@@ -635,10 +635,7 @@
                         alert('暂无可导出的奖品');
                         return;
                     }
-                    const text = prizes.map(r => {
-                        const type = r.prizeType === 'team_invite' ? 'Team邀请码' : (r.prizeName || '兑换码');
-                        return `${type}: ${r.prizeCode}`;
-                    }).join('\n');
+                    const text = prizes.map(r => r.prizeCode).join('\n');
                     
                     // 复制到剪贴板
                     navigator.clipboard.writeText(text).then(() => {
