@@ -453,7 +453,7 @@
                 if (wonInviteCode) {
                     infoTag.innerHTML = `<span>🎉</span><span>您已获得邀请码: <strong style="font-family: monospace; letter-spacing: 1px; cursor: pointer;" onclick="copyWonCode()">${wonInviteCode}</strong></span>`;
                 } else {
-                    infoTag.innerHTML = '<span>🎉</span><span>您已获得邀请码</span>';
+                    infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" style="vertical-align: -3px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path></svg></span><span>您已获得邀请码</span>';
                 }
                 infoTag.style.borderColor = 'var(--success)';
                 infoTag.style.background = 'rgba(34, 197, 94, 0.1)';
@@ -461,12 +461,17 @@
                 coreBtn.style.pointerEvents = '';
                 coreBtn.style.opacity = '';
                 document.querySelector('.core-text').textContent = '抽奖';
-                // 显示继续抽奖提示和购买按钮
-                buyBtn.classList.remove('hidden');
-                buyBtn.innerHTML = '🔄 继续抽奖 <span style="font-size: 0.8em; opacity: 0.8;">(奖品已更换为兑换码)</span>';
-                buyBtn.onclick = null;  // 移除购买功能
-                buyBtn.style.background = 'linear-gradient(135deg, var(--warning), #d97706)';
-                buyBtn.onclick = () => { startDraw(); };
+                // 显示继续抽奖提示（非按钮）
+                buyBtn.classList.add('hidden');
+                // 在 infoTag 下方添加提示
+                const existingTip = document.getElementById('continueDrawTip');
+                if (!existingTip) {
+                    const tip = document.createElement('div');
+                    tip.id = 'continueDrawTip';
+                    tip.style.cssText = 'text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;';
+                    tip.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>可继续抽奖，奖品已更换为兑换码';
+                    infoTag.parentNode.insertBefore(tip, infoTag.nextSibling);
+                }
             } else {
                 infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -3px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle></svg></span><span>每天 <strong>1</strong> 次免费抽奖</span>';
                 infoTag.style.borderColor = '';
@@ -591,7 +596,7 @@
             setTimeout(() => {
                 if (prizeType === 'team_invite') {
                     // Team 邀请码 - 大奖
-                    prizeTitle.innerHTML = '';
+                    prizeTitle.textContent = '🎉 恭喜中奖';
                     prizeText.textContent = 'Team 邀请码';
                     prizeText.classList.add('prize-win');
                     prizeCodeEl.textContent = prizeCode;
