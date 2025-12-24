@@ -1680,6 +1680,13 @@ LOTTERY_PRIZES = [
     {'type': 'redeem_1', 'name': '$1 兑换码', 'amount': 1, 'probability': 0.70},  # 70%
 ]
 
+# 抽奖冷却机制：每 N 人为一个周期，周期内中了大奖后，后续的人不能再中同级别大奖
+LOTTERY_CYCLE_SIZE = 40  # 周期人数
+lottery_cycle_state = {
+    'count': 0,  # 当前周期已抽奖人数
+    'team_invite_won': False,  # 本周期是否已有人中 Team 邀请码
+}
+
 def create_redeem_code(amount, expires_in=30):
     """调用 CLIProxy API 创建兑换码"""
     if not CLIPROXY_INTERNAL_KEY:
@@ -1893,10 +1900,8 @@ def lottery_history():
     for r in records:
         result.append({
             'orderId': r['order_id'],
-            'won': r['won'] == 1,  # won=1 表示 Team 邀请码
-            'prizeType': r.get('prize_type'),
-            'prizeName': r.get('prize_name'),
-            'prizeCode': r['invite_code'],
+            'won': bool(r['won']),
+            'inviteCode': r['invite_code'] if r['won'] else None,
             'createdAt': str(r['created_at'])
         })
     
@@ -1984,8 +1989,22 @@ def lottery_draw():
     import random
     order_id = f"LOT{int(time.time())}{secrets.token_hex(4).upper()}"
     
+    # 冷却机制：检查周期状态
+    global lottery_cycle_state
+    lottery_cycle_state['count'] += 1
+    if lottery_cycle_state['count'] > LOTTERY_CYCLE_SIZE:
+        # 新周期，重置状态
+        lottery_cycle_state['count'] = 1
+        lottery_cycle_state['team_invite_won'] = False
+    
     # 按概率抽取奖品
     rand = random.random()
+    
+    # 如果本周期已有人中 Team 邀请码，且这次随机数落在 0.00-0.01，用 1-rand 弹开
+    if lottery_cycle_state['team_invite_won'] and rand < 0.01:
+        rand = 1 - rand  # 弹到 0.99-1.00 区间，变成 $1 兑换码
+        print(f"[Lottery] 冷却机制触发，rand 从 {1-rand:.4f} 调整为 {rand:.4f}")
+    
     cumulative = 0
     prize = None
     for p in LOTTERY_PRIZES:
@@ -2002,7 +2021,9 @@ def lottery_draw():
     prize_code = None
     
     if prize_type == 'team_invite':
-        # Team 邀请码
+        # Team 邀请码 - 标记本周期已有人中奖
+        lottery_cycle_state['team_invite_won'] = True
+        
         available_account = conn.execute('''
             SELECT * FROM team_accounts 
             WHERE enabled = 1 AND seats_in_use < max_seats
