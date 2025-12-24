@@ -1687,8 +1687,8 @@ lottery_cycle_state = {
     'team_invite_won': False,  # 本周期是否已有人中 Team 邀请码
 }
 
-def create_redeem_code(amount, expires_in=30):
-    """调用 CLIProxy API 创建兑换码"""
+def create_redeem_code(amount, expires_in=0):
+    """调用 CLIProxy API 创建兑换码，expires_in=0 表示永不过期"""
     if not CLIPROXY_INTERNAL_KEY:
         print("[Lottery] CLIPROXY_INTERNAL_KEY 未配置")
         return None
