@@ -712,7 +712,35 @@
                     </div>
                 </div>
 
+                <!-- 用户次数管理 -->
                 <div class="table-container">
+                    <div class="table-header">
+                        <span class="title">用户抽奖次数管理</span>
+                        <div class="table-actions">
+                            <input type="text" id="lotteryUserSearch" placeholder="用户名" style="width: 120px;">
+                            <input type="number" id="lotteryAddChances" value="1" min="1" max="100" style="width: 60px;">
+                            <button class="btn btn-primary" onclick="addUserChances()">添加次数</button>
+                            <button class="btn btn-ghost" onclick="loadUserChances()">刷新</button>
+                        </div>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>用户</th>
+                                <th>今日免费</th>
+                                <th>今日购买</th>
+                                <th>今日已用</th>
+                                <th>今日剩余</th>
+                                <th>累计抽奖</th>
+                                <th>中奖次数</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userChancesList"></tbody>
+                    </table>
+                </div>
+
+                <div class="table-container" style="margin-top: 1rem;">
                     <div class="table-header">
                         <span class="title">抽奖记录</span>
                         <div class="table-actions">
@@ -1002,8 +1030,90 @@
             document.getElementById('statLotteryRate').textContent = data.winRate || '0%';
             document.getElementById('statLotteryOrders').textContent = data.totalOrders || 0;
             
+            loadUserChances();
             loadLotteryRecords();
             loadLotteryOrders();
+        }
+        
+        async function loadUserChances() {
+            const { ok, data } = await api('/admin/lottery/user-chances');
+            if (!ok) return;
+            
+            const tbody = document.getElementById('userChancesList');
+            if (!data.users || data.users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="empty-state">暂无用户数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = data.users.map(u => `
+                <tr>
+                    <td>${u.username}</td>
+                    <td>${u.freeChances}</td>
+                    <td>${u.boughtChances}</td>
+                    <td>${u.usedToday}</td>
+                    <td style="color: ${u.remaining > 0 ? 'var(--success)' : 'var(--muted)'}; font-weight: 600;">${u.remaining}</td>
+                    <td>${u.totalDraws}</td>
+                    <td>${u.totalWins > 0 ? `<span style="color: var(--success);">${u.totalWins}</span>` : '0'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="addChancesToUser(${u.userId}, '${u.username}')">+次数</button>
+                        ${u.totalWins > 0 ? '' : `<button class="btn btn-sm btn-danger" onclick="resetUserLottery(${u.userId}, '${u.username}')">重置</button>`}
+                    </td>
+                </tr>
+            `).join('');
+        }
+        
+        async function addUserChances() {
+            const username = document.getElementById('lotteryUserSearch').value.trim();
+            const chances = parseInt(document.getElementById('lotteryAddChances').value) || 1;
+            
+            if (!username) {
+                alert('请输入用户名');
+                return;
+            }
+            
+            const { ok, data } = await api('/admin/lottery/add-chances', {
+                method: 'POST',
+                body: JSON.stringify({ username, chances })
+            });
+            
+            if (ok) {
+                document.getElementById('lotteryUserSearch').value = '';
+                loadUserChances();
+            } else {
+                alert(data.error || '添加失败');
+            }
+        }
+        
+        async function addChancesToUser(userId, username) {
+            const chances = prompt(`给 ${username} 添加多少次抽奖机会？`, '1');
+            if (!chances) return;
+            
+            const { ok, data } = await api('/admin/lottery/add-chances', {
+                method: 'POST',
+                body: JSON.stringify({ userId, chances: parseInt(chances) })
+            });
+            
+            if (ok) {
+                loadUserChances();
+            } else {
+                alert(data.error || '添加失败');
+            }
+        }
+        
+        async function resetUserLottery(userId, username) {
+            if (!confirm(`确定要重置 ${username} 的抽奖记录吗？这将清除该用户今日的抽奖次数。`)) return;
+            
+            const { ok, data } = await api('/admin/lottery/reset-user', {
+                method: 'POST',
+                body: JSON.stringify({ userId })
+            });
+            
+            if (ok) {
+                loadUserChances();
+                loadLotteryStats();
+            } else {
+                alert(data.error || '重置失败');
+            }
         }
         
         async function loadLotteryRecords() {

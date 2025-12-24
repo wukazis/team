@@ -3329,6 +3329,146 @@ def admin_lottery_orders():
     
     return jsonify({'orders': result})
 
+@app.route('/api/admin/lottery/user-chances')
+@admin_required
+def admin_lottery_user_chances():
+    """获取用户抽奖次数列表"""
+    conn = get_db()
+    
+    # 获取今天有抽奖活动的用户
+    if USE_POSTGRES:
+        users = conn.execute('''
+            SELECT DISTINCT u.id, u.username,
+                COALESCE((SELECT SUM(quantity) FROM lottery_orders WHERE user_id = u.id AND status = 'paid' AND created_at::date = CURRENT_DATE), 0) as bought,
+                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND created_at::date = CURRENT_DATE), 0) as used_today,
+                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won >= 0), 0) as total_draws,
+                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won = 1), 0) as total_wins
+            FROM users u
+            WHERE u.id IN (
+                SELECT user_id FROM lottery_records WHERE created_at::date = CURRENT_DATE
+                UNION SELECT user_id FROM lottery_orders WHERE created_at::date = CURRENT_DATE
+            )
+            ORDER BY used_today DESC
+            LIMIT 50
+        ''').fetchall()
+    else:
+        users = conn.execute('''
+            SELECT DISTINCT u.id, u.username,
+                COALESCE((SELECT SUM(quantity) FROM lottery_orders WHERE user_id = u.id AND status = 'paid' AND date(created_at) = date('now')), 0) as bought,
+                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND date(created_at) = date('now')), 0) as used_today,
+                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won >= 0), 0) as total_draws,
+                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won = 1), 0) as total_wins
+            FROM users u
+            WHERE u.id IN (
+                SELECT user_id FROM lottery_records WHERE date(created_at) = date('now')
+                UNION SELECT user_id FROM lottery_orders WHERE date(created_at) = date('now')
+            )
+            ORDER BY used_today DESC
+            LIMIT 50
+        ''').fetchall()
+    
+    conn.close()
+    
+    result = []
+    for u in users:
+        is_admin = u['username'] == 'wukazi'
+        free_chances = 10000 if is_admin else LOTTERY_FREE_DAILY
+        bought = u['bought'] or 0
+        used = u['used_today'] or 0
+        remaining = max(0, free_chances + bought - used)
+        
+        result.append({
+            'userId': u['id'],
+            'username': u['username'],
+            'freeChances': free_chances if not is_admin else '∞',
+            'boughtChances': bought,
+            'usedToday': used,
+            'remaining': remaining if not is_admin else '∞',
+            'totalDraws': u['total_draws'] or 0,
+            'totalWins': u['total_wins'] or 0
+        })
+    
+    return jsonify({'users': result})
+
+@app.route('/api/admin/lottery/add-chances', methods=['POST'])
+@admin_required
+def admin_add_lottery_chances():
+    """给用户添加抽奖次数"""
+    data = request.json or {}
+    username = data.get('username')
+    user_id = data.get('userId')
+    chances = data.get('chances', 1)
+    
+    if not username and not user_id:
+        return jsonify({'error': '请提供用户名或用户ID'}), 400
+    
+    if chances < 1 or chances > 100:
+        return jsonify({'error': '次数必须在 1-100 之间'}), 400
+    
+    conn = get_db()
+    
+    # 查找用户
+    if username:
+        user = conn.execute('SELECT id FROM users WHERE username = ?', (username,)).fetchone()
+        if not user:
+            conn.close()
+            return jsonify({'error': f'用户 {username} 不存在'}), 404
+        user_id = user['id']
+    
+    # 创建一个已支付的购买订单（管理员赠送）
+    order_id = f"ADMIN{int(time.time())}{secrets.token_hex(4).upper()}"
+    
+    if USE_POSTGRES:
+        conn.execute('''
+            INSERT INTO lottery_orders (order_id, user_id, quantity, amount, status, created_at, paid_at)
+            VALUES (%s, %s, %s, 0, 'paid', NOW(), NOW())
+        ''', (order_id, user_id, chances))
+    else:
+        conn.execute('''
+            INSERT INTO lottery_orders (order_id, user_id, quantity, amount, status, created_at, paid_at)
+            VALUES (?, ?, ?, 0, 'paid', datetime('now'), datetime('now'))
+        ''', (order_id, user_id, chances))
+    
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('添加抽奖次数', f'user_id={user_id}, chances={chances}')
+    return jsonify({'status': 'ok'})
+
+@app.route('/api/admin/lottery/reset-user', methods=['POST'])
+@admin_required
+def admin_reset_user_lottery():
+    """重置用户今日抽奖记录"""
+    data = request.json or {}
+    user_id = data.get('userId')
+    
+    if not user_id:
+        return jsonify({'error': '请提供用户ID'}), 400
+    
+    conn = get_db()
+    
+    # 删除今日抽奖记录
+    if USE_POSTGRES:
+        conn.execute('''
+            DELETE FROM lottery_records WHERE user_id = %s AND created_at::date = CURRENT_DATE
+        ''', (user_id,))
+        conn.execute('''
+            DELETE FROM lottery_orders WHERE user_id = %s AND created_at::date = CURRENT_DATE
+        ''', (user_id,))
+    else:
+        conn.execute('''
+            DELETE FROM lottery_records WHERE user_id = ? AND date(created_at) = date('now')
+        ''', (user_id,))
+        conn.execute('''
+            DELETE FROM lottery_orders WHERE user_id = ? AND date(created_at) = date('now')
+        ''', (user_id,))
+    
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('重置用户抽奖', f'user_id={user_id}')
+    return jsonify({'status': 'ok'})
+
 # ========== 候车室设置 API ==========
 
 @app.route('/api/admin/waiting-room-settings', methods=['GET'])
