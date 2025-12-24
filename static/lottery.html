@@ -170,19 +170,6 @@
                     </div>
                 </div>
 
-                <!-- 待支付订单卡片 -->
-                <div id="pendingOrderCard" class="pending-order-card hidden">
-                    <h4>⏳ 待支付订单</h4>
-                    <div class="pending-order-info">
-                        <div>订单号: <span id="pendingOrderId">-</span></div>
-                        <div>购买: <span id="pendingQuantity">-</span> 次抽奖 · <span id="pendingAmount">-</span> Credit</div>
-                    </div>
-                    <div class="pending-order-actions">
-                        <button class="btn btn-warning" onclick="continuePay()">继续支付</button>
-                        <button class="btn btn-danger" onclick="cancelOrder()">取消订单</button>
-                    </div>
-                </div>
-
                 <!-- 反应堆 -->
                 <div class="reactor-wrapper" id="reactorWrapper">
                     <div class="reactor-box state-idle" id="reactorBox">
@@ -212,6 +199,19 @@
                     <div class="info-tag" id="infoTag">
                         <span>🎯</span>
                         <span>每天 <strong>1</strong> 次免费抽奖</span>
+                    </div>
+                </div>
+                
+                <!-- 待支付订单卡片 -->
+                <div id="pendingOrderCard" class="pending-order-card hidden">
+                    <h4>⏳ 待支付订单</h4>
+                    <div class="pending-order-info">
+                        <div>订单号: <span id="pendingOrderId">-</span></div>
+                        <div>购买: <span id="pendingQuantity">-</span> 次抽奖 · <span id="pendingAmount">-</span> Credit</div>
+                    </div>
+                    <div class="pending-order-actions">
+                        <button class="btn btn-warning" onclick="continuePay()">继续支付</button>
+                        <button class="btn btn-danger" onclick="cancelOrder()">取消订单</button>
                     </div>
                 </div>
                 
@@ -325,7 +325,6 @@
             const coreBtn = document.getElementById('coreBtn');
             const buyBtn = document.getElementById('buyBtn');
             const pendingCard = document.getElementById('pendingOrderCard');
-            const reactorWrapper = document.getElementById('reactorWrapper');
             
             // 待支付订单
             if (pendingOrder) {
@@ -333,15 +332,20 @@
                 document.getElementById('pendingOrderId').textContent = pendingOrder.orderId;
                 document.getElementById('pendingQuantity').textContent = pendingOrder.quantity;
                 document.getElementById('pendingAmount').textContent = pendingOrder.amount;
-                reactorWrapper.classList.add('hidden');
                 buyBtn.classList.add('hidden');
                 infoTag.innerHTML = '<span>⏳</span><span>请先处理待支付订单</span>';
                 infoTag.style.borderColor = 'var(--warning)';
                 infoTag.style.background = 'rgba(245, 158, 11, 0.1)';
+                // 禁用抽奖按钮
+                coreBtn.style.pointerEvents = 'none';
+                coreBtn.style.opacity = '0.5';
+                document.querySelector('.core-text').textContent = '待支付';
                 return;
             } else {
                 pendingCard.classList.add('hidden');
-                reactorWrapper.classList.remove('hidden');
+                coreBtn.style.pointerEvents = '';
+                coreBtn.style.opacity = '';
+                document.querySelector('.core-text').textContent = '抽奖';
             }
             
             if (isAdmin) {
