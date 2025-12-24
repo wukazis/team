@@ -1048,7 +1048,10 @@
         
         async function setTeamPool() {
             const count = parseInt(document.getElementById('teamPoolInput').value) || 0;
-            const { ok, data } = await api('/admin/lottery/pool', 'POST', { count });
+            const { ok, data } = await api('/admin/lottery/pool', {
+                method: 'POST',
+                body: JSON.stringify({ count })
+            });
             if (ok) {
                 alert('奖池设置成功');
             } else {
