@@ -674,6 +674,7 @@ def init_db():
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('waiting_room_max_queue', '0') ON CONFLICT (key) DO NOTHING")
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('dispatch_mode', 'auto') ON CONFLICT (key) DO NOTHING")
         cursor.execute("INSERT INTO system_settings (key, value) VALUES ('sync_interval', '30') ON CONFLICT (key) DO NOTHING")
+        cursor.execute("INSERT INTO system_settings (key, value) VALUES ('lottery_team_pool', '0') ON CONFLICT (key) DO NOTHING")
         
         raw_conn.commit()
         db_pool.putconn(raw_conn)
@@ -1687,6 +1688,42 @@ lottery_cycle_state = {
     'team_invite_won': False,  # 本周期是否已有人中 Team 邀请码
 }
 
+# 奖池 Team 邀请码数量（从数据库加载）
+LOTTERY_TEAM_POOL = 0
+
+def get_lottery_team_pool():
+    """获取奖池中 Team 邀请码剩余数量"""
+    try:
+        conn = get_db()
+        row = conn.execute("SELECT value FROM system_settings WHERE key = 'lottery_team_pool'").fetchone()
+        conn.close()
+        return int(row[0]) if row else 0
+    except:
+        return 0
+
+def set_lottery_team_pool(count):
+    """设置奖池中 Team 邀请码数量"""
+    global LOTTERY_TEAM_POOL
+    LOTTERY_TEAM_POOL = count
+    save_setting('lottery_team_pool', str(count))
+
+def decrease_lottery_team_pool():
+    """减少奖池中 Team 邀请码数量（抽中时调用）"""
+    global LOTTERY_TEAM_POOL
+    conn = get_db()
+    row = conn.execute("SELECT value FROM system_settings WHERE key = 'lottery_team_pool'").fetchone()
+    current = int(row[0]) if row else 0
+    if current > 0:
+        new_count = current - 1
+        if USE_POSTGRES:
+            conn.execute("UPDATE system_settings SET value = %s WHERE key = 'lottery_team_pool'", (str(new_count),))
+        else:
+            conn.execute("UPDATE system_settings SET value = ? WHERE key = 'lottery_team_pool'", (str(new_count),))
+        conn.commit()
+        LOTTERY_TEAM_POOL = new_count
+    conn.close()
+    return current > 0
+
 def create_redeem_code(amount, expires_in=0):
     """调用 CLIProxy API 创建兑换码，expires_in=0 表示永不过期"""
     if not CLIPROXY_INTERNAL_KEY:
@@ -1861,6 +1898,9 @@ def lottery_stats():
     has_won_team = total_wins > 0
     can_draw = is_admin or not has_won_team
     
+    # 获取奖池数量
+    team_pool = get_lottery_team_pool()
+    
     result = {
         'todayRemaining': today_remaining,  # 始终显示剩余次数
         'totalDraws': total_draws,
@@ -1871,7 +1911,8 @@ def lottery_stats():
         'canBuy': can_buy,  # 始终允许购买
         'pendingOrder': None,
         'wonInviteCode': won_invite_code,
-        'hasWonTeam': has_won_team
+        'hasWonTeam': has_won_team,
+        'teamPool': team_pool  # 奖池 Team 邀请码数量
     }
     
     if pending_order:
@@ -2018,6 +2059,14 @@ def lottery_draw():
     if not prize:
         prize = LOTTERY_PRIZES[-1]  # 兜底：$1 兑换码
     
+    # 检查奖池数量
+    pool_count = get_lottery_team_pool()
+    
+    # 如果奖池为空，且抽到 Team 邀请码，改为 $20 兑换码
+    if pool_count <= 0 and prize['type'] == 'team_invite':
+        prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
+        print(f"[Lottery] 奖池为空，Team 邀请码改为 $20 兑换码")
+    
     # 如果已中过 Team 邀请码，且这次又抽到 Team 邀请码，改为 $20 兑换码
     if has_won_team and prize['type'] == 'team_invite':
         prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
@@ -2027,26 +2076,36 @@ def lottery_draw():
     prize_code = None
     
     if prize_type == 'team_invite':
-        # Team 邀请码
-        available_account = conn.execute('''
-            SELECT * FROM team_accounts 
-            WHERE enabled = 1 AND seats_in_use < max_seats
-            ORDER BY (max_seats - seats_in_use) DESC
-            LIMIT 1
-        ''').fetchone()
-        team_account_id = available_account['id'] if available_account else None
-        prize_code = generate_code()
-        
-        if USE_POSTGRES:
-            conn.execute('''
-                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                VALUES (%s, %s, %s, 1)
-            ''', (prize_code, team_account_id, user_id))
+        # Team 邀请码 - 减少奖池数量
+        if not decrease_lottery_team_pool():
+            # 奖池已空，改为 $20 兑换码
+            prize_type = 'redeem_20'
+            prize_name = '$20 兑换码'
+            prize_code = create_redeem_code(20)
+            if not prize_code:
+                conn.close()
+                return jsonify({'error': '奖品生成失败，请重试'}), 500
         else:
-            conn.execute('''
-                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                VALUES (?, ?, ?, 1)
-            ''', (prize_code, team_account_id, user_id))
+            # 正常发放 Team 邀请码
+            available_account = conn.execute('''
+                SELECT * FROM team_accounts 
+                WHERE enabled = 1 AND seats_in_use < max_seats
+                ORDER BY (max_seats - seats_in_use) DESC
+                LIMIT 1
+            ''').fetchone()
+            team_account_id = available_account['id'] if available_account else None
+            prize_code = generate_code()
+            
+            if USE_POSTGRES:
+                conn.execute('''
+                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                    VALUES (%s, %s, %s, 1)
+                ''', (prize_code, team_account_id, user_id))
+            else:
+                conn.execute('''
+                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                    VALUES (?, ?, ?, 1)
+                ''', (prize_code, team_account_id, user_id))
     else:
         # 兑换码
         amount = prize.get('amount', 1)
@@ -3383,6 +3442,10 @@ def admin_lottery_stats():
     total_wins = conn.execute('SELECT COUNT(*) FROM lottery_records WHERE won = 1').fetchone()[0]
     total_orders = conn.execute('SELECT COUNT(*) FROM lottery_orders').fetchone()[0]
     
+    # 获取奖池数量
+    pool_row = conn.execute("SELECT value FROM system_settings WHERE key = 'lottery_team_pool'").fetchone()
+    team_pool = int(pool_row[0]) if pool_row else 0
+    
     conn.close()
     
     win_rate = f"{(total_wins / total_draws * 100):.1f}%" if total_draws > 0 else "0%"
@@ -3391,8 +3454,26 @@ def admin_lottery_stats():
         'totalDraws': total_draws,
         'totalWins': total_wins,
         'winRate': win_rate,
-        'totalOrders': total_orders
+        'totalOrders': total_orders,
+        'teamPool': team_pool
     })
+
+@app.route('/api/admin/lottery/pool', methods=['GET'])
+@admin_required
+def admin_get_lottery_pool():
+    """获取奖池 Team 邀请码数量"""
+    return jsonify({'teamPool': get_lottery_team_pool()})
+
+@app.route('/api/admin/lottery/pool', methods=['POST'])
+@admin_required
+def admin_set_lottery_pool():
+    """设置奖池 Team 邀请码数量"""
+    data = request.get_json()
+    count = int(data.get('count', 0))
+    if count < 0:
+        return jsonify({'error': '数量不能为负数'}), 400
+    set_lottery_team_pool(count)
+    return jsonify({'status': 'ok', 'teamPool': count})
 
 @app.route('/api/admin/lottery/records')
 @admin_required

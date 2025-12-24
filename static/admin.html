@@ -732,6 +732,19 @@
                     </div>
                 </div>
 
+                <!-- 奖池设置 -->
+                <div class="table-container" style="margin-bottom: 1rem;">
+                    <div class="table-header">
+                        <span class="title">奖池设置</span>
+                    </div>
+                    <div style="padding: 1rem; display: flex; align-items: center; gap: 1rem;">
+                        <span>Team 邀请码数量:</span>
+                        <input type="number" id="teamPoolInput" value="0" min="0" style="width: 80px;">
+                        <button class="btn btn-primary" onclick="setTeamPool()">保存</button>
+                        <span style="color: var(--muted); font-size: 0.85rem;">（为0时，1%奖品变为$20兑换码）</span>
+                    </div>
+                </div>
+
                 <!-- 用户次数管理 -->
                 <div class="table-container">
                     <div class="table-header">
@@ -1027,9 +1040,20 @@
             document.getElementById('statLotteryWins').textContent = data.totalWins || 0;
             document.getElementById('statLotteryRate').textContent = data.winRate || '0%';
             document.getElementById('statLotteryOrders').textContent = data.totalOrders || 0;
+            document.getElementById('teamPoolInput').value = data.teamPool || 0;
             
             loadUserChances();
             loadLotteryRecords();
+        }
+        
+        async function setTeamPool() {
+            const count = parseInt(document.getElementById('teamPoolInput').value) || 0;
+            const { ok, data } = await api('/admin/lottery/pool', 'POST', { count });
+            if (ok) {
+                alert('奖池设置成功');
+            } else {
+                alert('设置失败: ' + (data.error || '未知错误'));
+            }
         }
         
         async function loadUserChances() {
