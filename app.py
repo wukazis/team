@@ -3489,6 +3489,20 @@ def admin_reset_user_lottery():
     log_admin_action('重置用户抽奖', f'user_id={user_id}')
     return jsonify({'status': 'ok'})
 
+@app.route('/api/admin/lottery/clear-records', methods=['POST'])
+@admin_required
+def admin_clear_lottery_records():
+    """删除所有抽奖记录"""
+    conn = get_db()
+    
+    count = conn.execute('SELECT COUNT(*) FROM lottery_records').fetchone()[0]
+    conn.execute('DELETE FROM lottery_records')
+    conn.commit()
+    conn.close()
+    
+    log_admin_action('删除所有抽奖记录', f'count={count}')
+    return jsonify({'status': 'ok', 'deleted': count})
+
 # ========== 候车室设置 API ==========
 
 @app.route('/api/admin/waiting-room-settings', methods=['GET'])

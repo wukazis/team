@@ -764,6 +764,7 @@
                     <div class="table-header">
                         <span class="title">抽奖记录</span>
                         <div class="table-actions">
+                            <button class="btn btn-danger" onclick="clearAllLotteryRecords()">删除所有</button>
                             <button class="btn btn-ghost" onclick="loadLotteryRecords()">刷新</button>
                         </div>
                     </div>
@@ -1131,6 +1132,17 @@
                     <td class="text-muted">${new Date(r.createdAt).toLocaleString('zh-CN')}</td>
                 </tr>
             `).join('');
+        }
+        
+        async function clearAllLotteryRecords() {
+            if (!confirm('确定要删除所有抽奖记录吗？此操作不可恢复！')) return;
+            
+            const { ok, data } = await api('/admin/lottery/clear-records', { method: 'POST' });
+            if (ok) {
+                loadLotteryStats();
+            } else {
+                alert(data.error || '删除失败');
+            }
         }
         
         async function loadLotteryOrders() {
