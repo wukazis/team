@@ -1796,6 +1796,15 @@ def lottery_stats():
     # 中奖次数
     total_wins = conn.execute('SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1', (user_id,)).fetchone()[0]
     
+    # 获取中奖的邀请码
+    won_invite_code = None
+    if total_wins > 0 and not is_admin:
+        won_record = conn.execute('''
+            SELECT invite_code FROM lottery_records WHERE user_id = ? AND won = 1 ORDER BY created_at DESC LIMIT 1
+        ''', (user_id,)).fetchone()
+        if won_record:
+            won_invite_code = won_record['invite_code']
+    
     # 待支付订单
     pending_order = conn.execute('''
         SELECT * FROM lottery_orders WHERE user_id = ? AND status = 'pending'
@@ -1815,7 +1824,8 @@ def lottery_stats():
         'isAdmin': is_admin,
         'canDraw': can_draw,
         'canBuy': can_buy if can_draw else 0,
-        'pendingOrder': None
+        'pendingOrder': None,
+        'wonInviteCode': won_invite_code
     }
     
     if pending_order:
