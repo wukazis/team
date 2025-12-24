@@ -446,7 +446,7 @@
             }
             
             if (isAdmin) {
-                infoTag.innerHTML = '<span>👑</span><span>管理员 <strong>免费无限抽奖</strong></span>';
+                infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1" style="vertical-align: -3px;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg></span><span>管理员 <strong>免费无限抽奖</strong></span>';
                 buyBtn.classList.add('hidden');
             } else if (!canDraw) {
                 // 已中奖，显示邀请码
