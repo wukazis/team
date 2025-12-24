@@ -70,10 +70,14 @@ CF_TURNSTILE_SECRET_KEY = os.environ.get('CF_TURNSTILE_SECRET_KEY', '')
 HCAPTCHA_SITE_KEY = os.environ.get('HCAPTCHA_SITE_KEY', '')
 HCAPTCHA_SECRET_KEY = os.environ.get('HCAPTCHA_SECRET_KEY', '')
 
-# LinuxDO Credit 易支付配置
+# LinuxDO Credit 易支付配置（邀请码购买）
 CREDIT_PID = os.environ.get('CREDIT_PID', '')  # Client ID
 CREDIT_KEY = os.environ.get('CREDIT_KEY', '')  # Client Secret
 CREDIT_GATEWAY = 'https://credit.linux.do/epay'
+
+# 抽奖专用 Credit 应用配置
+LOTTERY_CREDIT_PID = os.environ.get('LOTTERY_CREDIT_PID', '')
+LOTTERY_CREDIT_KEY = os.environ.get('LOTTERY_CREDIT_KEY', '')
 INVITE_CODE_PRICE = int(os.environ.get('INVITE_CODE_PRICE', '100'))  # 邀请码价格（Credit）
 
 # 测试模式（跳过真实发送 ChatGPT 邀请）
@@ -1247,7 +1251,7 @@ def team_accounts_status():
 # ========== Credit 易支付 API ==========
 
 def generate_epay_sign(params: dict) -> str:
-    """生成易支付签名"""
+    """生成易支付签名（邀请码购买）"""
     # 排除 sign 和 sign_type，过滤空值
     filtered = {k: v for k, v in params.items() if k not in ('sign', 'sign_type') and v}
     # 按 ASCII 升序排列
@@ -1266,9 +1270,30 @@ def generate_epay_sign(params: dict) -> str:
     return sign
 
 def verify_epay_sign(params: dict) -> bool:
-    """验证易支付签名"""
+    """验证易支付签名（邀请码购买）"""
     sign = params.get('sign', '')
     expected = generate_epay_sign(params)
+    return hmac.compare_digest(sign.lower(), expected.lower())
+
+def generate_lottery_sign(params: dict) -> str:
+    """生成抽奖专用签名"""
+    filtered = {k: v for k, v in params.items() if k not in ('sign', 'sign_type') and v}
+    sorted_keys = sorted(filtered.keys())
+    query_string = '&'.join(f"{k}={filtered[k]}" for k in sorted_keys)
+    sign_str = f"{query_string}{LOTTERY_CREDIT_KEY}"
+    sign = hashlib.md5(sign_str.encode()).hexdigest()
+    print(f"[Lottery签名] 待签名串: {query_string}{{KEY}}")
+    print(f"[Lottery签名] 签名结果: {sign}")
+    return sign
+
+def verify_lottery_sign(params: dict) -> bool:
+    """验证抽奖专用签名"""
+    sign = params.get('sign', '')
+    filtered = {k: v for k, v in params.items() if k not in ('sign', 'sign_type') and v}
+    sorted_keys = sorted(filtered.keys())
+    query_string = '&'.join(f"{k}={filtered[k]}" for k in sorted_keys)
+    sign_str = f"{query_string}{LOTTERY_CREDIT_KEY}"
+    expected = hashlib.md5(sign_str.encode()).hexdigest()
     return hmac.compare_digest(sign.lower(), expected.lower())
 
 @app.route('/api/credit/price')
@@ -1497,7 +1522,7 @@ def cancel_my_order():
 
 @app.route('/notify', methods=['GET', 'POST'])
 def credit_notify():
-    """LinuxDO Credit 易支付异步回调"""
+    """LinuxDO Credit 易支付异步回调（邀请码购买）"""
     # GET 请求用于异步通知
     if request.method == 'GET':
         params = request.args.to_dict()
@@ -1527,83 +1552,6 @@ def credit_notify():
         return 'success'  # 返回 success 避免重试
     
     conn = get_db()
-    
-    # 判断订单类型：LOT 开头是抽奖订单，INV 开头是购买订单
-    if out_trade_no.startswith('LOT'):
-        # ========== 抽奖订单处理 ==========
-        # 验证金额
-        callback_amount = f"{float(money):.2f}"
-        expected_amount = f"{LOTTERY_PRICE:.2f}"
-        if callback_amount != expected_amount:
-            conn.close()
-            print(f"[Lottery Notify] 金额不匹配: 期望={expected_amount}, 回调={callback_amount}")
-            return 'fail', 400
-        
-        # 查找 pending 状态的抽奖记录
-        record = conn.execute('''
-            SELECT * FROM lottery_records WHERE order_id = ?
-        ''', (out_trade_no,)).fetchone()
-        
-        if not record:
-            conn.close()
-            print(f"[Lottery Notify] 订单不存在: {out_trade_no}")
-            return 'fail', 404
-        
-        # 检查是否已处理（won >= 0 表示已处理，-1 表示 pending）
-        if record['won'] >= 0:
-            conn.close()
-            print(f"[Lottery Notify] 订单已处理: {out_trade_no}")
-            return 'success'
-        
-        user_id = record['user_id']
-        
-        # 执行抽奖逻辑
-        import random
-        won = random.random() < LOTTERY_WIN_RATE  # 20% 中奖率
-        invite_code = None
-        
-        if won:
-            # 中奖，生成邀请码
-            # 查找可用车位
-            available_account = conn.execute('''
-                SELECT * FROM team_accounts 
-                WHERE enabled = 1 AND seats_in_use < max_seats
-                ORDER BY (max_seats - seats_in_use) DESC
-                LIMIT 1
-            ''').fetchone()
-            
-            team_account_id = available_account['id'] if available_account else None
-            invite_code = generate_code()
-            
-            # 创建邀请码记录
-            if USE_POSTGRES:
-                conn.execute('''
-                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                    VALUES (%s, %s, %s, 1)
-                ''', (invite_code, team_account_id, user_id))
-            else:
-                conn.execute('''
-                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                    VALUES (?, ?, ?, 1)
-                ''', (invite_code, team_account_id, user_id))
-        
-        # 更新抽奖记录
-        if USE_POSTGRES:
-            conn.execute('''
-                UPDATE lottery_records SET won = %s, invite_code = %s
-                WHERE order_id = %s
-            ''', (won, invite_code, out_trade_no))
-        else:
-            conn.execute('''
-                UPDATE lottery_records SET won = ?, invite_code = ?
-                WHERE order_id = ?
-            ''', (won, invite_code, out_trade_no))
-        
-        conn.commit()
-        conn.close()
-        
-        print(f"[Lottery Notify] 抽奖订单 {out_trade_no} 完成，用户 {user_id}，中奖: {won}, 邀请码: {invite_code}")
-        return 'success'
     
     # ========== 购买订单处理 ==========
     # 查找订单
@@ -1702,6 +1650,105 @@ LOTTERY_PRICE = 2  # 抽奖价格 2 Credit
 LOTTERY_WIN_RATE = 0.20  # 20% 中奖率
 LOTTERY_DAILY_LIMIT = 2  # 每天限购2次
 
+@app.route('/lot_notify', methods=['GET', 'POST'])
+def lottery_notify():
+    """抽奖专用 Credit 回调"""
+    if request.method == 'GET':
+        params = request.args.to_dict()
+    else:
+        params = request.form.to_dict() or request.json or {}
+    
+    print(f"[Lottery Notify] 收到回调: {params}")
+    
+    out_trade_no = params.get('out_trade_no', '')
+    trade_status = params.get('trade_status', '')
+    money = params.get('money', '')
+    
+    if not out_trade_no:
+        print("[Lottery Notify] 缺少 out_trade_no")
+        return 'fail', 400
+    
+    # 验证签名（使用抽奖专用密钥）
+    if not verify_lottery_sign(params):
+        print("[Lottery Notify] 签名验证失败")
+        return 'fail', 403
+    
+    if trade_status != 'TRADE_SUCCESS':
+        print(f"[Lottery Notify] 交易状态非成功: {trade_status}")
+        return 'success'
+    
+    # 验证金额
+    callback_amount = f"{float(money):.2f}"
+    expected_amount = f"{LOTTERY_PRICE:.2f}"
+    if callback_amount != expected_amount:
+        print(f"[Lottery Notify] 金额不匹配: 期望={expected_amount}, 回调={callback_amount}")
+        return 'fail', 400
+    
+    conn = get_db()
+    
+    # 查找 pending 状态的抽奖记录
+    record = conn.execute('''
+        SELECT * FROM lottery_records WHERE order_id = ?
+    ''', (out_trade_no,)).fetchone()
+    
+    if not record:
+        conn.close()
+        print(f"[Lottery Notify] 订单不存在: {out_trade_no}")
+        return 'fail', 404
+    
+    # 检查是否已处理
+    if record['won'] >= 0:
+        conn.close()
+        print(f"[Lottery Notify] 订单已处理: {out_trade_no}")
+        return 'success'
+    
+    user_id = record['user_id']
+    
+    # 执行抽奖逻辑
+    import random
+    won = random.random() < LOTTERY_WIN_RATE
+    invite_code = None
+    
+    if won:
+        available_account = conn.execute('''
+            SELECT * FROM team_accounts 
+            WHERE enabled = 1 AND seats_in_use < max_seats
+            ORDER BY (max_seats - seats_in_use) DESC
+            LIMIT 1
+        ''').fetchone()
+        
+        team_account_id = available_account['id'] if available_account else None
+        invite_code = generate_code()
+        
+        if USE_POSTGRES:
+            conn.execute('''
+                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                VALUES (%s, %s, %s, 1)
+            ''', (invite_code, team_account_id, user_id))
+        else:
+            conn.execute('''
+                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                VALUES (?, ?, ?, 1)
+            ''', (invite_code, team_account_id, user_id))
+    
+    # 更新抽奖记录
+    if USE_POSTGRES:
+        conn.execute('''
+            UPDATE lottery_records SET won = %s, invite_code = %s
+            WHERE order_id = %s
+        ''', (won, invite_code, out_trade_no))
+    else:
+        conn.execute('''
+            UPDATE lottery_records SET won = ?, invite_code = ?
+            WHERE order_id = ?
+        ''', (won, invite_code, out_trade_no))
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"[Lottery Notify] 订单 {out_trade_no} 完成，用户 {user_id}，中奖: {won}, 邀请码: {invite_code}")
+    return 'success'
+
 @app.route('/api/lottery/stats')
 @jwt_required
 def lottery_stats():
@@ -1784,8 +1831,8 @@ def lottery_draw():
     is_admin = username == 'wukazi'
     daily_limit = 10000 if is_admin else LOTTERY_DAILY_LIMIT
     
-    if not is_admin and (not CREDIT_PID or not CREDIT_KEY):
-        return jsonify({'error': 'Credit 支付未配置'}), 500
+    if not is_admin and (not LOTTERY_CREDIT_PID or not LOTTERY_CREDIT_KEY):
+        return jsonify({'error': '抽奖支付未配置'}), 500
     
     conn = get_db()
     
@@ -1880,18 +1927,19 @@ def lottery_draw():
     conn.commit()
     conn.close()
     
-    # 构建支付参数
+    # 构建支付参数（使用抽奖专用 Credit 应用）
     money_str = f"{LOTTERY_PRICE:.2f}"
     pay_params = {
-        'pid': CREDIT_PID,
+        'pid': LOTTERY_CREDIT_PID,
         'type': 'epay',
         'out_trade_no': order_id,
         'name': '幸运抽奖',
         'money': money_str,
-        'notify_url': f"{APP_BASE_URL}/notify",
+        'notify_url': 'https://rds.6666727.xyz/lot_notify',
         'return_url': f"https://rds.6666727.xyz/lottery.html?order_id={order_id}"
     }
-    pay_params['sign'] = generate_epay_sign(pay_params)
+    # 使用抽奖专用密钥签名
+    pay_params['sign'] = generate_lottery_sign(pay_params)
     pay_params['sign_type'] = 'MD5'
     
     print(f"[Lottery] 创建抽奖订单 {order_id}, 用户 {user_id}")
