@@ -1857,19 +1857,21 @@ def lottery_stats():
     
     conn.close()
     
-    # 普通用户中奖后不可再抽
-    can_draw = is_admin or total_wins == 0
+    # 中过 Team 邀请码后仍可继续抽奖，但 canDraw=false 用于前端显示不同 UI
+    has_won_team = total_wins > 0
+    can_draw = is_admin or not has_won_team
     
     result = {
-        'todayRemaining': today_remaining if can_draw else 0,
+        'todayRemaining': today_remaining,  # 始终显示剩余次数
         'totalDraws': total_draws,
         'totalWins': total_wins,
         'price': LOTTERY_PRICE,
         'isAdmin': is_admin,
         'canDraw': can_draw,
-        'canBuy': can_buy if can_draw else 0,
+        'canBuy': can_buy,  # 始终允许购买
         'pendingOrder': None,
-        'wonInviteCode': won_invite_code
+        'wonInviteCode': won_invite_code,
+        'hasWonTeam': has_won_team
     }
     
     if pending_order:
@@ -1951,14 +1953,12 @@ def lottery_draw():
     
     conn = get_db()
     
-    # 检查是否已中过 Team 邀请码（只有 Team 邀请码限制一次）
+    # 检查是否已中过 Team 邀请码
+    has_won_team = False
     if not is_admin:
         has_won_team = conn.execute('''
             SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1
-        ''', (user_id,)).fetchone()[0]
-        if has_won_team > 0:
-            conn.close()
-            return jsonify({'error': '您已获得过邀请码，不可再抽奖'}), 400
+        ''', (user_id,)).fetchone()[0] > 0
     
     # 计算今日剩余次数
     if USE_POSTGRES:
@@ -2017,6 +2017,10 @@ def lottery_draw():
     
     if not prize:
         prize = LOTTERY_PRIZES[-1]  # 兜底：$1 兑换码
+    
+    # 如果已中过 Team 邀请码，且这次又抽到 Team 邀请码，改为 $20 兑换码
+    if has_won_team and prize['type'] == 'team_invite':
+        prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
     
     prize_type = prize['type']
     prize_name = prize['name']
@@ -2097,13 +2101,7 @@ def lottery_buy():
     
     conn = get_db()
     
-    # 检查是否已中奖
-    has_won = conn.execute('''
-        SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1
-    ''', (user_id,)).fetchone()[0]
-    if has_won > 0:
-        conn.close()
-        return jsonify({'error': '您已获得过邀请码，不可再购买'}), 400
+    # 已中过 Team 邀请码的用户仍可购买（奖品会变为兑换码）
     
     # 检查今日购买限制
     if USE_POSTGRES:

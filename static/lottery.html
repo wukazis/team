@@ -401,10 +401,16 @@
                 }
                 infoTag.style.borderColor = 'var(--success)';
                 infoTag.style.background = 'rgba(34, 197, 94, 0.1)';
-                coreBtn.style.pointerEvents = 'none';
-                coreBtn.style.opacity = '0.5';
-                document.querySelector('.core-text').textContent = '已领取';
-                buyBtn.classList.add('hidden');;
+                // 允许继续抽奖
+                coreBtn.style.pointerEvents = '';
+                coreBtn.style.opacity = '';
+                document.querySelector('.core-text').textContent = '抽奖';
+                // 显示继续抽奖提示和购买按钮
+                buyBtn.classList.remove('hidden');
+                buyBtn.innerHTML = '🔄 继续抽奖 <span style="font-size: 0.8em; opacity: 0.8;">(奖品已更换为兑换码)</span>';
+                buyBtn.onclick = null;  // 移除购买功能
+                buyBtn.style.background = 'linear-gradient(135deg, var(--warning), #d97706)';
+                buyBtn.onclick = () => { startDraw(); };
             } else {
                 infoTag.innerHTML = '<span>🎯</span><span>每天 <strong>1</strong> 次免费抽奖</span>';
                 infoTag.style.borderColor = '';
