@@ -1900,8 +1900,10 @@ def lottery_history():
     for r in records:
         result.append({
             'orderId': r['order_id'],
-            'won': bool(r['won']),
-            'inviteCode': r['invite_code'] if r['won'] else None,
+            'won': r['won'] == 1,
+            'prizeType': r.get('prize_type'),
+            'prizeName': r.get('prize_name'),
+            'prizeCode': r['invite_code'],  # invite_code 字段存储所有奖品码
             'createdAt': str(r['created_at'])
         })
     
