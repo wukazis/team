@@ -449,14 +449,19 @@
                 container.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>';
                 return;
             }
+            // 奖杯 SVG 图标
+            const trophySvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>';
+            // 礼物 SVG 图标
+            const giftSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: middle; margin-right: 4px;"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>';
+            
             container.innerHTML = records.slice(0, 20).map(r => {
                 let badge = '';
                 if (r.prizeType === 'team_invite') {
-                    badge = '<span class="badge badge-win">🎉 邀请码</span>';
+                    badge = `<span class="badge badge-win">${trophySvg}邀请码</span>`;
                 } else if (r.prizeName) {
-                    badge = `<span class="badge badge-redeem">🎁 ${r.prizeName}</span>`;
+                    badge = `<span class="badge badge-redeem">${giftSvg}${r.prizeName}</span>`;
                 } else if (r.won) {
-                    badge = '<span class="badge badge-win">🎉 中奖</span>';
+                    badge = `<span class="badge badge-win">${trophySvg}中奖</span>`;
                 } else {
                     badge = '<span class="badge badge-lose">未中奖</span>';
                 }
