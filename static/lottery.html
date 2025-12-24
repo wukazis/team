@@ -15,6 +15,7 @@
             --primary: #00f3ff;
             --danger: #ff0055;
             --success: #22c55e;
+            --warning: #f59e0b;
         }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -25,290 +26,75 @@
             min-height: 100vh;
             overflow-x: hidden;
         }
-        .page-container {
-            max-width: 500px;
-            margin: 0 auto;
-            padding: 1rem;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        .header {
-            text-align: center;
-            padding: 1.5rem 0;
-        }
-        .header h1 {
-            font-size: 1.8rem;
-            background: linear-gradient(135deg, #00f3ff, #ff0055);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
-        }
+        .page-container { max-width: 500px; margin: 0 auto; padding: 1rem; min-height: 100vh; display: flex; flex-direction: column; }
+        .header { text-align: center; padding: 1.5rem 0; }
+        .header h1 { font-size: 1.8rem; background: linear-gradient(135deg, #00f3ff, #ff0055); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
         .header p { color: var(--muted); font-size: 0.9rem; }
-        .card {
-            background: var(--card);
-            border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1rem;
-            backdrop-filter: blur(10px);
-        }
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
-            margin-bottom: 1rem;
-        }
-        .user-avatar {
-            width: 48px;
-            height: 48px;
-            border-radius: 50%;
-            border: 2px solid var(--primary);
-        }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .user-info { display: flex; align-items: center; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .user-avatar { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--primary); }
         .user-name { font-weight: 600; }
         .user-meta { color: var(--muted); font-size: 0.85rem; }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 1rem;
-            text-align: center;
-            margin-bottom: 1rem;
-        }
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--primary);
-        }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center; margin-bottom: 1rem; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
         .stat-label { font-size: 0.75rem; color: var(--muted); }
-        
-        /* 反应堆容器 */
-        .reactor-wrapper {
-            position: relative;
-            width: 280px;
-            height: 280px;
-            margin: 1rem auto;
-        }
-        .flash-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: #fff;
-            opacity: 0;
-            pointer-events: none;
-            z-index: 999;
-            transition: opacity 0.1s;
-        }
-        .reactor-box {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        .reactor-box svg {
-            width: 100%;
-            height: 100%;
-            position: absolute;
-            z-index: 5;
-            overflow: visible;
-        }
-        .reactor-part {
-            fill: none;
-            stroke: var(--primary);
-            stroke-width: 1.5;
-            vector-effect: non-scaling-stroke;
-            transition: stroke 0.3s, filter 0.3s;
-        }
-        .ring-outer {
-            transform-origin: 50% 50%;
-            animation: spin 20s linear infinite;
-            stroke: rgba(0, 243, 255, 0.3);
-            stroke-dasharray: 10 10;
-        }
-        .ring-inner {
-            transform-origin: 50% 50%;
-            animation: spin 8s linear infinite reverse;
-            stroke: var(--primary);
-            filter: drop-shadow(0 0 5px var(--primary));
-        }
-        .core-btn-group {
-            cursor: pointer;
-            transform-origin: 50% 50%;
-            transition: transform 0.2s;
-        }
+        .reactor-wrapper { position: relative; width: 280px; height: 280px; margin: 1rem auto; }
+        .flash-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #fff; opacity: 0; pointer-events: none; z-index: 999; transition: opacity 0.1s; }
+        .reactor-box { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        .reactor-box svg { width: 100%; height: 100%; position: absolute; z-index: 5; overflow: visible; }
+        .reactor-part { fill: none; stroke: var(--primary); stroke-width: 1.5; vector-effect: non-scaling-stroke; transition: stroke 0.3s, filter 0.3s; }
+        .ring-outer { transform-origin: 50% 50%; animation: spin 20s linear infinite; stroke: rgba(0, 243, 255, 0.3); stroke-dasharray: 10 10; }
+        .ring-inner { transform-origin: 50% 50%; animation: spin 8s linear infinite reverse; stroke: var(--primary); filter: drop-shadow(0 0 5px var(--primary)); }
+        .core-btn-group { cursor: pointer; transform-origin: 50% 50%; transition: transform 0.2s; }
         .core-btn-group:hover { transform: scale(1.1); }
-        .core-circle {
-            fill: rgba(0, 243, 255, 0.1);
-            stroke: var(--primary);
-            stroke-width: 2;
-        }
-        .core-text {
-            fill: #fff;
-            font-size: 5px;
-            font-weight: bold;
-            text-anchor: middle;
-            user-select: none;
-            pointer-events: none;
-        }
-        
-        /* 充能状态 */
-        .state-charging .ring-outer, .state-charging .ring-inner {
-            stroke: var(--danger) !important;
-            filter: drop-shadow(0 0 15px var(--danger)) drop-shadow(0 0 30px #ff0000);
-            animation-duration: 0.2s !important;
-        }
-        .state-charging .core-circle {
-            stroke: #fff;
-            fill: var(--danger);
-        }
+        .core-circle { fill: rgba(0, 243, 255, 0.1); stroke: var(--primary); stroke-width: 2; }
+        .core-text { fill: #fff; font-size: 5px; font-weight: bold; text-anchor: middle; user-select: none; pointer-events: none; }
+        .state-charging .ring-outer, .state-charging .ring-inner { stroke: var(--danger) !important; filter: drop-shadow(0 0 15px var(--danger)) drop-shadow(0 0 30px #ff0000); animation-duration: 0.2s !important; }
+        .state-charging .core-circle { stroke: #fff; fill: var(--danger); }
         .state-charging .core-text { display: none; }
         .state-charging { animation: shake 0.1s infinite; }
-        
-        /* 爆炸状态 */
-        .state-exploded svg {
-            pointer-events: none;
-            opacity: 0;
-            transform: scale(5) rotate(90deg);
-            transition: transform 0.5s ease-out, opacity 0.4s ease-out;
-            filter: blur(20px);
-        }
-        .state-idle svg {
-            opacity: 1;
-            transform: scale(1) rotate(0);
-            transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s;
-            filter: blur(0);
-        }
-        
-        /* 结果展示 */
-        .prize-container {
-            position: absolute;
-            z-index: 10;
-            text-align: center;
-            opacity: 0;
-            pointer-events: none;
-            transform: scale(0.8);
-            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-            width: 100%;
-        }
-        .prize-container.show {
-            opacity: 1;
-            transform: scale(1);
-            pointer-events: auto;
-        }
-        .prize-title {
-            font-size: 14px;
-            letter-spacing: 2px;
-            color: #888;
-            margin-bottom: 5px;
-            text-transform: uppercase;
-        }
-        .prize-name {
-            font-size: 28px;
-            font-weight: 800;
-            margin: 10px 0;
-            background: linear-gradient(to bottom, #fff, #ddd);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 0 10px rgba(255,255,255,0.5));
-        }
-        .prize-win {
-            background: linear-gradient(to bottom, #ffe53b, #ff2525) !important;
-            -webkit-background-clip: text !important;
-            -webkit-text-fill-color: transparent !important;
-            text-shadow: 0 0 30px #ff0000;
-            font-size: 32px !important;
-        }
-        .prize-code {
-            background: rgba(0,0,0,0.5);
-            padding: 0.75rem 1rem;
-            border-radius: 8px;
-            font-family: monospace;
-            font-size: 1.1rem;
-            letter-spacing: 2px;
-            color: var(--success);
-            margin: 1rem 0;
-            border: 1px solid var(--success);
-        }
-        
-        .price-tag {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            background: rgba(0, 243, 255, 0.1);
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            border: 1px solid rgba(0, 243, 255, 0.3);
-        }
-        .btn {
-            display: block;
-            width: 100%;
-            padding: 0.75rem;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-            margin-top: 0.5rem;
-        }
-        .btn-primary {
-            background: linear-gradient(135deg, var(--primary), #0088ff);
-            color: #000;
-        }
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 20px rgba(0, 243, 255, 0.4);
-        }
+        .state-exploded svg { pointer-events: none; opacity: 0; transform: scale(5) rotate(90deg); transition: transform 0.5s ease-out, opacity 0.4s ease-out; filter: blur(20px); }
+        .state-idle svg { opacity: 1; transform: scale(1) rotate(0); transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.6s; filter: blur(0); }
+        .prize-container { position: absolute; z-index: 10; text-align: center; opacity: 0; pointer-events: none; transform: scale(0.8); transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); width: 100%; }
+        .prize-container.show { opacity: 1; transform: scale(1); pointer-events: auto; }
+        .prize-title { font-size: 14px; letter-spacing: 2px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
+        .prize-name { font-size: 28px; font-weight: 800; margin: 10px 0; background: linear-gradient(to bottom, #fff, #ddd); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 10px rgba(255,255,255,0.5)); }
+        .prize-win { background: linear-gradient(to bottom, #ffe53b, #ff2525) !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important; text-shadow: 0 0 30px #ff0000; font-size: 32px !important; }
+        .prize-code { background: rgba(0,0,0,0.5); padding: 0.75rem 1rem; border-radius: 8px; font-family: monospace; font-size: 1.1rem; letter-spacing: 2px; color: var(--success); margin: 1rem 0; border: 1px solid var(--success); }
+        .info-tag { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(0, 243, 255, 0.1); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; border: 1px solid rgba(0, 243, 255, 0.3); }
+        .btn { display: block; width: 100%; padding: 0.75rem; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 0.5rem; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), #0088ff); color: #000; }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0, 243, 255, 0.4); }
         .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-outline {
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text);
-        }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
         .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
-        
+        .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+        .btn-danger:hover { background: rgba(255, 0, 85, 0.1); }
+        .btn-warning { background: linear-gradient(135deg, var(--warning), #d97706); color: #000; }
+        .pending-order-card { background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+        .pending-order-card h4 { color: var(--warning); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .pending-order-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+        .pending-order-actions { display: flex; gap: 0.5rem; }
+        .pending-order-actions .btn { flex: 1; margin: 0; padding: 0.5rem; font-size: 0.9rem; }
         .history { max-height: 200px; overflow-y: auto; }
-        .history-item {
-            display: flex;
-            justify-content: space-between;
-            padding: 0.6rem 0;
-            border-bottom: 1px solid var(--border);
-            font-size: 0.85rem;
-        }
+        .history-item { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
         .history-item:last-child { border-bottom: none; }
-        .badge {
-            padding: 0.2rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 600;
-        }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
         .badge-win { background: rgba(34, 197, 94, 0.2); color: var(--success); }
         .badge-lose { background: rgba(255, 0, 85, 0.2); color: var(--danger); }
-        
         .login-prompt { text-align: center; padding: 3rem 1rem; }
         .hidden { display: none !important; }
-        
         @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes shake {
-            0%, 100% { transform: translate(1px, 1px) rotate(0deg); }
-            25% { transform: translate(-2px, -1px) rotate(-1deg); }
-            50% { transform: translate(-1px, 2px) rotate(1deg); }
-            75% { transform: translate(2px, 1px) rotate(0deg); }
-        }
-    </style>
+        @keyframes shake { 0%, 100% { transform: translate(1px, 1px) rotate(0deg); } 25% { transform: translate(-2px, -1px) rotate(-1deg); } 50% { transform: translate(-1px, 2px) rotate(1deg); } 75% { transform: translate(2px, 1px) rotate(0deg); } }
+</style>
 </head>
 <body>
     <div class="flash-overlay" id="flashOverlay"></div>
-    
     <div class="page-container">
         <div class="header">
             <h1>⚡ 抽奖</h1>
-            <p>试试手气！</p>
+            <p>试试手气，赢取邀请码！</p>
         </div>
-
         <!-- 未登录 -->
         <div id="loginPrompt" class="card login-prompt hidden">
             <p style="font-size: 1.2rem; margin-bottom: 1rem;">请先登录</p>
@@ -342,8 +128,21 @@
                     </div>
                 </div>
 
+                <!-- 待支付订单卡片 -->
+                <div id="pendingOrderCard" class="pending-order-card hidden">
+                    <h4>⏳ 待支付订单</h4>
+                    <div class="pending-order-info">
+                        <div>订单号: <span id="pendingOrderId">-</span></div>
+                        <div>购买: <span id="pendingQuantity">-</span> 次抽奖 · <span id="pendingAmount">-</span> Credit</div>
+                    </div>
+                    <div class="pending-order-actions">
+                        <button class="btn btn-warning" onclick="continuePay()">继续支付</button>
+                        <button class="btn btn-danger" onclick="cancelOrder()">取消订单</button>
+                    </div>
+                </div>
+
                 <!-- 反应堆 -->
-                <div class="reactor-wrapper">
+                <div class="reactor-wrapper" id="reactorWrapper">
                     <div class="reactor-box state-idle" id="reactorBox">
                         <div class="prize-container" id="prizeResult">
                             <div class="prize-title" id="prizeTitle">获得奖励</div>
@@ -361,20 +160,25 @@
                             <g class="core-btn-group" id="coreBtn" onclick="startDraw()">
                                 <circle class="core-circle" cx="50" cy="50" r="14" />
                                 <circle cx="50" cy="50" r="10" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="0.5" />
-                                <text x="50" y="52" class="core-text">ACTIVATE</text>
+                                <text x="50" y="52" class="core-text">抽奖</text>
                             </g>
                         </svg>
                     </div>
                 </div>
 
                 <div style="text-align: center; margin-bottom: 1rem;">
-                    <div class="price-tag" id="priceTag">
-                        <span>💰</span>
-                        <span>每次消耗 <strong>2 Credit</strong></span>
+                    <div class="info-tag" id="infoTag">
+                        <span>🎯</span>
+                        <span>每天 <strong>1</strong> 次免费抽奖</span>
                     </div>
                 </div>
                 
-                <p id="drawStatus" style="text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.2em;"></p>
+                <!-- 购买按钮 -->
+                <button id="buyBtn" class="btn btn-primary hidden" onclick="buyChances()">
+                    💰 购买抽奖次数 (2 Credit/次)
+                </button>
+                
+                <p id="drawStatus" style="text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.2em; margin-top: 0.5rem;"></p>
             </div>
 
             <div class="card">
@@ -395,6 +199,9 @@
         let currentUser = null;
         let isDrawing = false;
         let isAdmin = false;
+        let canDraw = true;
+        let canBuy = 0;
+        let pendingOrder = null;
 
         // 检查 URL 参数中的 token
         (function checkUrlToken() {
@@ -403,8 +210,9 @@
             if (urlToken) {
                 localStorage.setItem('token', urlToken);
                 jwtToken = urlToken;
-                const newUrl = window.location.pathname + (params.get('order_id') ? `?order_id=${params.get('order_id')}` : '');
-                history.replaceState({}, '', newUrl || '/');
+                const buyOrder = params.get('buy_order');
+                const newUrl = window.location.pathname + (buyOrder ? `?buy_order=${buyOrder}` : '');
+                history.replaceState({}, '', newUrl || '/lottery.html');
             }
         })();
 
@@ -455,25 +263,67 @@
                     document.getElementById('todayChances').textContent = data.todayRemaining || 0;
                     document.getElementById('totalDraws').textContent = data.totalDraws || 0;
                     document.getElementById('totalWins').textContent = data.totalWins || 0;
+                    
                     isAdmin = data.isAdmin || false;
+                    canDraw = data.canDraw !== false;
+                    canBuy = data.canBuy || 0;
+                    pendingOrder = data.pendingOrder;
                     
-                    const priceTag = document.getElementById('priceTag');
-                    const coreBtn = document.getElementById('coreBtn');
-                    
-                    if (isAdmin) {
-                        priceTag.innerHTML = '<span>👑</span><span>管理员 <strong>免费抽奖</strong></span>';
-                    } else if (!data.canDraw) {
-                        // 已中奖，禁止再抽
-                        priceTag.innerHTML = '<span>🎉</span><span>您已获得邀请码</span>';
-                        priceTag.style.borderColor = 'var(--success)';
-                        priceTag.style.background = 'rgba(34, 197, 94, 0.1)';
-                        coreBtn.style.pointerEvents = 'none';
-                        coreBtn.style.opacity = '0.5';
-                        document.querySelector('.core-text').textContent = 'CLAIMED';
-                    }
+                    updateUI();
                 }
             } catch (err) {
                 console.error('加载统计失败:', err);
+            }
+        }
+
+        function updateUI() {
+            const infoTag = document.getElementById('infoTag');
+            const coreBtn = document.getElementById('coreBtn');
+            const buyBtn = document.getElementById('buyBtn');
+            const pendingCard = document.getElementById('pendingOrderCard');
+            const reactorWrapper = document.getElementById('reactorWrapper');
+            
+            // 待支付订单
+            if (pendingOrder) {
+                pendingCard.classList.remove('hidden');
+                document.getElementById('pendingOrderId').textContent = pendingOrder.orderId;
+                document.getElementById('pendingQuantity').textContent = pendingOrder.quantity;
+                document.getElementById('pendingAmount').textContent = pendingOrder.amount;
+                reactorWrapper.classList.add('hidden');
+                buyBtn.classList.add('hidden');
+                infoTag.innerHTML = '<span>⏳</span><span>请先处理待支付订单</span>';
+                infoTag.style.borderColor = 'var(--warning)';
+                infoTag.style.background = 'rgba(245, 158, 11, 0.1)';
+                return;
+            } else {
+                pendingCard.classList.add('hidden');
+                reactorWrapper.classList.remove('hidden');
+            }
+            
+            if (isAdmin) {
+                infoTag.innerHTML = '<span>👑</span><span>管理员 <strong>免费无限抽奖</strong></span>';
+                buyBtn.classList.add('hidden');
+            } else if (!canDraw) {
+                // 已中奖，禁止再抽
+                infoTag.innerHTML = '<span>🎉</span><span>您已获得邀请码</span>';
+                infoTag.style.borderColor = 'var(--success)';
+                infoTag.style.background = 'rgba(34, 197, 94, 0.1)';
+                coreBtn.style.pointerEvents = 'none';
+                coreBtn.style.opacity = '0.5';
+                document.querySelector('.core-text').textContent = '已领取';
+                buyBtn.classList.add('hidden');
+            } else {
+                infoTag.innerHTML = '<span>🎯</span><span>每天 <strong>1</strong> 次免费抽奖</span>';
+                infoTag.style.borderColor = '';
+                infoTag.style.background = '';
+                
+                // 显示购买按钮
+                if (canBuy > 0) {
+                    buyBtn.classList.remove('hidden');
+                    buyBtn.textContent = `💰 购买抽奖次数 (2 Credit/次，今日还可购买 ${canBuy} 次)`;
+                } else {
+                    buyBtn.classList.add('hidden');
+                }
             }
         }
 
@@ -506,13 +356,17 @@
         }
 
         async function startDraw() {
-            if (isDrawing) return;
+            if (isDrawing || pendingOrder) return;
+            
+            const remaining = parseInt(document.getElementById('todayChances').textContent) || 0;
+            if (remaining <= 0 && !isAdmin) {
+                document.getElementById('drawStatus').textContent = '抽奖次数不足，请先购买';
+                return;
+            }
+            
             isDrawing = true;
-            
-            const reactorBox = document.getElementById('reactorBox');
             const status = document.getElementById('drawStatus');
-            
-            status.textContent = '正在处理...';
+            status.textContent = '正在抽奖...';
             
             try {
                 const res = await fetch('/api/lottery/draw', {
@@ -530,24 +384,16 @@
                     return;
                 }
                 
-                // 管理员免费抽奖或普通用户支付后
-                if (data.free) {
-                    status.textContent = '';
-                    // 开始充能动画
-                    reactorBox.classList.remove('state-idle');
-                    reactorBox.classList.add('state-charging');
-                    
-                    const chargeTime = 1500 + Math.random() * 1000;
-                    setTimeout(() => {
-                        triggerExplosion(data.won, data.inviteCode);
-                    }, chargeTime);
-                } else {
-                    // 普通用户跳转支付
-                    status.textContent = '正在跳转支付...';
-                    if (data.payParams && data.payGateway) {
-                        submitPayForm(data.payGateway, data.payParams);
-                    }
-                }
+                status.textContent = '';
+                // 开始充能动画
+                const reactorBox = document.getElementById('reactorBox');
+                reactorBox.classList.remove('state-idle');
+                reactorBox.classList.add('state-charging');
+                
+                const chargeTime = 1500 + Math.random() * 1000;
+                setTimeout(() => {
+                    triggerExplosion(data.won, data.inviteCode);
+                }, chargeTime);
             } catch (err) {
                 status.textContent = '网络错误，请重试';
                 isDrawing = false;
@@ -602,6 +448,116 @@
             }, 300);
         }
 
+        async function buyChances() {
+            if (pendingOrder) {
+                document.getElementById('drawStatus').textContent = '请先处理待支付订单';
+                return;
+            }
+            
+            const status = document.getElementById('drawStatus');
+            status.textContent = '正在创建订单...';
+            
+            try {
+                const res = await fetch('/api/lottery/buy', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ quantity: 1 })
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    status.textContent = data.error || '创建订单失败';
+                    return;
+                }
+                
+                status.textContent = '正在跳转支付...';
+                submitPayForm(data.payGateway, data.payParams);
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+            }
+        }
+
+        async function continuePay() {
+            if (!pendingOrder) return;
+            
+            const status = document.getElementById('drawStatus');
+            status.textContent = '正在创建支付...';
+            
+            // 重新获取支付参数
+            try {
+                const res = await fetch('/api/lottery/buy', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ quantity: pendingOrder.quantity, orderId: pendingOrder.orderId })
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    // 如果返回有待支付订单错误，说明订单还在，直接用原订单信息构建支付
+                    if (data.error && data.error.includes('待支付')) {
+                        // 构建支付参数
+                        const payParams = {
+                            pid: '87aed88c401e09c59732458728ea5bd62858714f7',
+                            type: 'epay',
+                            out_trade_no: pendingOrder.orderId,
+                            name: `抽奖次数x${pendingOrder.quantity}`,
+                            money: pendingOrder.amount.toFixed(2),
+                            notify_url: 'https://rds.6666727.xyz/lot_notify',
+                            return_url: `https://rds.6666727.xyz/lottery.html?buy_order=${pendingOrder.orderId}`
+                        };
+                        // 需要后端生成签名，这里简化处理，取消订单后重新购买
+                        status.textContent = '请取消订单后重新购买';
+                        return;
+                    }
+                    status.textContent = data.error || '支付失败';
+                    return;
+                }
+                
+                status.textContent = '正在跳转支付...';
+                submitPayForm(data.payGateway, data.payParams);
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+            }
+        }
+
+        async function cancelOrder() {
+            if (!pendingOrder) return;
+            
+            if (!confirm('确定要取消这个订单吗？')) return;
+            
+            const status = document.getElementById('drawStatus');
+            status.textContent = '正在取消...';
+            
+            try {
+                const res = await fetch('/api/lottery/cancel-order', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ orderId: pendingOrder.orderId })
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    status.textContent = data.error || '取消失败';
+                    return;
+                }
+                
+                status.textContent = '订单已取消';
+                pendingOrder = null;
+                loadStats();
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+            }
+        }
+
         function submitPayForm(gateway, params) {
             const form = document.createElement('form');
             form.method = 'POST';
@@ -618,46 +574,47 @@
             form.submit();
         }
 
-        // 检查支付回调
-        async function checkPaymentResult() {
+        // 检查购买订单支付结果
+        async function checkBuyOrderResult() {
             const params = new URLSearchParams(window.location.search);
-            const orderId = params.get('order_id') || params.get('out_trade_no');
+            const buyOrder = params.get('buy_order');
             
-            if (orderId && orderId.startsWith('LOT')) {
+            if (buyOrder) {
                 history.replaceState({}, '', '/lottery.html');
                 
                 const status = document.getElementById('drawStatus');
-                status.textContent = '正在查询结果...';
+                status.textContent = '正在确认支付...';
                 
                 let attempts = 0;
                 const maxAttempts = 20;
                 
                 const pollResult = async () => {
                     try {
-                        const res = await fetch(`/api/lottery/result?orderId=${orderId}`, {
+                        const res = await fetch(`/api/lottery/check-order?orderId=${buyOrder}`, {
                             headers: { 'Authorization': `Bearer ${jwtToken}` }
                         });
                         if (res.ok) {
                             const data = await res.json();
-                            if (data.status === 'completed') {
-                                status.textContent = '';
-                                const reactorBox = document.getElementById('reactorBox');
-                                reactorBox.classList.remove('state-idle');
-                                reactorBox.classList.add('state-charging');
-                                isDrawing = true;
-                                
+                            if (data.status === 'paid') {
+                                status.textContent = `购买成功！获得 ${data.quantity} 次抽奖机会`;
                                 setTimeout(() => {
-                                    triggerExplosion(data.won, data.inviteCode);
-                                }, 1500);
+                                    status.textContent = '';
+                                    loadStats();
+                                }, 2000);
                                 return;
                             } else if (data.status === 'pending' && attempts < maxAttempts) {
                                 attempts++;
                                 status.textContent = `等待支付确认... (${attempts}/${maxAttempts})`;
                                 setTimeout(pollResult, 500);
                                 return;
+                            } else if (data.status === 'cancelled') {
+                                status.textContent = '订单已取消';
+                                loadStats();
+                                return;
                             }
                         }
-                        status.textContent = '查询超时，请刷新页面';
+                        status.textContent = '支付确认超时，请刷新页面';
+                        loadStats();
                     } catch (err) {
                         status.textContent = '查询失败，请刷新页面';
                     }
@@ -673,9 +630,9 @@
             if (loggedIn) {
                 document.getElementById('mainContent').classList.remove('hidden');
                 renderUser();
-                loadStats();
+                await loadStats();
                 loadHistory();
-                checkPaymentResult();
+                checkBuyOrderResult();
             }
         })();
     </script>

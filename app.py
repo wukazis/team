@@ -624,6 +624,20 @@ def init_db():
             )
         ''')
         
+        # 抽奖次数购买订单表
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS lottery_orders (
+                id SERIAL PRIMARY KEY,
+                order_id TEXT UNIQUE,
+                user_id INTEGER REFERENCES users(id),
+                quantity INTEGER DEFAULT 1,
+                amount REAL,
+                status TEXT DEFAULT 'pending',
+                created_at TIMESTAMP DEFAULT NOW(),
+                paid_at TIMESTAMP
+            )
+        ''')
+        
         # 添加新字段（如果不存在）
         try:
             cursor.execute('ALTER TABLE users ADD COLUMN waiting_verified INTEGER DEFAULT 0')
@@ -1646,13 +1660,14 @@ def get_my_orders():
 
 # ========== 抽奖 API ==========
 
-LOTTERY_PRICE = 2  # 抽奖价格 2 Credit
+LOTTERY_PRICE = 2  # 每次抽奖价格 2 Credit
 LOTTERY_WIN_RATE = 0.20  # 20% 中奖率
-LOTTERY_DAILY_LIMIT = 2  # 每天限购2次
+LOTTERY_FREE_DAILY = 1  # 每天免费次数
+LOTTERY_BUY_LIMIT = 2  # 每天最多购买次数
 
 @app.route('/lot_notify', methods=['GET', 'POST'])
 def lottery_notify():
-    """抽奖专用 Credit 回调"""
+    """抽奖次数购买回调"""
     if request.method == 'GET':
         params = request.args.to_dict()
     else:
@@ -1665,88 +1680,72 @@ def lottery_notify():
     money = params.get('money', '')
     
     if not out_trade_no:
-        print("[Lottery Notify] 缺少 out_trade_no")
         return 'fail', 400
     
-    # 验证签名（使用抽奖专用密钥）
     if not verify_lottery_sign(params):
         print("[Lottery Notify] 签名验证失败")
         return 'fail', 403
     
     if trade_status != 'TRADE_SUCCESS':
-        print(f"[Lottery Notify] 交易状态非成功: {trade_status}")
         return 'success'
-    
-    # 验证金额
-    callback_amount = f"{float(money):.2f}"
-    expected_amount = f"{LOTTERY_PRICE:.2f}"
-    if callback_amount != expected_amount:
-        print(f"[Lottery Notify] 金额不匹配: 期望={expected_amount}, 回调={callback_amount}")
-        return 'fail', 400
     
     conn = get_db()
     
-    # 查找 pending 状态的抽奖记录
-    record = conn.execute('''
-        SELECT * FROM lottery_records WHERE order_id = ?
+    # 查找购买订单
+    order = conn.execute('''
+        SELECT * FROM lottery_orders WHERE order_id = ?
     ''', (out_trade_no,)).fetchone()
     
-    if not record:
+    if not order:
         conn.close()
         print(f"[Lottery Notify] 订单不存在: {out_trade_no}")
         return 'fail', 404
     
-    # 检查是否已处理
-    if record['won'] >= 0:
+    if order['status'] == 'paid':
         conn.close()
-        print(f"[Lottery Notify] 订单已处理: {out_trade_no}")
         return 'success'
     
-    user_id = record['user_id']
+    # 验证金额
+    order_amount = f"{float(order['amount']):.2f}"
+    callback_amount = f"{float(money):.2f}"
+    if order_amount != callback_amount:
+        conn.close()
+        print(f"[Lottery Notify] 金额不匹配")
+        return 'fail', 400
     
-    # 执行抽奖逻辑
-    import random
-    won = random.random() < LOTTERY_WIN_RATE
-    invite_code = None
+    user_id = order['user_id']
+    quantity = order['quantity']
     
-    if won:
-        available_account = conn.execute('''
-            SELECT * FROM team_accounts 
-            WHERE enabled = 1 AND seats_in_use < max_seats
-            ORDER BY (max_seats - seats_in_use) DESC
-            LIMIT 1
-        ''').fetchone()
-        
-        team_account_id = available_account['id'] if available_account else None
-        invite_code = generate_code()
-        
-        if USE_POSTGRES:
-            conn.execute('''
-                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                VALUES (%s, %s, %s, 1)
-            ''', (invite_code, team_account_id, user_id))
-        else:
-            conn.execute('''
-                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                VALUES (?, ?, ?, 1)
-            ''', (invite_code, team_account_id, user_id))
-    
-    # 更新抽奖记录
+    # 增加用户抽奖次数
     if USE_POSTGRES:
         conn.execute('''
-            UPDATE lottery_records SET won = %s, invite_code = %s
-            WHERE order_id = %s
-        ''', (won, invite_code, out_trade_no))
-    else:
+            INSERT INTO lottery_chances (user_id, chances, date)
+            VALUES (%s, %s, CURRENT_DATE)
+            ON CONFLICT (user_id, date) DO UPDATE SET chances = lottery_chances.chances + %s
+        ''', (user_id, quantity, quantity))
         conn.execute('''
-            UPDATE lottery_records SET won = ?, invite_code = ?
-            WHERE order_id = ?
-        ''', (won, invite_code, out_trade_no))
+            UPDATE lottery_orders SET status = 'paid', paid_at = NOW() WHERE order_id = %s
+        ''', (out_trade_no,))
+    else:
+        existing = conn.execute('''
+            SELECT * FROM lottery_chances WHERE user_id = ? AND date = date('now')
+        ''', (user_id,)).fetchone()
+        if existing:
+            conn.execute('''
+                UPDATE lottery_chances SET chances = chances + ? WHERE user_id = ? AND date = date('now')
+            ''', (quantity, user_id))
+        else:
+            conn.execute('''
+                INSERT INTO lottery_chances (user_id, chances, date) VALUES (?, ?, date('now'))
+            ''', (user_id, quantity))
+        conn.execute('''
+            UPDATE lottery_orders SET status = 'paid', paid_at = datetime('now') WHERE order_id = ?
+        ''', (out_trade_no,))
     
     conn.commit()
     conn.close()
     
-    print(f"[Lottery Notify] 订单 {out_trade_no} 完成，用户 {user_id}，中奖: {won}, 邀请码: {invite_code}")
+    print(f"[Lottery Notify] 用户 {user_id} 购买 {quantity} 次抽奖")
     return 'success'
 
 @app.route('/api/lottery/stats')
@@ -1756,44 +1755,78 @@ def lottery_stats():
     user_id = request.user['user_id']
     username = request.user.get('username', '')
     
-    # 管理员特权
     is_admin = username == 'wukazi'
-    daily_limit = 10000 if is_admin else LOTTERY_DAILY_LIMIT
     
     conn = get_db()
     
-    # 今日已抽奖次数
+    # 今日已购买次数
     if USE_POSTGRES:
-        today_count = conn.execute('''
+        today_bought = conn.execute('''
+            SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+            WHERE user_id = %s AND status = 'paid' AND created_at::date = CURRENT_DATE
+        ''', (user_id,)).fetchone()[0]
+    else:
+        today_bought = conn.execute('''
+            SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+            WHERE user_id = ? AND status = 'paid' AND date(created_at) = date('now')
+        ''', (user_id,)).fetchone()[0]
+    
+    # 今日已用次数
+    if USE_POSTGRES:
+        today_used = conn.execute('''
             SELECT COUNT(*) FROM lottery_records 
             WHERE user_id = %s AND created_at::date = CURRENT_DATE
         ''', (user_id,)).fetchone()[0]
     else:
-        today_count = conn.execute('''
+        today_used = conn.execute('''
             SELECT COUNT(*) FROM lottery_records 
             WHERE user_id = ? AND date(created_at) = date('now')
         ''', (user_id,)).fetchone()[0]
     
-    # 累计抽奖次数（排除 pending）
+    # 今日剩余次数 = 免费次数 + 购买次数 - 已用次数
+    free_chances = 10000 if is_admin else LOTTERY_FREE_DAILY
+    today_remaining = max(0, free_chances + today_bought - today_used)
+    
+    # 今日还能购买的次数
+    can_buy = max(0, LOTTERY_BUY_LIMIT - today_bought) if not is_admin else 0
+    
+    # 累计抽奖次数
     total_draws = conn.execute('SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won >= 0', (user_id,)).fetchone()[0]
     
     # 中奖次数
     total_wins = conn.execute('SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1', (user_id,)).fetchone()[0]
+    
+    # 待支付订单
+    pending_order = conn.execute('''
+        SELECT * FROM lottery_orders WHERE user_id = ? AND status = 'pending'
+        ORDER BY created_at DESC LIMIT 1
+    ''', (user_id,)).fetchone()
     
     conn.close()
     
     # 普通用户中奖后不可再抽
     can_draw = is_admin or total_wins == 0
     
-    return jsonify({
-        'todayRemaining': max(0, daily_limit - today_count) if can_draw else 0,
+    result = {
+        'todayRemaining': today_remaining if can_draw else 0,
         'totalDraws': total_draws,
         'totalWins': total_wins,
-        'price': 0 if is_admin else LOTTERY_PRICE,
-        'dailyLimit': daily_limit,
+        'price': LOTTERY_PRICE,
         'isAdmin': is_admin,
-        'canDraw': can_draw
-    })
+        'canDraw': can_draw,
+        'canBuy': can_buy if can_draw else 0,
+        'pendingOrder': None
+    }
+    
+    if pending_order:
+        result['pendingOrder'] = {
+            'orderId': pending_order['order_id'],
+            'amount': pending_order['amount'],
+            'quantity': pending_order['quantity'],
+            'createdAt': str(pending_order['created_at'])
+        }
+    
+    return jsonify(result)
 
 @app.route('/api/lottery/history')
 @jwt_required
@@ -1823,20 +1856,15 @@ def lottery_history():
 @app.route('/api/lottery/draw', methods=['POST'])
 @jwt_required
 def lottery_draw():
-    """创建抽奖订单"""
+    """执行抽奖（消耗次数）"""
     user_id = request.user['user_id']
     username = request.user.get('username', '')
     
-    # 管理员特权：wukazi 免费抽奖
     is_admin = username == 'wukazi'
-    daily_limit = 10000 if is_admin else LOTTERY_DAILY_LIMIT
-    
-    if not is_admin and (not LOTTERY_CREDIT_PID or not LOTTERY_CREDIT_KEY):
-        return jsonify({'error': '抽奖支付未配置'}), 500
     
     conn = get_db()
     
-    # 普通用户：检查是否已经中过奖（只能获取一个邀请码）
+    # 检查是否已中奖
     if not is_admin:
         has_won = conn.execute('''
             SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1
@@ -1845,116 +1873,209 @@ def lottery_draw():
             conn.close()
             return jsonify({'error': '您已获得过邀请码，不可再抽奖'}), 400
     
-    # 检查今日次数（包括 pending 状态的订单）
+    # 计算今日剩余次数
     if USE_POSTGRES:
-        today_count = conn.execute('''
+        today_bought = conn.execute('''
+            SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+            WHERE user_id = %s AND status = 'paid' AND created_at::date = CURRENT_DATE
+        ''', (user_id,)).fetchone()[0]
+        today_used = conn.execute('''
             SELECT COUNT(*) FROM lottery_records 
             WHERE user_id = %s AND created_at::date = CURRENT_DATE
         ''', (user_id,)).fetchone()[0]
     else:
-        today_count = conn.execute('''
+        today_bought = conn.execute('''
+            SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+            WHERE user_id = ? AND status = 'paid' AND date(created_at) = date('now')
+        ''', (user_id,)).fetchone()[0]
+        today_used = conn.execute('''
             SELECT COUNT(*) FROM lottery_records 
             WHERE user_id = ? AND date(created_at) = date('now')
         ''', (user_id,)).fetchone()[0]
     
-    if today_count >= daily_limit:
+    free_chances = 10000 if is_admin else LOTTERY_FREE_DAILY
+    remaining = free_chances + today_bought - today_used
+    
+    if remaining <= 0:
         conn.close()
-        return jsonify({'error': f'今日抽奖次数已用完（每天限{daily_limit}次）'}), 400
+        return jsonify({'error': '抽奖次数不足，请先购买'}), 400
     
-    # 生成订单号
+    # 执行抽奖
+    import random
     order_id = f"LOT{int(time.time())}{secrets.token_hex(4).upper()}"
+    won = random.random() < LOTTERY_WIN_RATE
+    invite_code = None
     
-    # 管理员直接抽奖，不需要支付
-    if is_admin:
-        import random
-        won = random.random() < LOTTERY_WIN_RATE
-        invite_code = None
+    if won:
+        available_account = conn.execute('''
+            SELECT * FROM team_accounts 
+            WHERE enabled = 1 AND seats_in_use < max_seats
+            ORDER BY (max_seats - seats_in_use) DESC
+            LIMIT 1
+        ''').fetchone()
+        team_account_id = available_account['id'] if available_account else None
+        invite_code = generate_code()
         
-        if won:
-            available_account = conn.execute('''
-                SELECT * FROM team_accounts 
-                WHERE enabled = 1 AND seats_in_use < max_seats
-                ORDER BY (max_seats - seats_in_use) DESC
-                LIMIT 1
-            ''').fetchone()
-            team_account_id = available_account['id'] if available_account else None
-            invite_code = generate_code()
-            
-            if USE_POSTGRES:
-                conn.execute('''
-                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                    VALUES (%s, %s, %s, 1)
-                ''', (invite_code, team_account_id, user_id))
-            else:
-                conn.execute('''
-                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                    VALUES (?, ?, ?, 1)
-                ''', (invite_code, team_account_id, user_id))
-        
-        # 直接记录结果
         if USE_POSTGRES:
             conn.execute('''
-                INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
-                VALUES (%s, %s, %s, %s, NOW())
-            ''', (order_id, user_id, 1 if won else 0, invite_code))
+                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                VALUES (%s, %s, %s, 1)
+            ''', (invite_code, team_account_id, user_id))
         else:
             conn.execute('''
-                INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
-                VALUES (?, ?, ?, ?, datetime('now'))
-            ''', (order_id, user_id, 1 if won else 0, invite_code))
-        conn.commit()
-        conn.close()
-        
-        print(f"[Lottery Admin] 管理员 {username} 免费抽奖，中奖: {won}")
-        return jsonify({
-            'orderId': order_id,
-            'free': True,
-            'won': won,
-            'inviteCode': invite_code
-        })
+                INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+                VALUES (?, ?, ?, 1)
+            ''', (invite_code, team_account_id, user_id))
     
-    # 普通用户：创建 pending 状态的抽奖记录，需要支付
+    # 记录抽奖
     if USE_POSTGRES:
         conn.execute('''
             INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
-            VALUES (%s, %s, -1, NULL, NOW())
-        ''', (order_id, user_id))
+            VALUES (%s, %s, %s, %s, NOW())
+        ''', (order_id, user_id, 1 if won else 0, invite_code))
     else:
         conn.execute('''
             INSERT INTO lottery_records (order_id, user_id, won, invite_code, created_at)
-            VALUES (?, ?, -1, NULL, datetime('now'))
-        ''', (order_id, user_id))
+            VALUES (?, ?, ?, ?, datetime('now'))
+        ''', (order_id, user_id, 1 if won else 0, invite_code))
+    
     conn.commit()
     conn.close()
     
-    # 构建支付参数（使用抽奖专用 Credit 应用）
-    money_str = f"{LOTTERY_PRICE:.2f}"
+    print(f"[Lottery] 用户 {user_id} 抽奖，中奖: {won}")
+    return jsonify({
+        'orderId': order_id,
+        'won': won,
+        'inviteCode': invite_code
+    })
+
+@app.route('/api/lottery/buy', methods=['POST'])
+@jwt_required
+def lottery_buy():
+    """购买抽奖次数"""
+    if not LOTTERY_CREDIT_PID or not LOTTERY_CREDIT_KEY:
+        return jsonify({'error': '支付未配置'}), 500
+    
+    user_id = request.user['user_id']
+    username = request.user.get('username', '')
+    
+    if username == 'wukazi':
+        return jsonify({'error': '管理员无需购买'}), 400
+    
+    data = request.json or {}
+    quantity = data.get('quantity', 1)
+    if quantity < 1 or quantity > 10:
+        return jsonify({'error': '购买数量无效'}), 400
+    
+    conn = get_db()
+    
+    # 检查是否已中奖
+    has_won = conn.execute('''
+        SELECT COUNT(*) FROM lottery_records WHERE user_id = ? AND won = 1
+    ''', (user_id,)).fetchone()[0]
+    if has_won > 0:
+        conn.close()
+        return jsonify({'error': '您已获得过邀请码，不可再购买'}), 400
+    
+    # 检查今日购买限制
+    if USE_POSTGRES:
+        today_bought = conn.execute('''
+            SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+            WHERE user_id = %s AND status = 'paid' AND created_at::date = CURRENT_DATE
+        ''', (user_id,)).fetchone()[0]
+    else:
+        today_bought = conn.execute('''
+            SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+            WHERE user_id = ? AND status = 'paid' AND date(created_at) = date('now')
+        ''', (user_id,)).fetchone()[0]
+    
+    if today_bought + quantity > LOTTERY_BUY_LIMIT:
+        conn.close()
+        return jsonify({'error': f'今日最多购买 {LOTTERY_BUY_LIMIT} 次，已购买 {today_bought} 次'}), 400
+    
+    # 检查是否有待支付订单
+    pending = conn.execute('''
+        SELECT * FROM lottery_orders WHERE user_id = ? AND status = 'pending'
+    ''', (user_id,)).fetchone()
+    if pending:
+        conn.close()
+        return jsonify({'error': '您有待支付订单，请先支付或取消'}), 400
+    
+    # 创建订单
+    order_id = f"LOTB{int(time.time())}{secrets.token_hex(4).upper()}"
+    amount = LOTTERY_PRICE * quantity
+    
+    if USE_POSTGRES:
+        conn.execute('''
+            INSERT INTO lottery_orders (order_id, user_id, quantity, amount, status, created_at)
+            VALUES (%s, %s, %s, %s, 'pending', NOW())
+        ''', (order_id, user_id, quantity, amount))
+    else:
+        conn.execute('''
+            INSERT INTO lottery_orders (order_id, user_id, quantity, amount, status, created_at)
+            VALUES (?, ?, ?, ?, 'pending', datetime('now'))
+        ''', (order_id, user_id, quantity, amount))
+    conn.commit()
+    conn.close()
+    
+    # 构建支付参数
+    money_str = f"{amount:.2f}"
     pay_params = {
         'pid': LOTTERY_CREDIT_PID,
         'type': 'epay',
         'out_trade_no': order_id,
-        'name': '幸运抽奖',
+        'name': f'抽奖次数x{quantity}',
         'money': money_str,
         'notify_url': 'https://rds.6666727.xyz/lot_notify',
-        'return_url': f"https://rds.6666727.xyz/lottery.html?order_id={order_id}"
+        'return_url': f"https://rds.6666727.xyz/lottery.html?buy_order={order_id}"
     }
-    # 使用抽奖专用密钥签名
     pay_params['sign'] = generate_lottery_sign(pay_params)
     pay_params['sign_type'] = 'MD5'
     
-    print(f"[Lottery] 创建抽奖订单 {order_id}, 用户 {user_id}")
+    print(f"[Lottery] 用户 {user_id} 购买 {quantity} 次抽奖，订单 {order_id}")
     
     return jsonify({
         'orderId': order_id,
-        'amount': LOTTERY_PRICE,
+        'amount': amount,
+        'quantity': quantity,
         'payParams': pay_params,
         'payGateway': f"{CREDIT_GATEWAY}/pay/submit.php"
     })
 
-@app.route('/api/lottery/result')
+@app.route('/api/lottery/cancel-order', methods=['POST'])
 @jwt_required
-def lottery_result():
-    """查询抽奖结果"""
+def lottery_cancel_order():
+    """取消待支付订单"""
+    user_id = request.user['user_id']
+    data = request.json or {}
+    order_id = data.get('orderId')
+    
+    if not order_id:
+        return jsonify({'error': '缺少订单号'}), 400
+    
+    conn = get_db()
+    order = conn.execute('''
+        SELECT * FROM lottery_orders WHERE order_id = ? AND user_id = ?
+    ''', (order_id, user_id)).fetchone()
+    
+    if not order:
+        conn.close()
+        return jsonify({'error': '订单不存在'}), 404
+    
+    if order['status'] != 'pending':
+        conn.close()
+        return jsonify({'error': '只能取消待支付订单'}), 400
+    
+    conn.execute("UPDATE lottery_orders SET status = 'cancelled' WHERE order_id = ?", (order_id,))
+    conn.commit()
+    conn.close()
+    
+    return jsonify({'success': True})
+
+@app.route('/api/lottery/check-order')
+@jwt_required
+def lottery_check_order():
+    """检查购买订单状态"""
     user_id = request.user['user_id']
     order_id = request.args.get('orderId')
     
@@ -1962,22 +2083,17 @@ def lottery_result():
         return jsonify({'error': '缺少订单号'}), 400
     
     conn = get_db()
-    record = conn.execute('''
-        SELECT * FROM lottery_records WHERE order_id = ? AND user_id = ?
+    order = conn.execute('''
+        SELECT * FROM lottery_orders WHERE order_id = ? AND user_id = ?
     ''', (order_id, user_id)).fetchone()
     conn.close()
     
-    if not record:
-        return jsonify({'status': 'not_found', 'error': '订单不存在'})
-    
-    # won = -1 表示还在 pending 状态
-    if record['won'] == -1:
-        return jsonify({'status': 'pending'})
+    if not order:
+        return jsonify({'status': 'not_found'})
     
     return jsonify({
-        'status': 'completed',
-        'won': bool(record['won']),
-        'inviteCode': record['invite_code'] if record['won'] else None
+        'status': order['status'],
+        'quantity': order['quantity']
     })
 
 # ========== 排队通知 API ==========
