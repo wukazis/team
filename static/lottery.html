@@ -451,7 +451,7 @@
             } else if (!canDraw) {
                 // 已中奖，显示邀请码
                 if (wonInviteCode) {
-                    infoTag.innerHTML = `<span>🎉</span><span>您已获得邀请码: <strong style="font-family: monospace; letter-spacing: 1px; cursor: pointer;" onclick="copyWonCode()">${wonInviteCode}</strong></span>`;
+                    infoTag.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" style="vertical-align: -3px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path><path d="M5 19l.5 1.5L7 21l-1.5.5L5 23l-.5-1.5L3 21l1.5-.5L5 19z"></path><path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13z"></path></svg></span><span>您已获得邀请码: <strong style="font-family: monospace; letter-spacing: 1px; cursor: pointer;" onclick="copyWonCode()">${wonInviteCode}</strong></span>`;
                 } else {
                     infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" style="vertical-align: -3px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path></svg></span><span>您已获得邀请码</span>';
                 }
