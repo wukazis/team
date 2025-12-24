@@ -275,7 +275,7 @@
                 
                 <!-- 购买按钮 -->
                 <button id="buyBtn" class="btn btn-primary hidden" onclick="buyChances()">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -3px; margin-right: 4px;"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h2v4"/></svg>购买抽奖次数 (2 Credit/次)
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align: -3px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><text x="12" y="16" font-size="12" font-weight="bold" fill="#000" text-anchor="middle">$</text></svg>购买抽奖次数 (2 Credit/次)
                 </button>
                 
                 <p id="drawStatus" style="text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.2em; margin-top: 0.5rem;"></p>
@@ -475,7 +475,7 @@
                 // 显示购买按钮
                 if (canBuy > 0) {
                     buyBtn.classList.remove('hidden');
-                    buyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -3px; margin-right: 4px;"><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h2v4"/></svg>购买抽奖次数 (2 Credit/次，今日还可购买 ' + canBuy + ' 次)';
+                    buyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align: -3px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><text x="12" y="16" font-size="12" font-weight="bold" fill="#000" text-anchor="middle">$</text></svg>购买抽奖次数 (2 Credit/次，今日还可购买 ' + canBuy + ' 次)';
                 } else {
                     buyBtn.classList.add('hidden');
                 }
