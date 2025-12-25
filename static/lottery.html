@@ -331,14 +331,17 @@
                 <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 450px;">
                     <div class="modal-header">
                         <h3 style="display: flex; align-items: center; gap: 0.5rem;">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            <img src="/ques.svg" width="16" height="16" alt="规则">
                             抽奖规则
                         </h3>
                         <button class="modal-close" onclick="closeRulesModal()">&times;</button>
                     </div>
                     <div class="modal-body" style="font-size: 0.9rem; line-height: 1.8;">
                         <div style="margin-bottom: 1rem;">
-                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">🎯 抽奖次数</div>
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                                抽奖次数
+                            </div>
                             <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
                                 <li>每天免费 1 次抽奖机会</li>
                                 <li>可购买额外次数 (2 Credit/次)</li>
@@ -346,7 +349,10 @@
                             </ul>
                         </div>
                         <div style="margin-bottom: 1rem;">
-                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">🎁 奖品概率</div>
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>
+                                奖品概率
+                            </div>
                             <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
                                 <li><span style="color: var(--success);">1%</span> - Team 邀请码 (奖池有货时)</li>
                                 <li><span style="color: var(--warning);">1%</span> - $20 兑换码 (奖池为空时)</li>
@@ -356,7 +362,10 @@
                             </ul>
                         </div>
                         <div style="margin-bottom: 1rem;">
-                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">📋 兑换码说明</div>
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                兑换码说明
+                            </div>
                             <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
                                 <li>兑换码永不过期</li>
                                 <li>可在 CLIProxy 中使用</li>
@@ -364,7 +373,10 @@
                             </ul>
                         </div>
                         <div>
-                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">⚠️ 注意事项</div>
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                                注意事项
+                            </div>
                             <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
                                 <li>中奖后仍可继续抽奖</li>
                                 <li>已中邀请码后，1%奖品变为$20兑换码</li>
