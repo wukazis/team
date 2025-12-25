@@ -2071,6 +2071,13 @@ def lottery_draw():
     if has_won_team and prize['type'] == 'team_invite':
         prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
     
+    # 如果用户已用邀请（冷却队列中），且抽到 Team 邀请码，改为 $20 兑换码
+    if prize['type'] == 'team_invite':
+        user_has_used = conn.execute('SELECT has_used FROM users WHERE id = ?', (user_id,)).fetchone()
+        if user_has_used and user_has_used[0] == 1:
+            prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
+            print(f"[Lottery] 用户 {user_id} 在冷却队列中，Team 邀请码改为 $20 兑换码")
+    
     prize_type = prize['type']
     prize_name = prize['name']
     prize_code = None
