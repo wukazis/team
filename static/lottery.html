@@ -194,10 +194,10 @@
     <div class="page-container">
         <!-- 顶部导航 -->
         <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-            <a href="/" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 0.4rem; width: auto; padding: 0.4rem 0.8rem; text-decoration: none; font-size: 0.85rem;">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                首页
-            </a>
+            <button onclick="showRulesModal()" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 0.4rem; width: auto; padding: 0.4rem 0.8rem; font-size: 0.85rem;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                规则说明
+            </button>
             <a href="https://www.wukazi.xyz/" class="btn btn-outline" style="display: inline-flex; align-items: center; gap: 0.4rem; width: auto; padding: 0.4rem 0.8rem; text-decoration: none; font-size: 0.85rem;">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
                 Rewind
@@ -322,6 +322,54 @@
                     </div>
                     <div id="prizesContent" class="modal-body">
                         <p style="color: var(--muted); text-align: center;">加载中...</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 规则弹窗 -->
+            <div id="rulesModal" class="modal-overlay hidden" onclick="closeRulesModal(event)">
+                <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 450px;">
+                    <div class="modal-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                            抽奖规则
+                        </h3>
+                        <button class="modal-close" onclick="closeRulesModal()">&times;</button>
+                    </div>
+                    <div class="modal-body" style="font-size: 0.9rem; line-height: 1.8;">
+                        <div style="margin-bottom: 1rem;">
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">🎯 抽奖次数</div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li>每天免费 1 次抽奖机会</li>
+                                <li>可购买额外次数 (2 Credit/次)</li>
+                                <li>每日最多购买 10 次</li>
+                            </ul>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">🎁 奖品概率</div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li><span style="color: var(--success);">1%</span> - Team 邀请码 (奖池有货时)</li>
+                                <li><span style="color: var(--warning);">1%</span> - $20 兑换码 (奖池为空时)</li>
+                                <li><span style="color: var(--warning);">4%</span> - $10 兑换码</li>
+                                <li><span style="color: var(--warning);">25%</span> - $5 兑换码</li>
+                                <li><span style="color: var(--muted);">70%</span> - $1 兑换码</li>
+                            </ul>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">📋 兑换码说明</div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li>兑换码永不过期</li>
+                                <li>可在 CLIProxy 中使用</li>
+                                <li>点击奖品可复制兑换码</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem;">⚠️ 注意事项</div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li>中奖后仍可继续抽奖</li>
+                                <li>已中邀请码后，1%奖品变为$20兑换码</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -715,6 +763,15 @@
         function closePrizesModal(event) {
             if (event && event.target !== event.currentTarget) return;
             document.getElementById('prizesModal').classList.add('hidden');
+        }
+        
+        function showRulesModal() {
+            document.getElementById('rulesModal').classList.remove('hidden');
+        }
+        
+        function closeRulesModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('rulesModal').classList.add('hidden');
         }
         
         async function exportCodes() {
