@@ -3655,12 +3655,14 @@ def admin_lottery_user_chances():
     """获取用户抽奖次数列表"""
     conn = get_db()
     
+    # 获取全局重置时间点
+    global_reset = conn.execute("SELECT value FROM system_settings WHERE key = 'lottery_global_reset'").fetchone()
+    global_reset_time = global_reset[0] if global_reset else None
+    
     # 获取今天有抽奖活动的用户
     if USE_POSTGRES:
         users = conn.execute('''
             SELECT DISTINCT u.id, u.username,
-                COALESCE((SELECT SUM(quantity) FROM lottery_orders WHERE user_id = u.id AND status = 'paid' AND created_at::date = CURRENT_DATE), 0) as bought,
-                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND created_at::date = CURRENT_DATE), 0) as used_today,
                 COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won >= 0), 0) as total_draws,
                 COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won = 1), 0) as total_wins
             FROM users u
@@ -3668,14 +3670,12 @@ def admin_lottery_user_chances():
                 SELECT user_id FROM lottery_records WHERE created_at::date = CURRENT_DATE
                 UNION SELECT user_id FROM lottery_orders WHERE created_at::date = CURRENT_DATE
             )
-            ORDER BY used_today DESC
+            ORDER BY total_draws DESC
             LIMIT 50
         ''').fetchall()
     else:
         users = conn.execute('''
             SELECT DISTINCT u.id, u.username,
-                COALESCE((SELECT SUM(quantity) FROM lottery_orders WHERE user_id = u.id AND status = 'paid' AND date(created_at) = date('now')), 0) as bought,
-                COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND date(created_at) = date('now')), 0) as used_today,
                 COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won >= 0), 0) as total_draws,
                 COALESCE((SELECT COUNT(*) FROM lottery_records WHERE user_id = u.id AND won = 1), 0) as total_wins
             FROM users u
@@ -3683,22 +3683,66 @@ def admin_lottery_user_chances():
                 SELECT user_id FROM lottery_records WHERE date(created_at) = date('now')
                 UNION SELECT user_id FROM lottery_orders WHERE date(created_at) = date('now')
             )
-            ORDER BY used_today DESC
+            ORDER BY total_draws DESC
             LIMIT 50
         ''').fetchall()
     
-    conn.close()
-    
     result = []
     for u in users:
+        user_id = u['id']
         is_admin = u['username'] == 'wukazi'
+        
+        # 获取该用户的重置时间点（用户级别优先，否则用全局）
+        user_reset = conn.execute("SELECT value FROM system_settings WHERE key = ?", (f'lottery_reset_{user_id}',)).fetchone()
+        reset_time = user_reset[0] if user_reset else global_reset_time
+        
+        # 计算购买和使用次数（考虑重置时间点）
+        if USE_POSTGRES:
+            if reset_time:
+                bought = conn.execute('''
+                    SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+                    WHERE user_id = %s AND status = 'paid' AND created_at::date = CURRENT_DATE AND created_at > %s
+                ''', (user_id, reset_time)).fetchone()[0]
+                used = conn.execute('''
+                    SELECT COUNT(*) FROM lottery_records 
+                    WHERE user_id = %s AND created_at::date = CURRENT_DATE AND created_at > %s
+                ''', (user_id, reset_time)).fetchone()[0]
+            else:
+                bought = conn.execute('''
+                    SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+                    WHERE user_id = %s AND status = 'paid' AND created_at::date = CURRENT_DATE
+                ''', (user_id,)).fetchone()[0]
+                used = conn.execute('''
+                    SELECT COUNT(*) FROM lottery_records 
+                    WHERE user_id = %s AND created_at::date = CURRENT_DATE
+                ''', (user_id,)).fetchone()[0]
+        else:
+            if reset_time:
+                bought = conn.execute('''
+                    SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+                    WHERE user_id = ? AND status = 'paid' AND date(created_at) = date('now') AND created_at > ?
+                ''', (user_id, reset_time)).fetchone()[0]
+                used = conn.execute('''
+                    SELECT COUNT(*) FROM lottery_records 
+                    WHERE user_id = ? AND date(created_at) = date('now') AND created_at > ?
+                ''', (user_id, reset_time)).fetchone()[0]
+            else:
+                bought = conn.execute('''
+                    SELECT COALESCE(SUM(quantity), 0) FROM lottery_orders 
+                    WHERE user_id = ? AND status = 'paid' AND date(created_at) = date('now')
+                ''', (user_id,)).fetchone()[0]
+                used = conn.execute('''
+                    SELECT COUNT(*) FROM lottery_records 
+                    WHERE user_id = ? AND date(created_at) = date('now')
+                ''', (user_id,)).fetchone()[0]
+        
         free_chances = 10000 if is_admin else LOTTERY_FREE_DAILY
-        bought = u['bought'] or 0
-        used = u['used_today'] or 0
+        bought = bought or 0
+        used = used or 0
         remaining = max(0, free_chances + bought - used)
         
         result.append({
-            'userId': u['id'],
+            'userId': user_id,
             'username': u['username'],
             'freeChances': free_chances if not is_admin else '∞',
             'boughtChances': bought,
@@ -3708,6 +3752,7 @@ def admin_lottery_user_chances():
             'totalWins': u['total_wins'] or 0
         })
     
+    conn.close()
     return jsonify({'users': result})
 
 @app.route('/api/admin/lottery/add-chances', methods=['POST'])
