@@ -753,6 +753,7 @@
                             <input type="text" id="lotteryUserSearch" placeholder="用户名" style="width: 120px;">
                             <input type="number" id="lotteryAddChances" value="1" min="1" max="100" style="width: 60px;">
                             <button class="btn btn-primary" onclick="addUserChances()">添加次数</button>
+                            <button class="btn btn-danger" onclick="resetAllUserChances()">重置所有</button>
                             <button class="btn btn-ghost" onclick="loadUserChances()">刷新</button>
                         </div>
                     </div>
@@ -1105,6 +1106,23 @@
                 loadUserChances();
             } else {
                 alert(data.error || '添加失败');
+            }
+        }
+        
+        async function resetAllUserChances() {
+            if (!confirm('确定要重置所有用户的抽奖次数吗？\n\n重置后所有用户的免费次数恢复为1，可购买次数恢复为2。')) {
+                return;
+            }
+            
+            const { ok, data } = await api('/admin/lottery/reset-all', {
+                method: 'POST'
+            });
+            
+            if (ok) {
+                alert('已重置所有用户的抽奖次数');
+                loadUserChances();
+            } else {
+                alert(data.error || '重置失败');
             }
         }
         
