@@ -141,6 +141,39 @@
         .prize-odds-percent.epic { color: var(--warning); }
         .prize-odds-percent.common { color: var(--muted); }
         @media (max-width: 1100px) { .sidebar { display: none; } }
+        /* --- 激光扫描特效 --- */
+
+        @keyframes openHui {
+            0% {
+                opacity: 0;
+                transform: scaleX(0.1) scaleY(0.01); /* 最开始是一个点 */
+                background: #fff; /* 瞬间闪白 */
+            }
+            30% {
+                opacity: 1;
+                transform: scaleX(1) scaleY(0.01); /* 变成一条横线 */
+                background: var(--card);
+            }
+            60% {
+                transform: scaleX(1) scaleY(1.1); /* 纵向拉开，稍微过头 */
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        .modal-overlay:not(.hidden) {
+            animation: simpleFade 0.3s forwards;
+        }
+
+        .modal-overlay:not(.hidden) .modal-card {
+            /* 必须设置 transform-origin 为中心 */
+            transform-origin: center center;
+            animation: openHui 0.45s cubic-bezier(0.23, 1, 0.32, 1) forwards;
+            /* 加个边框发光 */
+            box-shadow: 0 0 0 1px var(--primary), 0 0 30px rgba(0, 243, 255, 0.3);
+        }
+
 </style>
 </head>
 <body>
@@ -226,9 +259,13 @@
             <div class="card">
                 <div class="user-info">
                     <img id="userAvatar" class="user-avatar" src="" alt="">
-                    <div>
+                    <div style="flex: 1;">
                         <div id="userName" class="user-name">-</div>
                         <div id="userMeta" class="user-meta">-</div>
+                    </div>
+                    <div id="poolInfo" style="text-align: right; font-size: 0.8rem; color: var(--muted);">
+                        <div>奖池剩余</div>
+                        <div style="font-size: 1.1rem; font-weight: 600; color: var(--success);"><span id="poolCount">0</span> 个邀请码</div>
                     </div>
                 </div>
                 
@@ -473,18 +510,22 @@
                     // 更新奖池显示
                     const teamPool = data.teamPool || 0;
                     document.getElementById('teamPoolCount').textContent = teamPool;
+                    document.getElementById('poolCount').textContent = teamPool;
                     const prize1Name = document.getElementById('prize1Name');
                     const prizeOdds1 = document.getElementById('prizeOdds1');
+                    const poolCountEl = document.getElementById('poolCount');
                     if (teamPool > 0) {
                         prize1Name.textContent = 'Team 邀请码';
                         prizeOdds1.querySelector('.prize-odds-percent').classList.remove('epic');
                         prizeOdds1.querySelector('.prize-odds-percent').classList.add('rare');
                         document.getElementById('teamPoolCount').style.color = 'var(--success)';
+                        poolCountEl.style.color = 'var(--success)';
                     } else {
                         prize1Name.textContent = '$20 兑换码';
                         prizeOdds1.querySelector('.prize-odds-percent').classList.remove('rare');
                         prizeOdds1.querySelector('.prize-odds-percent').classList.add('epic');
                         document.getElementById('teamPoolCount').style.color = 'var(--muted)';
+                        poolCountEl.style.color = 'var(--muted)';
                     }
                     
                     updateUI();
