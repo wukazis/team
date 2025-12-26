@@ -80,9 +80,7 @@ LOTTERY_CREDIT_PID = os.environ.get('LOTTERY_CREDIT_PID', '')
 LOTTERY_CREDIT_KEY = os.environ.get('LOTTERY_CREDIT_KEY', '')
 INVITE_CODE_PRICE = int(os.environ.get('INVITE_CODE_PRICE', '100'))  # 邀请码价格（Credit）
 
-# CLIProxy 兑换码 API 配置
-CLIPROXY_API_URL = os.environ.get('CLIPROXY_API_URL', 'https://www.wukazi.xyz')
-CLIPROXY_INTERNAL_KEY = os.environ.get('CLIPROXY_INTERNAL_KEY', '')
+
 
 # 测试模式（跳过真实发送 ChatGPT 邀请）
 TEST_MODE = os.environ.get('TEST_MODE', 'false').lower() == 'true'
@@ -1673,12 +1671,9 @@ LOTTERY_PRICE = 2  # 每次抽奖价格 2 Credit
 LOTTERY_FREE_DAILY = 1  # 每天免费次数
 LOTTERY_BUY_LIMIT = 2  # 每天最多购买次数
 
-# 抽奖奖品概率配置
+# 抽奖奖品概率配置（100% Team 邀请码）
 LOTTERY_PRIZES = [
-    {'type': 'team_invite', 'name': 'Team 邀请码', 'probability': 0.01},  # 1%
-    {'type': 'redeem_10', 'name': '$10 兑换码', 'amount': 10, 'probability': 0.04},  # 4%
-    {'type': 'redeem_5', 'name': '$5 兑换码', 'amount': 5, 'probability': 0.25},  # 25%
-    {'type': 'redeem_1', 'name': '$1 兑换码', 'amount': 1, 'probability': 0.70},  # 70%
+    {'type': 'team_invite', 'name': 'Team 邀请码', 'probability': 1.0},  # 100%
 ]
 
 # 抽奖冷却机制：每 N 次为一个周期，周期内中了大奖后，后续不能再中同级别大奖
@@ -1724,27 +1719,7 @@ def decrease_lottery_team_pool():
     conn.close()
     return current > 0
 
-def create_redeem_code(amount, expires_in=0):
-    """调用 CLIProxy API 创建兑换码，expires_in=0 表示永不过期"""
-    if not CLIPROXY_INTERNAL_KEY:
-        print("[Lottery] CLIPROXY_INTERNAL_KEY 未配置")
-        return None
-    try:
-        resp = requests.post(
-            f"{CLIPROXY_API_URL}/internal/create-redeem-code",
-            json={'amount': amount, 'expires_in': expires_in},
-            headers={'X-Internal-Key': CLIPROXY_INTERNAL_KEY},
-            timeout=10
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            return data.get('code')
-        else:
-            print(f"[Lottery] 创建兑换码失败: {resp.status_code} {resp.text}")
-            return None
-    except Exception as e:
-        print(f"[Lottery] 创建兑换码异常: {e}")
-        return None
+
 
 @app.route('/lot_notify', methods=['GET', 'POST'])
 def lottery_notify():
@@ -2104,89 +2079,60 @@ def lottery_draw():
         lottery_cycle_state['count'] = 1
         lottery_cycle_state['team_invite_won'] = False
     
-    # 按概率抽取奖品
-    rand = random.random()
-    
-    # 如果本周期已有人中 Team 邀请码，且这次随机数落在 0.00-0.01，用 1-rand 弹开
-    if lottery_cycle_state['team_invite_won'] and rand < 0.01:
-        rand = 1 - rand  # 弹到 0.99-1.00 区间，变成 $1 兑换码
-        print(f"[Lottery] 冷却机制触发，rand 从 {1-rand:.4f} 调整为 {rand:.4f}")
-    
-    cumulative = 0
-    prize = None
-    for p in LOTTERY_PRIZES:
-        cumulative += p['probability']
-        if rand < cumulative:
-            prize = p
-            break
-    
-    if not prize:
-        prize = LOTTERY_PRIZES[-1]  # 兜底：$1 兑换码
-    
     # 检查奖池数量
     pool_count = get_lottery_team_pool()
     
-    # 如果奖池为空，且抽到 Team 邀请码，改为 $20 兑换码
-    if pool_count <= 0 and prize['type'] == 'team_invite':
-        prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
-        print(f"[Lottery] 奖池为空，Team 邀请码改为 $20 兑换码")
+    # 如果奖池为空，返回错误
+    if pool_count <= 0:
+        conn.close()
+        return jsonify({'error': '奖池已空，暂停抽奖'}), 400
     
-    # 如果已中过 Team 邀请码，且这次又抽到 Team 邀请码，改为 $20 兑换码
-    if has_won_team and prize['type'] == 'team_invite':
-        prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
+    # 如果已中过 Team 邀请码，返回错误
+    if has_won_team:
+        conn.close()
+        return jsonify({'error': '您已中过 Team 邀请码，无法再次抽奖'}), 400
     
-    # 如果用户已用邀请（冷却队列中），且抽到 Team 邀请码，改为 $20 兑换码
-    if prize['type'] == 'team_invite':
-        user_has_used = conn.execute('SELECT has_used FROM users WHERE id = ?', (user_id,)).fetchone()
-        if user_has_used and user_has_used[0] == 1:
-            prize = {'type': 'redeem_20', 'name': '$20 兑换码', 'amount': 20, 'probability': 0.01}
-            print(f"[Lottery] 用户 {user_id} 在冷却队列中，Team 邀请码改为 $20 兑换码")
+    # 如果用户已用邀请（冷却队列中），返回错误
+    user_has_used = conn.execute('SELECT has_used FROM users WHERE id = ?', (user_id,)).fetchone()
+    if user_has_used and user_has_used[0] == 1:
+        conn.close()
+        return jsonify({'error': '您在冷却队列中，无法抽奖'}), 400
     
-    prize_type = prize['type']
-    prize_name = prize['name']
+    prize_type = 'team_invite'
+    prize_name = 'Team 邀请码'
     prize_code = None
     
-    if prize_type == 'team_invite':
-        # Team 邀请码 - 减少奖池数量
-        if not decrease_lottery_team_pool():
-            # 奖池已空，改为 $20 兑换码
-            prize_type = 'redeem_20'
-            prize_name = '$20 兑换码'
-            prize_code = create_redeem_code(20)
-            if not prize_code:
-                conn.close()
-                return jsonify({'error': '奖品生成失败，请重试'}), 500
-        else:
-            # 正常发放 Team 邀请码
-            available_account = conn.execute('''
-                SELECT * FROM team_accounts 
-                WHERE enabled = 1 AND seats_in_use < max_seats
-                ORDER BY (max_seats - seats_in_use) DESC
-                LIMIT 1
-            ''').fetchone()
-            team_account_id = available_account['id'] if available_account else None
-            prize_code = generate_code()
-            
-            if USE_POSTGRES:
-                conn.execute('''
-                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                    VALUES (%s, %s, %s, 1)
-                ''', (prize_code, team_account_id, user_id))
-            else:
-                conn.execute('''
-                    INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
-                    VALUES (?, ?, ?, 1)
-                ''', (prize_code, team_account_id, user_id))
-    else:
-        # 兑换码
-        amount = prize.get('amount', 1)
-        prize_code = create_redeem_code(amount)
-        if not prize_code:
-            conn.close()
-            return jsonify({'error': '奖品生成失败，请重试'}), 500
+    # Team 邀请码 - 减少奖池数量
+    if not decrease_lottery_team_pool():
+        conn.close()
+        return jsonify({'error': '奖池已空，暂停抽奖'}), 400
     
-    # 记录抽奖（won=1 表示 Team 邀请码，won=2/3/4 表示不同金额兑换码）
-    won_value = {'team_invite': 1, 'redeem_10': 2, 'redeem_5': 3, 'redeem_1': 4}.get(prize_type, 0)
+    # 正常发放 Team 邀请码
+    available_account = conn.execute('''
+        SELECT * FROM team_accounts 
+        WHERE enabled = 1 AND seats_in_use < max_seats
+        ORDER BY (max_seats - seats_in_use) DESC
+        LIMIT 1
+    ''').fetchone()
+    team_account_id = available_account['id'] if available_account else None
+    prize_code = generate_code()
+    
+    if USE_POSTGRES:
+        conn.execute('''
+            INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+            VALUES (%s, %s, %s, 1)
+        ''', (prize_code, team_account_id, user_id))
+    else:
+        conn.execute('''
+            INSERT INTO invite_codes (code, team_account_id, user_id, auto_generated)
+            VALUES (?, ?, ?, 1)
+        ''', (prize_code, team_account_id, user_id))
+    
+    # 标记本周期已有人中 Team 邀请码
+    lottery_cycle_state['team_invite_won'] = True
+    
+    # 记录抽奖（won=1 表示 Team 邀请码）
+    won_value = 1
     
     if USE_POSTGRES:
         conn.execute('''
@@ -2230,8 +2176,6 @@ def lottery_buy():
         return jsonify({'error': '购买数量无效'}), 400
     
     conn = get_db()
-    
-    # 已中过 Team 邀请码的用户仍可购买（奖品会变为兑换码）
     
     # 获取重置时间点
     reset_time = None
