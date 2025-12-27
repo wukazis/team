@@ -247,24 +247,87 @@
         @keyframes twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
         .sidebar-empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 0.5rem 0; }
         
-        /* 鼠标互动粒子效果 */
-        .cursor-particle {
+        /* 鼠标互动 - 故障艺术效果 */
+        .glitch-cursor {
+            position: fixed;
+            width: 20px;
+            height: 20px;
+            pointer-events: none;
+            z-index: 9999;
+            mix-blend-mode: difference;
+        }
+        .glitch-cursor::before,
+        .glitch-cursor::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border: 2px solid;
+            border-radius: 50%;
+        }
+        .glitch-cursor::before {
+            border-color: #00f3ff;
+            animation: glitchCursor1 0.3s infinite;
+        }
+        .glitch-cursor::after {
+            border-color: #ff0055;
+            animation: glitchCursor2 0.3s infinite;
+        }
+        @keyframes glitchCursor1 {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(-3px, 1px); }
+            50% { transform: translate(2px, -2px); }
+            75% { transform: translate(-1px, 3px); }
+        }
+        @keyframes glitchCursor2 {
+            0%, 100% { transform: translate(0, 0); }
+            25% { transform: translate(3px, -1px); }
+            50% { transform: translate(-2px, 2px); }
+            75% { transform: translate(1px, -3px); }
+        }
+        .glitch-trail {
             position: fixed;
             pointer-events: none;
-            border-radius: 50%;
-            z-index: 9999;
+            z-index: 9998;
+            font-family: monospace;
+            font-size: 12px;
+            white-space: nowrap;
             mix-blend-mode: screen;
         }
-        .cursor-glow {
+        .glitch-scanline {
             position: fixed;
-            width: 200px;
-            height: 200px;
-            border-radius: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, #00f3ff, #ff0055, transparent);
             pointer-events: none;
-            z-index: 1;
-            background: radial-gradient(circle, rgba(0, 243, 255, 0.08) 0%, transparent 70%);
-            transform: translate(-50%, -50%);
-            transition: opacity 0.3s;
+            z-index: 9997;
+            opacity: 0;
+            box-shadow: 0 0 10px #00f3ff, 0 0 20px #ff0055;
+        }
+        .glitch-block {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9996;
+            background: linear-gradient(90deg, rgba(0,243,255,0.3), rgba(255,0,85,0.3));
+            mix-blend-mode: overlay;
+        }
+        @keyframes glitchText {
+            0%, 100% { transform: translate(0) skewX(0); opacity: 1; }
+            10% { transform: translate(-2px, 1px) skewX(-5deg); }
+            20% { transform: translate(2px, -1px) skewX(5deg); opacity: 0.8; }
+            30% { transform: translate(-1px, 2px) skewX(-3deg); }
+            40% { transform: translate(1px, -2px) skewX(3deg); opacity: 0.6; }
+        }
+        .page-container.glitch-active {
+            animation: glitchContainer 0.1s;
+        }
+        @keyframes glitchContainer {
+            0% { transform: translate(0); filter: hue-rotate(0deg); }
+            25% { transform: translate(-2px, 1px); filter: hue-rotate(90deg); }
+            50% { transform: translate(2px, -1px); filter: hue-rotate(180deg); }
+            75% { transform: translate(-1px, -1px); filter: hue-rotate(270deg); }
+            100% { transform: translate(0); filter: hue-rotate(360deg); }
         }
         .online-sidebar { right: 20px; top: 120px; }
         .winners-sidebar { right: 20px; top: 420px; }
@@ -298,8 +361,9 @@
 </style>
 </head>
 <body>
-    <!-- 鼠标光晕效果 -->
-    <div class="cursor-glow" id="cursorGlow"></div>
+    <!-- 故障艺术鼠标效果 -->
+    <div class="glitch-cursor" id="glitchCursor"></div>
+    <div class="glitch-scanline" id="glitchScanline"></div>
     
     <!-- 奖品概率侧边栏 -->
     <div class="sidebar prizes-sidebar">
@@ -550,89 +614,112 @@
     </div>
 
     <script>
-        // ============ 鼠标互动粒子效果 ============
-        const cursorGlow = document.getElementById('cursorGlow');
-        const particles = [];
-        const colors = ['#00f3ff', '#ff0055', '#8b5cf6', '#22c55e'];
+        // ============ 故障艺术鼠标效果 ============
+        const glitchCursor = document.getElementById('glitchCursor');
+        const glitchScanline = document.getElementById('glitchScanline');
+        const glitchChars = '!@#$%^&*()_+-=[]{}|;:,.<>?/~`01';
+        const trails = [];
         let mouseX = 0, mouseY = 0;
-        let lastParticleTime = 0;
+        let lastTrailTime = 0;
+        let lastGlitchTime = 0;
         
-        function createParticle(x, y) {
-            const particle = document.createElement('div');
-            particle.className = 'cursor-particle';
-            const size = Math.random() * 8 + 4;
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            particle.style.cssText = `
-                left: ${x}px;
-                top: ${y}px;
-                width: ${size}px;
-                height: ${size}px;
-                background: ${color};
-                box-shadow: 0 0 ${size * 2}px ${color}, 0 0 ${size * 4}px ${color};
-                opacity: 1;
+        // 创建故障文字轨迹
+        function createGlitchTrail(x, y) {
+            const trail = document.createElement('div');
+            trail.className = 'glitch-trail';
+            const char = glitchChars[Math.floor(Math.random() * glitchChars.length)];
+            const colors = ['#00f3ff', '#ff0055', '#8b5cf6', '#22c55e', '#fff'];
+            trail.textContent = char.repeat(Math.floor(Math.random() * 3) + 1);
+            trail.style.cssText = `
+                left: ${x + (Math.random() - 0.5) * 30}px;
+                top: ${y + (Math.random() - 0.5) * 30}px;
+                color: ${colors[Math.floor(Math.random() * colors.length)]};
+                text-shadow: 0 0 5px currentColor;
+                animation: glitchText 0.3s forwards;
             `;
-            document.body.appendChild(particle);
-            
-            const angle = Math.random() * Math.PI * 2;
-            const speed = Math.random() * 30 + 20;
-            const vx = Math.cos(angle) * speed;
-            const vy = Math.sin(angle) * speed;
-            const life = Math.random() * 600 + 400;
-            
-            particles.push({ el: particle, x, y, vx, vy, life, maxLife: life, size });
+            document.body.appendChild(trail);
+            trails.push({ el: trail, life: 300 });
         }
         
-        function updateParticles() {
-            for (let i = particles.length - 1; i >= 0; i--) {
-                const p = particles[i];
-                p.life -= 16;
-                p.x += p.vx * 0.02;
-                p.y += p.vy * 0.02;
-                p.vy += 0.5; // 轻微重力
-                
-                const progress = p.life / p.maxLife;
-                p.el.style.left = p.x + 'px';
-                p.el.style.top = p.y + 'px';
-                p.el.style.opacity = progress;
-                p.el.style.transform = `scale(${progress})`;
-                
-                if (p.life <= 0) {
-                    p.el.remove();
-                    particles.splice(i, 1);
+        // 创建故障色块
+        function createGlitchBlock(x, y) {
+            const block = document.createElement('div');
+            block.className = 'glitch-block';
+            const w = Math.random() * 100 + 20;
+            const h = Math.random() * 10 + 2;
+            block.style.cssText = `
+                left: ${x - w/2}px;
+                top: ${y + (Math.random() - 0.5) * 50}px;
+                width: ${w}px;
+                height: ${h}px;
+                opacity: ${Math.random() * 0.5 + 0.2};
+            `;
+            document.body.appendChild(block);
+            setTimeout(() => block.remove(), 100);
+        }
+        
+        // 触发扫描线
+        function triggerScanline() {
+            glitchScanline.style.top = Math.random() * window.innerHeight + 'px';
+            glitchScanline.style.opacity = '1';
+            setTimeout(() => glitchScanline.style.opacity = '0', 100);
+        }
+        
+        // 更新轨迹
+        function updateTrails() {
+            for (let i = trails.length - 1; i >= 0; i--) {
+                trails[i].life -= 16;
+                if (trails[i].life <= 0) {
+                    trails[i].el.remove();
+                    trails.splice(i, 1);
                 }
             }
-            requestAnimationFrame(updateParticles);
+            requestAnimationFrame(updateTrails);
         }
-        updateParticles();
+        updateTrails();
         
         document.addEventListener('mousemove', (e) => {
             mouseX = e.clientX;
             mouseY = e.clientY;
             
-            // 更新光晕位置
-            cursorGlow.style.left = mouseX + 'px';
-            cursorGlow.style.top = mouseY + 'px';
-            cursorGlow.style.opacity = '1';
+            // 更新光标位置
+            glitchCursor.style.left = mouseX - 10 + 'px';
+            glitchCursor.style.top = mouseY - 10 + 'px';
             
-            // 限制粒子生成频率
             const now = Date.now();
-            if (now - lastParticleTime > 50) {
-                createParticle(mouseX, mouseY);
-                lastParticleTime = now;
+            // 生成故障轨迹
+            if (now - lastTrailTime > 30) {
+                createGlitchTrail(mouseX, mouseY);
+                lastTrailTime = now;
+            }
+            // 随机触发扫描线和色块
+            if (now - lastGlitchTime > 200 && Math.random() > 0.7) {
+                triggerScanline();
+                createGlitchBlock(mouseX, mouseY);
+                lastGlitchTime = now;
             }
         });
         
-        document.addEventListener('mouseleave', () => {
-            cursorGlow.style.opacity = '0';
-        });
-        
-        // 点击时爆发更多粒子
+        // 点击时触发强烈故障
         document.addEventListener('click', (e) => {
-            for (let i = 0; i < 8; i++) {
-                setTimeout(() => createParticle(e.clientX, e.clientY), i * 20);
+            // 爆发多个故障元素
+            for (let i = 0; i < 12; i++) {
+                setTimeout(() => {
+                    createGlitchTrail(e.clientX, e.clientY);
+                    if (i % 3 === 0) createGlitchBlock(e.clientX, e.clientY);
+                }, i * 15);
             }
+            // 多条扫描线
+            for (let i = 0; i < 3; i++) {
+                setTimeout(triggerScanline, i * 50);
+            }
+            // 页面抖动
+            document.querySelector('.page-container')?.classList.add('glitch-active');
+            setTimeout(() => {
+                document.querySelector('.page-container')?.classList.remove('glitch-active');
+            }, 100);
         });
-        // ============ 鼠标互动效果结束 ============
+        // ============ 故障艺术效果结束 ============
 
         let jwtToken = localStorage.getItem('token') || '';
         let currentUser = null;
