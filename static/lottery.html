@@ -3,504 +3,531 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Redefinition - 抽奖</title>
-    <!-- 使用蓝色晶体Icon -->
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><path d='M50 0 L100 50 L50 100 L0 50 Z' fill='%232a3b90' opacity='0.8'/></svg>">
+    <title>抽奖 - Team Invite</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%2300f3ff' stroke='%23ff0055' stroke-width='4'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>⚡</text></svg>">
     <style>
         :root {
-            --bg: #ffffff;
-            --card-bg: rgba(255, 255, 255, 0.65);
-            --card-border: rgba(255, 255, 255, 0.8);
-            --text-main: #2c3e50;
-            --text-muted: #7f8c8d;
-            --primary: #2a3b90; /* 深靛蓝 */
-            --accent: #8e44ad;  /* 紫色 */
-            --success: #27ae60;
-            --warning: #d35400;
-            --ink-splash: linear-gradient(135deg, #2a3b90, #8e44ad, #3498db);
+            --bg: #020205;
+            --card: rgba(26, 26, 46, 0.8);
+            --border: #334155;
+            --text: #f1f5f9;
+            --muted: #94a3b8;
+            --primary: #00f3ff;
+            --danger: #ff0055;
+            --success: #22c55e;
+            --warning: #f59e0b;
         }
-
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Lato:wght@300;400;700&display=swap');
-
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        
         body {
-            font-family: 'Lato', sans-serif;
+            font-family: 'Segoe UI', Roboto, sans-serif;
             background-color: var(--bg);
-            color: var(--text-main);
+            background-image: radial-gradient(circle at 50% 50%, #1a1a2e 0%, #020205 70%);
+            color: var(--text);
             min-height: 100vh;
             overflow-x: hidden;
-            position: relative;
         }
-
-        /* 模拟图片右上角的水彩/晶体晕染背景 */
-        body::before {
-            content: '';
-            position: fixed;
-            top: -20vh;
-            right: -20vw;
-            width: 100vw;
-            height: 100vh;
-            background: 
-                radial-gradient(circle at 80% 20%, rgba(42, 59, 144, 0.6) 0%, transparent 50%),
-                radial-gradient(circle at 90% 10%, rgba(142, 68, 173, 0.5) 0%, transparent 40%),
-                radial-gradient(circle at 70% 30%, rgba(52, 152, 219, 0.4) 0%, transparent 60%);
-            filter: blur(60px);
-            z-index: -1;
-            animation: breathe 10s ease-in-out infinite alternate;
-        }
-
-        /* 纸张纹理 */
-        body::after {
-            content: '';
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.05'/%3E%3C/svg%3E");
-            z-index: -1;
-            opacity: 0.6;
-            pointer-events: none;
-        }
-
-        .page-container { max-width: 500px; margin: 0 auto; padding: 2rem 1.5rem; min-height: 100vh; display: flex; flex-direction: column; }
-        
-        /* 标题样式：优雅的衬线体 */
-        .header { text-align: center; padding: 2rem 0 3rem 0; position: relative; }
-        .header h1 { 
-            font-family: 'Playfair Display', serif;
-            font-size: 2.5rem; 
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            background: var(--ink-splash);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
-        }
-        .header p { 
-            font-family: 'Playfair Display', serif;
-            font-style: italic;
-            color: var(--text-muted); 
-            font-size: 1rem; 
-        }
-
-        /* 卡片：极致的磨砂玻璃 */
-        .card { 
-            background: var(--card-bg); 
-            border: 1px solid rgba(255, 255, 255, 0.4); 
-            border-radius: 20px; 
-            padding: 2rem; 
-            margin-bottom: 1.5rem; 
-            backdrop-filter: blur(20px); 
-            -webkit-backdrop-filter: blur(20px);
-            box-shadow: 0 10px 40px rgba(42, 59, 144, 0.08); /* 淡淡的蓝紫色投影 */
-            transition: transform 0.3s ease;
-        }
-        
-        .card:hover { transform: translateY(-3px); }
-
-        .user-info { display: flex; align-items: center; gap: 1.2rem; padding-bottom: 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.05); margin-bottom: 1.5rem; }
-        .user-avatar { width: 56px; height: 56px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1); object-fit: cover; }
-        .user-name { font-family: 'Playfair Display', serif; font-weight: 700; font-size: 1.2rem; }
-        .user-meta { color: var(--text-muted); font-size: 0.85rem; letter-spacing: 0.5px; }
-        
+        .page-container { max-width: 500px; margin: 0 auto; padding: 1rem; min-height: 100vh; display: flex; flex-direction: column; }
+        .header { text-align: center; padding: 1.5rem 0; }
+        .header h1 { font-size: 1.8rem; background: linear-gradient(135deg, #00f3ff, #ff0055); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 0.5rem; }
+        .header p { color: var(--muted); font-size: 0.9rem; }
+        .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 1.5rem; margin-bottom: 1rem; backdrop-filter: blur(10px); }
+        .user-info { display: flex; align-items: center; gap: 1rem; padding-bottom: 1rem; border-bottom: 1px solid var(--border); margin-bottom: 1rem; }
+        .user-avatar { width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--primary); }
+        .user-name { font-weight: 600; }
+        .user-meta { color: var(--muted); font-size: 0.85rem; }
         .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; text-align: center; margin-bottom: 1rem; }
-        .stat-value { font-family: 'Playfair Display', serif; font-size: 1.8rem; font-weight: 400; color: var(--primary); }
-        .stat-label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin-top: 5px; }
-
-        /* 核心抽奖区 - 晶体结构 */
-        .reactor-wrapper { position: relative; width: 280px; height: 280px; margin: 1rem auto; }
-        .reactor-box { position: relative; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; }
+        .stat-value { font-size: 1.5rem; font-weight: 700; color: var(--primary); }
+        .stat-label { font-size: 0.75rem; color: var(--muted); }
         
-        /* 几何图形 SVG */
-        .reactor-box svg { width: 100%; height: 100%; position: absolute; z-index: 5; overflow: visible; filter: drop-shadow(0 0 15px rgba(42, 59, 144, 0.2)); }
-        
-        .crystal-ring { 
-            fill: none; 
-            stroke: url(#gradientStroke); 
-            stroke-width: 0.5; 
-            transform-origin: 50% 50%;
-            animation: crystalRotate 30s linear infinite; 
+        /* --- 莲花组件 CSS 其实 --- */
+        .lotus-container {
+            position: relative;
+            width: 280px;
+            height: 280px;
+            margin: 1rem auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* 适当的发光背景 */
+            background: radial-gradient(circle, rgba(0, 243, 255, 0.05) 0%, transparent 60%); 
         }
-        
-        .crystal-core {
-            fill: rgba(255,255,255,0.9);
-            stroke: var(--primary);
-            stroke-width: 0.5;
+
+        .lotus-wrapper {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
             cursor: pointer;
+            transition: transform 0.3s ease;
+            animation: breathe 4s infinite ease-in-out;
+        }
+
+        .lotus-wrapper:hover {
+            transform: scale(1.05); /* 悬停微放大 */
+        }
+        
+        /* 花瓣样式 - 适配暗黑全息风 */
+        .petal {
+            position: absolute;
+            bottom: 50%;
+            left: 50%;
+            width: 50px;
+            height: 90px;
+            /* 渐变改为已有的变量色系 */
+            background: linear-gradient(135deg, rgba(0,243,255,0.8), rgba(28, 46, 104, 0.6));
+            margin-left: -25px; /* 居中 */
+            transform-origin: center bottom;
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.2);
+            mix-blend-mode: screen; /* 关键：在黑底上叠加发光 */
+            opacity: 0.9;
             transition: all 0.5s ease;
-            transform-origin: 50% 50%;
-        }
-        
-        .crystal-core:hover {
-            fill: #f0f4ff;
-            transform: scale(1.05);
-            filter: drop-shadow(0 0 10px rgba(42, 59, 144, 0.3));
+            backdrop-filter: blur(2px);
         }
 
-        .core-text { 
-            fill: var(--primary); 
-            font-family: 'Playfair Display', serif; 
-            font-size: 6px; 
-            letter-spacing: 1px;
-            text-anchor: middle; 
-            pointer-events: none; 
-            user-select: none;
+        .petal.layer-1 { /* 外层 */
+            height: 110px;
+            width: 60px;
+            background: linear-gradient(to top, rgba(75, 44, 120, 0.8), var(--primary));
+            margin-left: -30px;
+            opacity: 0.8;
+            mix-blend-mode: screen; 
         }
 
-        /* 抽奖中状态 - 呼吸绽放 */
-        .state-charging .crystal-ring { animation: bloomScale 2s infinite ease-in-out; stroke-width: 1; }
-        .state-charging .crystal-core { animation: pulse 1s infinite; fill: var(--primary); }
-        .state-charging .core-text { fill: #fff; }
-
-        /* 中奖结果展示 */
-        .prize-container { 
-            position: absolute; z-index: 10; text-align: center; opacity: 0; pointer-events: none; 
-            transition: all 0.8s cubic-bezier(0.19, 1, 0.22, 1); 
-            width: 120%; left: -10%;
-            transform: translateY(10px);
-        }
-        .prize-container.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
-        
-        .prize-title { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--text-muted); margin-bottom: 5px; letter-spacing: 2px; }
-        .prize-name { 
-            font-family: 'Playfair Display', serif; 
-            font-size: 32px; 
-            font-weight: 700; 
-            margin: 15px 0; 
-            background: var(--ink-splash); /* 字体使用水墨渐变 */
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            filter: drop-shadow(0 5px 15px rgba(42, 59, 144, 0.2));
-        }
-        
-        .prize-code { 
-            background: rgba(42, 59, 144, 0.05); 
-            padding: 0.8rem 1.5rem; 
-            border-radius: 4px; 
-            font-family: 'Lato', monospace; 
-            font-size: 1.1rem; 
-            letter-spacing: 2px; 
-            color: var(--primary); 
-            margin: 1.5rem 0; 
-            border: 1px solid rgba(42, 59, 144, 0.1);
+        .petal.layer-2 { /* 中层 */
+            height: 80px;
+            width: 40px;
+            background: linear-gradient(to top, var(--danger), var(--primary));
+            margin-left: -20px;
+            opacity: 0.85;
+            mix-blend-mode: hard-light;
         }
 
-        /* 标签 */
-        .info-tag { 
-            display: inline-flex; align-items: center; gap: 0.5rem; 
-            background: linear-gradient(to right, rgba(42, 59, 144, 0.05), rgba(142, 68, 173, 0.05));
-            padding: 0.6rem 1.2rem; 
-            border-radius: 50px; 
-            font-size: 0.85rem; 
-            color: var(--text-muted);
-            border: 1px solid rgba(255,255,255,0.5);
+        .petal.layer-3 { /* 内层 */
+            height: 50px;
+            width: 26px;
+            background: linear-gradient(45deg, #fff, var(--primary));
+            margin-left: -13px;
+            opacity: 0.95;
+            box-shadow: 0 0 10px var(--primary);
+            mix-blend-mode: lighten;
         }
-        
-        /* 按钮：简约风格 */
-        .btn { 
-            display: block; width: 100%; padding: 0.9rem; border: none; border-radius: 8px; 
-            font-size: 0.95rem; font-weight: 400; letter-spacing: 1px; cursor: pointer; 
-            transition: all 0.3s; margin-top: 0.8rem; font-family: 'Lato', sans-serif;
-            position: relative; overflow: hidden;
-        }
-        
-        .btn-primary { 
-            background: var(--ink-splash); 
-            color: #fff; 
-            box-shadow: 0 4px 15px rgba(42, 59, 144, 0.3);
-        }
-        .btn-primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(42, 59, 144, 0.4); transform: translateY(-1px); }
-        .btn-primary:disabled { background: #ccc; box-shadow: none; cursor: not-allowed; }
-        
-        .btn-outline { background: transparent; border: 1px solid rgba(0,0,0,0.1); color: var(--text-muted); }
-        .btn-outline:hover { border-color: var(--primary); color: var(--primary); background: rgba(255,255,255,0.5); }
-        
-        .btn-danger, .btn-warning { background: transparent; border: 1px solid currentColor; }
-        
-        /* 记录列表 */
-        .history { max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(0,0,0,0.1) transparent; }
-        .history-item { display: flex; justify-content: space-between; padding: 0.8rem 0; border-bottom: 1px solid rgba(0,0,0,0.05); font-size: 0.85rem; color: var(--text-muted); }
-        .history-item:last-child { border-bottom: none; }
-        
-        .badge { padding: 0.2rem 0.6rem; border-radius: 10px; font-size: 0.7rem; font-weight: 600; }
-        .badge-win { background: rgba(42, 59, 144, 0.1); color: var(--primary); }
-        .badge-lose { background: rgba(0,0,0,0.05); color: #999; }
-        
-        /* 侧边栏：浮动玻璃 */
-        .sidebar { 
-            position: fixed; width: 200px; 
-            background: var(--card-bg); 
-            border: 1px solid rgba(255,255,255,0.6); 
-            border-radius: 12px; 
-            padding: 1.2rem; 
-            box-shadow: 0 5px 20px rgba(0,0,0,0.05); 
-            backdrop-filter: blur(15px);
-            z-index: 100;
-        }
-        .sidebar h3 { font-family: 'Playfair Display', serif; font-size: 1rem; color: var(--primary); margin-bottom: 1rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 0.5rem; }
-        .sidebar-item { padding: 0.5rem; border-radius: 6px; transition: background 0.2s; }
-        .sidebar-item:hover { background: rgba(255,255,255,0.5); }
-        .sidebar-name { color: var(--text-main); font-weight: 400; font-size: 0.85rem;}
-        
-        .prize-odds-percent { font-family: 'Playfair Display', serif; font-weight: 700; }
-        .prize-odds-percent.rare { color: var(--primary); }
-        .prize-odds-percent.epic { color: var(--accent); }
-        
-        .online-dot { background: var(--success); box-shadow: 0 0 8px rgba(39, 174, 96, 0.4); }
 
-        /* 侧边栏位置调整 */
-        .prizes-sidebar { left: 40px; top: 100px; }
-        .online-sidebar { right: 40px; top: 100px; }
-        .winners-sidebar { right: 40px; top: 400px; }
+        /* 花蕊中心文字 */
+        .center-text {
+            position: absolute;
+            z-index: 20;
+            color: #fff;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            font-size: 1.1rem;
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--primary), 0 0 20px var(--primary);
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
 
-        /* 弹窗：水墨淡入 */
-        .modal-overlay { background: rgba(255,255,255,0.8); backdrop-filter: blur(5px); }
-        .modal-card { 
-            background: #fff; 
-            border: 1px solid rgba(0,0,0,0.05); 
-            box-shadow: 0 20px 60px rgba(42, 59, 144, 0.15); 
-            border-radius: 20px; 
+        /* 飘落动画 */
+        .petal.falling {
+            pointer-events: none;
+            animation: fallOff 1.5s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards;
         }
-        .modal-header h3 { font-family: 'Playfair Display', serif; }
-        .prize-item { background: rgba(245, 247, 250, 0.5); border: 1px solid rgba(0,0,0,0.03); border-radius: 8px; }
-        .prize-item-code { background: #fff; border: 1px dashed rgba(0,0,0,0.1); color: var(--text-main); }
-        
-        /* 动画定义 */
-        @keyframes crystalRotate { 
-            0% { transform: rotate(0deg); } 
-            100% { transform: rotate(360deg); } 
-        }
+
         @keyframes breathe {
-            0% { opacity: 0.6; transform: scale(1); }
-            100% { opacity: 0.9; transform: scale(1.1); }
-        }
-        @keyframes bloom {
-            0% { opacity: 0; transform: scale(0.8); }
-            100% { opacity: 1; transform: scale(1); }
-        }
-        @keyframes pulse {
-            0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(42, 59, 144, 0.4); }
-            70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(42, 59, 144, 0); }
-            100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(42, 59, 144, 0); }
-        }
-        @keyframes bloomScale {
-            0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.8; }
-            50% { transform: scale(1.2) rotate(10deg); opacity: 1; stroke: var(--accent); }
+            0%, 100% { transform: scale(1); filter: brightness(1); }
+            50% { transform: scale(1.02); filter: brightness(1.2) drop-shadow(0 0 5px var(--primary)); }
         }
 
-        /* 闪白淡入 - 水彩风格用柔和的白色 */
-        .flash-overlay { background: #fff; mix-blend-mode: overlay; transition: opacity 1.5s ease-out; }
+        @keyframes fallOff {
+            0% { transform-origin: center bottom; opacity: 1; filter: blur(0); }
+            100% {
+                transform: translateY(200px) rotate(var(--fall-rotation)) scale(0.2);
+                opacity: 0;
+                filter: blur(10px);
+            }
+        }
+        /* --- 结束莲花组件 --- */
 
-        a { color: var(--primary); text-decoration: none; border-bottom: 1px solid rgba(42, 59, 144, 0.2); transition: all 0.2s;}
-        a:hover { border-bottom-color: var(--primary); }
 
-        @media (max-width: 1100px) { .sidebar { display: none; } }
+        /* 中奖结果层 (隐藏在花朵后面) */
+        .prize-reveal {
+            position: absolute;
+            z-index: 5;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            width: 100%;
+            text-align: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        .prize-reveal.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+            pointer-events: auto;
+            z-index: 30; /* 跑到最前面 */
+        }
+        
+        .prize-title { font-size: 14px; letter-spacing: 2px; color: #888; margin-bottom: 5px; text-transform: uppercase; }
+        .prize-name { font-size: 28px; font-weight: 800; margin: 10px 0; background: linear-gradient(to bottom, #fff, #ddd); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 0 10px rgba(255,255,255,0.5)); }
+        .prize-win { background: linear-gradient(to bottom, #ffe53b, #ff2525) !important; -webkit-background-clip: text !important; background-clip: text !important; -webkit-text-fill-color: transparent !important; text-shadow: 0 0 30px #ff0000; font-size: 32px !important; }
+        .prize-code { background: rgba(0,0,0,0.5); padding: 0.75rem 1rem; border-radius: 8px; font-family: monospace; font-size: 1.1rem; letter-spacing: 2px; color: var(--success); margin: 1rem 0; border: 1px solid var(--success); }
+        
+        .info-tag { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(0, 243, 255, 0.1); padding: 0.5rem 1rem; border-radius: 20px; font-size: 0.85rem; border: 1px solid rgba(0, 243, 255, 0.3); }
+        .btn { display: block; width: 100%; padding: 0.75rem; border: none; border-radius: 10px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 0.5rem; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), #0088ff); color: #000; }
+        .btn-primary:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(0, 243, 255, 0.4); }
+        .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text); }
+        .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+        .btn-danger { background: transparent; border: 1px solid var(--danger); color: var(--danger); }
+        .btn-danger:hover { background: rgba(255, 0, 85, 0.1); }
+        .btn-warning { background: linear-gradient(135deg, var(--warning), #d97706); color: #000; }
+        .pending-order-card { background: rgba(245, 158, 11, 0.1); border: 1px solid var(--warning); border-radius: 12px; padding: 1rem; margin-bottom: 1rem; }
+        .pending-order-card h4 { color: var(--warning); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+        .pending-order-info { font-size: 0.85rem; color: var(--muted); margin-bottom: 0.75rem; }
+        .pending-order-actions { display: flex; gap: 0.5rem; }
+        .pending-order-actions .btn { flex: 1; margin: 0; padding: 0.5rem; font-size: 0.9rem; }
+        .history { max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .history::-webkit-scrollbar { width: 6px; }
+        .history::-webkit-scrollbar-track { background: transparent; }
+        .history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .history::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+        .history-item { display: flex; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid var(--border); font-size: 0.85rem; }
+        .history-item:last-child { border-bottom: none; }
+        .badge { padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge-win { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+        .badge-lose { background: rgba(255, 0, 85, 0.2); color: var(--danger); }
+        .badge-redeem { background: rgba(245, 158, 11, 0.2); color: var(--warning); }
+        
+        /* 弹窗样式 */
+        .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); backdrop-filter: blur(5px); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+        .modal-card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; width: 90%; max-width: 400px; max-height: 80vh; overflow: hidden; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; border-bottom: 1px solid var(--border); }
+        .modal-header h3 { margin: 0; font-size: 1.1rem; }
+        .modal-close { background: none; border: none; color: var(--muted); font-size: 1.5rem; cursor: pointer; padding: 0; line-height: 1; }
+        .modal-close:hover { color: var(--text); }
+        .modal-body { padding: 1rem 1.5rem; max-height: 60vh; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .modal-body::-webkit-scrollbar { width: 6px; }
+        .modal-body::-webkit-scrollbar-track { background: transparent; }
+        .modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+        .modal-body::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+        .prize-item { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 1rem; margin-bottom: 0.75rem; }
+        .prize-item:last-child { margin-bottom: 0; }
+        .prize-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+        .prize-item-type { font-weight: 600; }
+        .prize-item-type.team { color: var(--success); }
+        .prize-item-type.redeem { color: var(--warning); }
+        .prize-item-code { font-family: monospace; background: rgba(0,0,0,0.3); padding: 0.5rem 0.75rem; border-radius: 6px; font-size: 0.9rem; letter-spacing: 1px; cursor: pointer; word-break: break-all; }
+        .prize-item-code:hover { background: rgba(0,0,0,0.5); }
+        .prize-item-time { font-size: 0.75rem; color: var(--muted); margin-top: 0.5rem; }
+        .login-prompt { text-align: center; padding: 3rem 1rem; }
         .hidden { display: none !important; }
-    </style>
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        
+        /* 侧边栏 */
+        .sidebar { position: fixed; width: 180px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1rem; box-shadow: 0 2px 8px rgba(0,0,0,0.3); z-index: 100; max-height: 280px; overflow: hidden; }
+        .sidebar h3 { font-size: 0.9rem; color: var(--primary); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+        .sidebar-list { display: flex; flex-direction: column; gap: 0.4rem; max-height: 200px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+        .sidebar-list::-webkit-scrollbar { width: 4px; }
+        .sidebar-list::-webkit-scrollbar-track { background: transparent; }
+        .sidebar-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+        .sidebar-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem; border-radius: 6px; transition: background 0.15s; }
+        .sidebar-item:hover { background: rgba(255,255,255,0.05); }
+        .sidebar-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; flex-shrink: 0; }
+        .sidebar-name { font-size: 0.8rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+        .online-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; flex-shrink: 0; animation: pulse 2s infinite; }
+        .winner-badge { font-size: 0.65rem; color: var(--warning); display: inline-flex; }
+        .winner-badge svg { animation: twinkle 1.5s ease-in-out infinite; }
+        @keyframes twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
+        .sidebar-empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 0.5rem 0; }
+        .online-sidebar { right: 20px; top: 120px; }
+        .winners-sidebar { right: 20px; top: 420px; }
+        .prizes-sidebar { left: 20px; top: 120px; }
+        .prize-odds-item { display: flex; justify-content: space-between; align-items: center; padding: 0.4rem 0; border-bottom: 1px solid var(--border); font-size: 0.8rem; }
+        .prize-odds-item:last-child { border-bottom: none; }
+        .prize-odds-percent { font-weight: 600; min-width: 35px; }
+        .prize-odds-percent.rare { color: var(--success); }
+        .prize-odds-percent.epic { color: var(--warning); }
+        .prize-odds-percent.common { color: var(--muted); }
+        @media (max-width: 1100px) { .sidebar { display: none; } }
+        /* --- 激光扫描特效 --- */
+
+        @keyframes openHui {
+            0% { opacity: 0; transform: scaleX(0.1) scaleY(0.01); background: #fff; }
+            30% { opacity: 1; transform: scaleX(1) scaleY(0.01); background: var(--card); }
+            60% { transform: scaleX(1) scaleY(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        .modal-overlay:not(.hidden) { animation: simpleFade 0.3s forwards; }
+        .modal-overlay:not(.hidden) .modal-card { transform-origin: center center; animation: openHui 0.45s cubic-bezier(0.23, 1, 0.32, 1) forwards; box-shadow: 0 0 0 1px var(--primary), 0 0 30px rgba(0, 243, 255, 0.3); }
+
+        .btn-reset {
+            background: linear-gradient(135deg, var(--border), var(--card));
+            color: var(--muted);
+            border: 1px solid var(--border);
+            margin-top: 10px;
+        }
+
+</style>
 </head>
 <body>
-    <div class="flash-overlay" id="flashOverlay"></div>
     
-    <!-- 侧边栏：概率 -->
+    <!-- 奖品概率侧边栏 -->
     <div class="sidebar prizes-sidebar">
-        <h3>Redefinition EP</h3>
+        <h3>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>
+            奖品概率
+        </h3>
         <div class="sidebar-list" style="gap: 0;">
             <div class="prize-odds-item" id="prizeOdds1">
-                <span class="prize-odds-percent rare">01%</span>
-                <span id="prize1Name" style="margin-left:8px">Tea Invite</span>
+                <span class="prize-odds-percent rare">1%</span>
+                <span id="prize1Name">Team 邀请码</span>
             </div>
             <div class="prize-odds-item">
-                <span class="prize-odds-percent epic">04%</span>
-                <span style="margin-left:8px">$10 Credit</span>
+                <span class="prize-odds-percent epic">4%</span>
+                <span>$10 兑换码</span>
             </div>
             <div class="prize-odds-item">
-                <span class="prize-odds-percent" style="color:var(--text-muted)">25%</span>
-                <span style="margin-left:8px">$5 Credit</span>
+                <span class="prize-odds-percent epic">25%</span>
+                <span>$5 兑换码</span>
             </div>
             <div class="prize-odds-item">
-                <span class="prize-odds-percent" style="color:var(--text-muted)">70%</span>
-                <span style="margin-left:8px">$1 Credit</span>
+                <span class="prize-odds-percent common">70%</span>
+                <span>$1 兑换码</span>
             </div>
         </div>
-        <div id="teamPoolInfo" style="margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid rgba(0,0,0,0.05); font-size: 0.75rem; color: var(--text-muted); text-align: center;">
-            Pool Availability: <span id="teamPoolCount" style="color: var(--primary); font-family:'Playfair Display', serif; font-size:1rem;">-</span>
+        <div id="teamPoolInfo" style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--border); font-size: 0.75rem; color: var(--muted); text-align: center;">
+            奖池: <span id="teamPoolCount" style="color: var(--success); font-weight: 600;">0</span> 个邀请码
         </div>
     </div>
     
-    <!-- 侧边栏：在线 -->
+    <!-- 在线用户侧边栏 -->
     <div id="onlineSidebar" class="sidebar online-sidebar hidden">
         <h3>
-            Active Signals <span id="onlineCount" style="margin-left: auto; font-size: 0.8rem; color: var(--success); font-family:'Lato', sans-serif;">0</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+            在线 <span id="onlineCount" style="margin-left: auto; font-size: 0.75rem; color: var(--success);">0</span>
         </h3>
-        <div id="onlineList" class="sidebar-list"><p class="sidebar-empty" style="color:#ccc; text-align:center;">Void</p></div>
+        <div id="onlineList" class="sidebar-list"><p class="sidebar-empty">暂无</p></div>
     </div>
     
-    <!-- 侧边栏：中奖 -->
+    <!-- 中奖用户侧边栏 -->
     <div id="winnersSidebar" class="sidebar winners-sidebar hidden">
         <h3>
-            Recent Finds <span id="winnersCount" style="margin-left: auto; font-size: 0.8rem; color: var(--primary); font-family:'Lato', sans-serif;">0</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>
+            中奖用户 <span id="winnersCount" style="margin-left: auto; font-size: 0.75rem; color: var(--warning);">0</span>
         </h3>
-        <div id="winnersList" class="sidebar-list"><p class="sidebar-empty" style="color:#ccc; text-align:center;">Silence</p></div>
+        <div id="winnersList" class="sidebar-list"><p class="sidebar-empty">暂无</p></div>
     </div>
     
     <div class="page-container">
-        <!-- 导航 -->
+        <!-- 顶部导航 -->
         <div style="display: flex; justify-content: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 0.5rem;">
-            <button onclick="showRulesModal()" class="btn btn-outline" style="width: auto !important; padding: 0.4rem 1rem; border-radius: 20px; font-size: 0.8rem; margin: 0;">
-                Rules
+            <button onclick="showRulesModal()" class="btn btn-outline" style="display: inline-flex !important; align-items: center; gap: 0.4rem; width: auto !important; padding: 0.4rem 0.8rem; font-size: 0.85rem; margin: 0;">
+                <img src="/ques.svg" width="14" height="14" style="flex-shrink: 0;" alt="规则">
+                规则说明
             </button>
-            <a href="https://www.6666727.xyz/" class="btn btn-outline" style="width: auto !important; padding: 0.4rem 1rem; border-radius: 20px; text-decoration: none; border-bottom: 1px solid rgba(0,0,0,0.1); font-size: 0.8rem; margin: 0;">
-                Station
+            <a href="https://www.wukazi.xyz/" class="btn btn-outline" style="display: inline-flex !important; align-items: center; gap: 0.4rem; width: auto !important; padding: 0.4rem 0.8rem; text-decoration: none; font-size: 0.85rem; margin: 0;">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                Rewind
+            </a>
+            <a href="https://www.6666727.xyz/" class="btn btn-outline" style="display: inline-flex !important; align-items: center; gap: 0.4rem; width: auto !important; padding: 0.4rem 0.8rem; text-decoration: none; font-size: 0.85rem; margin: 0;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(0 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)"/><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(-60 12 12)"/></svg>
+                候车室
             </a>
         </div>
         
         <div class="header">
-            <h1>Redefinition</h1>
-            <p>Fragmented Luck & Digital Bloom</p>
+            <h1>⚡ 抽奖</h1>
+            <p>试试手气，赢取邀请码！</p>
+            <p style="font-size: 0.8rem; color: var(--muted); margin-top: 0.5rem;">兑换码请前往 <a href="https://www.wukazi.xyz/" style="color: var(--primary);">Rewind</a> 使用 · Team邀请码请前往 <a href="https://www.6666727.xyz/" style="color: var(--primary);">候车室</a> 使用</p>
+        </div>
+        <!-- 未登录 -->
+        <div id="loginPrompt" class="card login-prompt hidden">
+            <p style="font-size: 1.2rem; margin-bottom: 1rem;">请先登录</p>
+            <p style="color: var(--muted); margin-bottom: 1.5rem;">需要 LinuxDO 账号才能参与抽奖</p>
+            <button onclick="goToLogin()" class="btn btn-primary" style="width: auto; padding: 0.75rem 2rem; margin: 0 auto;">前往登录</button>
         </div>
 
-        <!-- 登录提示 -->
-        <div id="loginPrompt" class="card login-prompt hidden" style="text-align: center;">
-            <p style="font-family: 'Playfair Display', serif; font-size: 1.5rem; margin-bottom: 0.5rem; color: var(--primary);">Authentication Required</p>
-            <p style="color: var(--text-muted); margin-bottom: 2rem;">Access the terminal via LinuxDO</p>
-            <button onclick="goToLogin()" class="btn btn-primary" style="width: auto; padding: 0.8rem 2.5rem; border-radius: 50px; margin: 0 auto;">Connect ID</button>
-        </div>
-
-        <!-- 主内容 -->
+        <!-- 已登录 -->
         <div id="mainContent" class="hidden">
             <div class="card">
                 <div class="user-info">
                     <img id="userAvatar" class="user-avatar" src="" alt="">
                     <div style="flex: 1;">
-                        <div id="userName" class="user-name">Loading...</div>
-                        <div id="userMeta" class="user-meta">Identity Verified</div>
+                        <div id="userName" class="user-name">-</div>
+                        <div id="userMeta" class="user-meta">-</div>
+                    </div>
+                    <div id="poolInfo" style="text-align: right; font-size: 0.8rem; color: var(--muted);">
+                        <div style="font-size: 1.1rem; font-weight: 600;">剩余team邀请码数量</div>
+                        <div style="font-size: 1.1rem; font-weight: 600; color: var(--success);"><span id="poolCount">0</span></div>
                     </div>
                 </div>
                 
                 <div class="stats">
                     <div>
                         <div class="stat-value" id="todayChances">-</div>
-                        <div class="stat-label">Daily Bloom</div>
+                        <div class="stat-label">今日剩余</div>
                     </div>
                     <div>
                         <div class="stat-value" id="totalDraws">-</div>
-                        <div class="stat-label">Total Cycles</div>
+                        <div class="stat-label">累计抽奖</div>
                     </div>
                     <div>
                         <div class="stat-value" id="totalWins">-</div>
-                        <div class="stat-label">Fragments</div>
+                        <div class="stat-label">中奖次数</div>
                     </div>
                 </div>
 
-                <!-- 晶体抽奖核心 -->
-                <div class="reactor-wrapper" id="reactorWrapper">
-                    <div class="reactor-box state-idle" id="reactorBox">
-                        <div class="prize-container" id="prizeResult">
-                            <div class="prize-title" id="prizeTitle">Crystallized</div>
-                            <div class="prize-name" id="prizeText">...</div>
-                            <div class="prize-code hidden" id="prizeCode"></div>
-                            <button class="btn btn-outline" onclick="collectPrize()" style="width: auto; padding: 0.5rem 2.5rem; border-radius: 50px; margin: 1rem auto 0; border-color: var(--primary); color: var(--primary);">Collect Fragment</button>
-                        </div>
-                        
-                        <svg viewBox="0 0 100 100">
-                            <defs>
-                                <linearGradient id="gradientStroke" x1="0%" y1="0%" x2="100%" y2="100%">
-                                    <stop offset="0%" stop-color="#2a3b90" />
-                                    <stop offset="50%" stop-color="#8e44ad" />
-                                    <stop offset="100%" stop-color="#3498db" />
-                                </linearGradient>
-                            </defs>
-                            <!-- 外部晶体环（不规则） -->
-                            <path class="crystal-ring" d="M50 5 L85 25 L95 60 L70 95 L30 95 L5 60 L15 25 Z" fill="none" />
-                            <path class="crystal-ring" d="M50 10 L80 30 L90 55 L65 90 L35 90 L10 55 L20 30 Z" fill="none" opacity="0.5" style="animation-direction: reverse; animation-duration: 40s;" />
-                            <!-- 核心 -->
-                            <g class="core-btn-group" id="coreBtn" onclick="startDraw()">
-                                <!-- 菱形核心 -->
-                                <path class="crystal-core" d="M50 25 L75 50 L50 75 L25 50 Z" />
-                                <text x="50" y="52" class="core-text">BLOOM</text>
-                            </g>
-                        </svg>
+                <!-- 替换部分：莲花抽奖容器 -->
+                <div class="lotus-container" id="lotusBtn">
+                    
+                    <!-- 中奖结果显示层 -->
+                    <div class="prize-reveal" id="prizeReveal">
+                        <div class="prize-title" id="prizeTitle">获得奖励</div>
+                        <div class="prize-name" id="prizeText">???</div>
+                        <div class="prize-code hidden" id="prizeCode"></div>
+                        <button class="btn btn-primary" onclick="collectPrize()" style="width: auto; padding: 0.5rem 1.5rem; margin: 10px auto; font-size: 0.9rem;">收下</button>
                     </div>
-                </div>
 
-                <div style="text-align: center; margin-bottom: 2rem;">
+                    <!-- 动态生成的花瓣层 -->
+                    <div class="lotus-wrapper" id="lotusWrapperOuter" onclick="startDraw()">
+                        <!-- JS 将在这里插入 petal div -->
+                    </div>
+                    
+                    <!-- 按钮文字 -->
+                    <div class="center-text" id="centerText">点击<br>抽奖</div>
+                </div>
+                <!-- 替换部分结束 -->
+
+                <div style="text-align: center; margin-bottom: 1rem;">
                     <div class="info-tag" id="infoTag">
-                        <span>✦</span>
-                        <span>Daily Free Attempt: <strong>1</strong></span>
+                        <span>🎯</span>
+                        <span>每天 <strong>1</strong> 次免费抽奖</span>
                     </div>
                 </div>
                 
-                <!-- 待支付订单 -->
-                <div id="pendingOrderCard" class="card hidden" style="background: rgba(211, 84, 0, 0.05); border-color: rgba(211, 84, 0, 0.2);">
-                    <div style="font-size: 0.9rem; color: var(--warning); margin-bottom: 1rem; text-align: center;">
-                        Unresolved Transaction Detected
+                <!-- 待支付订单卡片 -->
+                <div id="pendingOrderCard" class="pending-order-card hidden">
+                    <div class="pending-order-info">
+                        <div>订单号: <span id="pendingOrderId">-</span></div>
+                        <div>购买: <span id="pendingQuantity">-</span> 次抽奖 · <span id="pendingAmount">-</span> Credit</div>
                     </div>
-                    <div style="display: flex; gap: 1rem;">
-                        <button class="btn btn-warning" onclick="continuePay()" style="margin:0; border-radius: 50px;">Complete</button>
-                        <button class="btn btn-outline" onclick="cancelOrder()" style="margin:0; border-radius: 50px; color: var(--warning); border-color: var(--warning);">Dismiss</button>
+                    <div class="pending-order-actions">
+                        <button class="btn btn-warning" onclick="continuePay()">继续支付</button>
+                        <button class="btn btn-danger" onclick="cancelOrder()">取消订单</button>
                     </div>
                 </div>
                 
                 <!-- 购买按钮 -->
-                <button id="buyBtn" class="btn btn-outline hidden" onclick="buyChances()" style="border-style: dashed;">
-                    + Acquire Credits (2cr)
+                <button id="buyBtn" class="btn btn-primary hidden" onclick="buyChances()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -3px; margin-right: 4px;"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>购买抽奖次数 (2 Credit/次)
                 </button>
                 
-                <p id="drawStatus" style="text-align: center; color: var(--text-muted); font-size: 0.85rem; min-height: 1.2em; margin-top: 1rem; font-style: italic;"></p>
+                <p id="drawStatus" style="text-align: center; color: var(--muted); font-size: 0.85rem; min-height: 1.2em; margin-top: 0.5rem;"></p>
             </div>
 
             <div class="card">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.05); padding-bottom: 1rem;">
-                    <h3 style="font-family: 'Playfair Display', serif; font-size: 1.2rem; margin: 0; color: var(--primary);">
-                        Collection Log
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h3 style="font-size: 1rem; margin: 0; display: flex; align-items: center; gap: 0.5rem;">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>
+                        中奖记录
                     </h3>
-                    <button class="btn btn-outline" style="width: auto; padding: 0.3rem 0.8rem; font-size: 0.75rem; margin: 0; border-radius: 20px;" onclick="showPrizesModal()">View Assets</button>
+                    <button class="btn btn-outline" style="width: auto; padding: 0.4rem 0.8rem; font-size: 0.8rem; margin: 0;" onclick="showPrizesModal()">查看奖品</button>
                 </div>
                 <div id="historyList" class="history">
-                    <p style="color: #ccc; text-align: center; padding: 1.5rem;">Nothing recorded on the paper.</p>
+                    <p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>
                 </div>
             </div>
             
-            <!-- 弹窗 -->
+            <!-- 奖品弹窗 -->
             <div id="prizesModal" class="modal-overlay hidden" onclick="closePrizesModal(event)">
                 <div class="modal-card" onclick="event.stopPropagation()">
-                    <div class="modal-header" style="padding: 1.5rem; border-bottom: 1px solid rgba(0,0,0,0.05); display: flex; justify-content: space-between;">
-                        <h3 style="font-size: 1.2rem; color: var(--primary);">Assets</h3>
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn btn-outline" style="width: auto; padding: 0.2rem 0.8rem; font-size: 0.7rem; margin: 0; border-radius: 12px;" onclick="exportCodes()">Copy All</button>
-                            <button class="modal-close" style="background:none; border:none; font-size:1.5rem; color: #999; cursor: pointer;" onclick="closePrizesModal()">&times;</button>
+                    <div class="modal-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>我的奖品</h3>
+                        <div style="display: flex; align-items: center; gap: 0.5rem;">
+                            <button class="btn btn-outline" style="width: auto; padding: 0.3rem 0.6rem; font-size: 0.75rem; margin: 0;" onclick="exportCodes()">批量复制</button>
+                            <button class="modal-close" onclick="closePrizesModal()">&times;</button>
                         </div>
                     </div>
-                    <div id="prizesContent" class="modal-body" style="padding: 1.5rem; max-height: 60vh; overflow-y: auto;">
-                        Loading...
+                    <div id="prizesContent" class="modal-body">
+                        <p style="color: var(--muted); text-align: center;">加载中...</p>
                     </div>
                 </div>
             </div>
             
-             <!-- 规则弹窗 -->
+            <!-- 规则弹窗 -->
             <div id="rulesModal" class="modal-overlay hidden" onclick="closeRulesModal(event)">
                 <div class="modal-card" onclick="event.stopPropagation()" style="max-width: 450px;">
-                    <div class="modal-header" style="padding: 1.5rem; display:flex; justify-content:space-between;">
-                        <h3 style="font-family: 'Playfair Display', serif; color: var(--primary);">Guidelines</h3>
-                        <button class="modal-close" style="background:none; border:none; color:#ccc; font-size: 1.5rem; cursor:pointer;" onclick="closeRulesModal()">&times;</button>
+                    <div class="modal-header">
+                        <h3 style="display: flex; align-items: center; gap: 0.5rem;">
+                            <img src="/ques.svg" width="16" height="16" alt="规则">
+                            抽奖规则
+                        </h3>
+                        <button class="modal-close" onclick="closeRulesModal()">&times;</button>
                     </div>
-                    <div class="modal-body" style="padding: 1.5rem; font-size: 0.9rem; line-height: 1.8; color: var(--text-muted);">
-                        <p><strong style="color: var(--primary);">01. Occurrence</strong><br>Once daily complimentary blooming. Additional cycles require 2 credits.</p>
-                        <p style="margin-top: 1rem;"><strong style="color: var(--primary);">02. Probability Distribution</strong><br>
-                        - Team Invite (Rare): 1%<br>
-                        - High Value Fragment ($10): 4%<br>
-                        - Medium Fragment ($5): 25%<br>
-                        - Common Fragment ($1): 70%</p>
+                    <div class="modal-body" style="font-size: 0.9rem; line-height: 1.8;">
+                        <div style="margin-bottom: 1rem;">
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                                抽奖次数
+                            </div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li>每天免费 1 次抽奖机会</li>
+                                <li>可购买额外次数 (2 Credit/次)</li>
+                                <li>每日最多购买 10 次</li>
+                            </ul>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="8" width="18" height="4" rx="1"/><path d="M12 8v13"/><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"/></svg>
+                                奖品概率
+                            </div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li><span style="color: var(--success);">1%</span> - Team 邀请码 (奖池有货时)</li>
+                                <li><span style="color: var(--warning);">1%</span> - $20 兑换码 (奖池为空时)</li>
+                                <li><span style="color: var(--warning);">4%</span> - $10 兑换码</li>
+                                <li><span style="color: var(--warning);">25%</span> - $5 兑换码</li>
+                                <li><span style="color: var(--muted);">70%</span> - $1 兑换码</li>
+                            </ul>
+                        </div>
+                        <div style="margin-bottom: 1rem;">
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                                兑换码说明
+                            </div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li>兑换码永不过期</li>
+                                <li>可在 rewind站点 中使用</li>
+                                <li>点击奖品可复制兑换码</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <div style="color: var(--primary); font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.4rem;">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13" stroke-width="2.5"/><circle cx="12" cy="16.5" r="0.5" fill="currentColor" stroke="currentColor" stroke-width="1.5"/></svg>
+                                注意事项
+                            </div>
+                            <ul style="color: var(--muted); padding-left: 1.2rem; margin: 0;">
+                                <li>中奖后仍可继续抽奖</li>
+                                <li>已中邀请码后，1%奖品变为$20兑换码</li>
+                            </ul>
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <div style="text-align: center; padding: 1rem 0;">
+            </div>
         </div>
     </div>
 
     <script>
-        // 保持原有的逻辑脚本，仅修改UI相关的ID引用和文本反馈
         let jwtToken = localStorage.getItem('token') || '';
         let currentUser = null;
         let isDrawing = false;
@@ -510,6 +537,78 @@
         let pendingOrder = null;
         let wonInviteCode = null;
 
+        // 星星/奖杯图标常量
+        const trophySvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path></svg>';
+
+        // ----------------- 莲花逻辑开始 -----------------
+        const lotusWrapperOuter = document.getElementById('lotusWrapperOuter');
+        const centerText = document.getElementById('centerText');
+        const layers = [
+            { count: 12, class: 'layer-1' }, // 外层
+            { count: 8, class: 'layer-2' },  // 中层
+            { count: 5, class: 'layer-3' }   // 内层
+        ];
+        let allPetals = [];
+
+        function initLotus() {
+            lotusWrapperOuter.innerHTML = '';
+            allPetals = [];
+            
+            layers.forEach((layer) => {
+                for (let i = 0; i < layer.count; i++) {
+                    const petal = document.createElement('div');
+                    petal.classList.add('petal', layer.class);
+                    // 计算旋转
+                    const rotation = (360 / layer.count) * i;
+                    const randomOffset = (Math.random() - 0.5) * 10; 
+                    petal.style.transform = `rotate(${rotation + randomOffset}deg)`;
+                    lotusWrapperOuter.appendChild(petal);
+                    allPetals.push(petal);
+                }
+            });
+            centerText.style.opacity = '1';
+            lotusWrapperOuter.style.animation = 'breathe 4s infinite ease-in-out';
+        }
+
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function dropPetals() {
+            // 停止呼吸动画
+            lotusWrapperOuter.style.animation = 'none';
+            centerText.style.opacity = '0';
+            
+            // 随机顺序打乱
+            const petalsToAnimate = [...allPetals];
+            shuffleArray(petalsToAnimate);
+
+            petalsToAnimate.forEach((petal, index) => {
+                const endRotation = (Math.random() * 360 - 180) + 'deg';
+                petal.style.setProperty('--fall-rotation', endRotation);
+                setTimeout(() => {
+                    petal.classList.add('falling');
+                }, index * 40); // 稍微快一点掉落
+            });
+        }
+        
+        function resetLotusElement() {
+            // 清理动画class，重置状态
+            allPetals.forEach(petal => {
+                petal.classList.remove('falling');
+                petal.style.opacity = '';
+                petal.style.filter = '';
+                // 重新读取transform (需要重新渲染)
+            });
+            initLotus(); // 简单粗暴重新生成
+        }
+        // ----------------- 莲花逻辑结束 -----------------
+
+
+        // 检查 URL 参数中的 token
         (function checkUrlToken() {
             const params = new URLSearchParams(window.location.search);
             const urlToken = params.get('token');
@@ -545,16 +644,18 @@
             }
         }
 
-        function goToLogin() { window.location.href = '/auth/linuxdo'; }
+        function goToLogin() {
+            window.location.href = '/auth/linuxdo';
+        }
 
         function renderUser() {
             if (!currentUser) return;
             const avatar = currentUser.avatar_template 
                 ? currentUser.avatar_template.replace('{size}', '96')
-                : `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%232a3b90"/><text x="50" y="65" font-size="50" fill="white" text-anchor="middle">${currentUser.username[0].toUpperCase()}</text></svg>`;
+                : `data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="50" fill="%2300f3ff"/><text x="50" y="65" font-size="50" fill="white" text-anchor="middle">${currentUser.username[0].toUpperCase()}</text></svg>`;
             document.getElementById('userAvatar').src = avatar;
             document.getElementById('userName').textContent = currentUser.name || currentUser.username;
-            document.getElementById('userMeta').textContent = `${currentUser.email || 'Verified User'}`;
+            document.getElementById('userMeta').textContent = `@${currentUser.username} · TL${currentUser.trust_level}`;
         }
 
         async function loadStats() {
@@ -565,8 +666,8 @@
                 if (res.ok) {
                     const data = await res.json();
                     document.getElementById('todayChances').textContent = data.todayRemaining || 0;
-                    document.getElementById('totalDraws').textContent = (data.totalDraws || 0).toLocaleString();
-                    document.getElementById('totalWins').textContent = (data.totalWins || 0).toLocaleString();
+                    document.getElementById('totalDraws').textContent = data.totalDraws || 0;
+                    document.getElementById('totalWins').textContent = data.totalWins || 0;
                     
                     isAdmin = data.isAdmin || false;
                     canDraw = data.canDraw !== false;
@@ -574,65 +675,98 @@
                     pendingOrder = data.pendingOrder;
                     wonInviteCode = data.wonInviteCode || null;
                     
+                    // 更新奖池显示
                     const teamPool = data.teamPool || 0;
                     document.getElementById('teamPoolCount').textContent = teamPool;
+                    document.getElementById('poolCount').textContent = teamPool;
                     const prize1Name = document.getElementById('prize1Name');
-                    
+                    const prizeOdds1 = document.getElementById('prizeOdds1');
+                    const poolCountEl = document.getElementById('poolCount');
                     if (teamPool > 0) {
-                        prize1Name.textContent = 'Team Invite';
-                        document.getElementById('teamPoolCount').style.color = 'var(--primary)';
+                        prize1Name.textContent = 'Team 邀请码';
+                        prizeOdds1.querySelector('.prize-odds-percent').classList.remove('epic');
+                        prizeOdds1.querySelector('.prize-odds-percent').classList.add('rare');
+                        document.getElementById('teamPoolCount').style.color = 'var(--success)';
+                        poolCountEl.style.color = 'var(--success)';
                     } else {
-                        prize1Name.textContent = '$20 Credit';
-                        document.getElementById('teamPoolCount').style.color = '#ccc';
+                        prize1Name.textContent = '$20 兑换码';
+                        prizeOdds1.querySelector('.prize-odds-percent').classList.remove('rare');
+                        prizeOdds1.querySelector('.prize-odds-percent').classList.add('epic');
+                        document.getElementById('teamPoolCount').style.color = 'var(--muted)';
+                        poolCountEl.style.color = 'var(--muted)';
                     }
+                    
                     updateUI();
                 }
-            } catch (err) {}
+            } catch (err) {
+                console.error('加载统计失败:', err);
+            }
         }
 
         function updateUI() {
             const infoTag = document.getElementById('infoTag');
-            const reactorBox = document.getElementById('reactorBox');
+            const lotusWrapper = document.getElementById('lotusWrapperOuter');
             const buyBtn = document.getElementById('buyBtn');
             const pendingCard = document.getElementById('pendingOrderCard');
-            const coreText = document.querySelector('.core-text');
+            const centerText = document.getElementById('centerText');
             
+            // 待支付订单
             if (pendingOrder) {
                 pendingCard.classList.remove('hidden');
+                document.getElementById('pendingOrderId').textContent = pendingOrder.orderId;
+                document.getElementById('pendingQuantity').textContent = pendingOrder.quantity;
+                document.getElementById('pendingAmount').textContent = pendingOrder.amount;
                 buyBtn.classList.add('hidden');
-                infoTag.innerHTML = '<span>!</span><span>Pending Transaction</span>';
-                reactorBox.style.pointerEvents = 'none';
-                reactorBox.style.opacity = '0.5';
-                coreText.textContent = "WAIT";
+                infoTag.innerHTML = '<span>⏳</span><span>请先处理待支付订单</span>';
+                infoTag.style.borderColor = 'var(--warning)';
+                infoTag.style.background = 'rgba(245, 158, 11, 0.1)';
+                // 禁用抽奖按钮
+                lotusWrapper.style.pointerEvents = 'none';
+                lotusWrapper.style.filter = 'grayscale(1)';
+                centerText.textContent = '待支付';
                 return;
             } else {
                 pendingCard.classList.add('hidden');
-                reactorBox.style.pointerEvents = '';
-                reactorBox.style.opacity = '1';
-                coreText.textContent = "BLOOM";
+                lotusWrapper.style.pointerEvents = '';
+                lotusWrapper.style.filter = '';
+                centerText.innerHTML = '点击<br>抽奖';
             }
             
             if (isAdmin) {
-                infoTag.innerHTML = '<span>✦</span><span>Admin Override</span>';
+                infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1" style="vertical-align: -3px;"><path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z"/></svg></span><span>管理员 <strong>免费无限抽奖</strong></span>';
                 buyBtn.classList.add('hidden');
             } else if (!canDraw) {
+                // 已中奖
                 if (wonInviteCode) {
-                    infoTag.innerHTML = `<span>★</span><span>Acquired: ${wonInviteCode}</span>`;
+                    infoTag.innerHTML = `<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" style="vertical-align: -3px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path><path d="M5 19l.5 1.5L7 21l-1.5.5L5 23l-.5-1.5L3 21l1.5-.5L5 19z"></path><path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13z"></path></svg></span><span>您已获得邀请码: <strong style="font-family: monospace; letter-spacing: 1px; cursor: pointer;" onclick="copyWonCode()">${wonInviteCode}</strong></span>`;
                 } else {
-                    infoTag.innerHTML = '<span>✓</span><span>Daily Cycle Complete</span>';
+                    infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2" style="vertical-align: -3px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path></svg></span><span>您已获得邀请码</span>';
                 }
+                infoTag.style.borderColor = 'var(--success)';
+                infoTag.style.background = 'rgba(34, 197, 94, 0.1)';
                 
-                if (canBuy > 0) {
-                    buyBtn.classList.remove('hidden');
-                    buyBtn.innerHTML = `+ Expand Cycle (${canBuy} left)`;
-                } else {
-                    buyBtn.classList.add('hidden');
+                // 允许继续抽奖
+                lotusWrapper.style.pointerEvents = '';
+                centerText.innerHTML = '点击<br>抽奖';
+                buyBtn.classList.add('hidden');
+                
+                const existingTip = document.getElementById('continueDrawTip');
+                if (!existingTip) {
+                    const tip = document.createElement('div');
+                    tip.id = 'continueDrawTip';
+                    tip.style.cssText = 'text-align: center; color: var(--muted); font-size: 0.85rem; margin-top: 0.5rem; display: flex; align-items: center; justify-content: center; gap: 0.5rem;';
+                    tip.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>可继续抽奖，奖品已更换为兑换码';
+                    infoTag.parentNode.insertBefore(tip, infoTag.nextSibling);
                 }
             } else {
-                infoTag.innerHTML = '<span>✦</span><span>Daily Free Attempt: <strong>1</strong></span>';
+                infoTag.innerHTML = '<span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -3px;"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2" fill="currentColor"></circle></svg></span><span>每天 <strong>1</strong> 次免费抽奖</span>';
+                infoTag.style.borderColor = '';
+                infoTag.style.background = '';
+                
+                // 显示购买按钮
                 if (canBuy > 0) {
-                    buyBtn.innerHTML = `+ Acquire Credits (2cr)`;
                     buyBtn.classList.remove('hidden');
+                    buyBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none" style="vertical-align: -3px; margin-right: 4px;"><circle cx="12" cy="12" r="10"/><text x="12" y="16" font-size="12" font-weight="bold" fill="#000" text-anchor="middle">$</text></svg>购买抽奖次数 (2 Credit/次，今日还可购买 ' + canBuy + ' 次)';
                 } else {
                     buyBtn.classList.add('hidden');
                 }
@@ -641,32 +775,41 @@
 
         async function loadHistory() {
             try {
-                const res = await fetch('/api/lottery/history', { headers: { 'Authorization': `Bearer ${jwtToken}` } });
+                const res = await fetch('/api/lottery/history', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
                 if (res.ok) {
                     const data = await res.json();
                     renderHistory(data.records || []);
                 }
-            } catch (err) {}
+            } catch (err) {
+                console.error('加载历史失败:', err);
+            }
         }
 
         function renderHistory(records) {
             const container = document.getElementById('historyList');
             if (!records.length) {
-                container.innerHTML = '<p style="color: #ccc; text-align: center; padding: 1.5rem;">Nothing recorded on the paper.</p>';
+                container.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 1rem;">暂无记录</p>';
                 return;
             }
+            const sparkleSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path><path d="M5 19l.5 1.5L7 21l-1.5.5L5 23l-.5-1.5L3 21l1.5-.5L5 19z"></path><path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13z"></path></svg>';
+            const giftSvg = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>';
+            
             container.innerHTML = records.slice(0, 20).map(r => {
                 let badge = '';
                 if (r.prizeType === 'team_invite') {
-                    badge = `<span class="badge badge-win">Invite</span>`;
+                    badge = `<span class="badge badge-win">${sparkleSvg}邀请码</span>`;
                 } else if (r.prizeName) {
-                    badge = `<span class="badge badge-win">${r.prizeName}</span>`;
+                    badge = `<span class="badge badge-redeem">${giftSvg}${r.prizeName}</span>`;
+                } else if (r.won) {
+                    badge = `<span class="badge badge-win">${trophySvg}中奖</span>`;
                 } else {
-                    badge = '<span class="badge badge-lose">Miss</span>';
+                    badge = '<span class="badge badge-lose">未中奖</span>';
                 }
                 return `
                     <div class="history-item">
-                        <span>${new Date(r.createdAt).toLocaleDateString()}</span>
+                        <span>${new Date(r.createdAt).toLocaleString('zh-CN')}</span>
                         ${badge}
                     </div>
                 `;
@@ -675,164 +818,442 @@
 
         async function startDraw() {
             if (isDrawing || pendingOrder) return;
+            
             const remaining = parseInt(document.getElementById('todayChances').textContent) || 0;
-            if (remaining <= 0 && !isAdmin) return;
+            if (remaining <= 0 && !isAdmin) {
+                document.getElementById('drawStatus').textContent = '抽奖次数不足，请先购买';
+                return;
+            }
             
             isDrawing = true;
-            document.getElementById('drawStatus').textContent = 'Materializing...';
+            const status = document.getElementById('drawStatus');
+            status.textContent = '请求中...';
             
             try {
                 const res = await fetch('/api/lottery/draw', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${jwtToken}`, 'Content-Type': 'application/json' }
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
                 const data = await res.json();
                 
                 if (!res.ok) {
-                    document.getElementById('drawStatus').textContent = data.error || 'Connection Failed';
+                    status.textContent = data.error || '抽奖失败';
                     isDrawing = false;
                     return;
                 }
                 
-                document.getElementById('drawStatus').textContent = '';
-                const reactorBox = document.getElementById('reactorBox');
-                reactorBox.classList.remove('state-idle');
-                reactorBox.classList.add('state-charging');
+                status.textContent = '';
                 
+                // 准备奖品文案
+                setupPrizeDisplay(data.prizeType, data.prizeName, data.prizeCode);
+                
+                // 开始莲花掉落动画
+                dropPetals();
+                
+                // 动画大概需要1.5秒完全掉落，我们在0.8秒时显示奖品
                 setTimeout(() => {
-                    revealPrize(data.prizeType, data.prizeName, data.prizeCode);
-                }, 2000); // Slower, elegant reveal
+                    document.getElementById('prizeReveal').classList.add('show');
+                }, 800);
+
             } catch (err) {
+                status.textContent = '网络错误，请重试';
                 isDrawing = false;
             }
         }
 
-        function revealPrize(prizeType, prizeName, prizeCode) {
-            const reactorBox = document.getElementById('reactorBox');
-            // 柔和的闪光
-            const flash = document.getElementById('flashOverlay');
-            flash.style.opacity = '1';
-            setTimeout(() => { flash.style.opacity = '0'; }, 1000);
-            
-            reactorBox.classList.remove('state-charging');
-            
-            const prizeContainer = document.getElementById('prizeResult');
-            const title = document.getElementById('prizeTitle');
-            const text = document.getElementById('prizeText');
-            const codeEl = document.getElementById('prizeCode');
+        function setupPrizeDisplay(prizeType, prizeName, prizeCode) {
+            const prizeTitle = document.getElementById('prizeTitle');
+            const prizeText = document.getElementById('prizeText');
+            const prizeCodeEl = document.getElementById('prizeCode');
             
             if (prizeType === 'team_invite') {
-                title.textContent = 'Rare Bloom';
-                text.textContent = 'Team Invite';
-                codeEl.textContent = prizeCode;
-                codeEl.classList.remove('hidden');
-            } else if (prizeCode) {
-                title.textContent = 'Fragment Found';
-                text.textContent = prizeName;
-                codeEl.textContent = prizeCode;
-                codeEl.classList.remove('hidden');
+                prizeTitle.textContent = '🎉 恭喜中奖';
+                prizeText.textContent = 'Team 邀请码';
+                prizeText.classList.add('prize-win');
+                prizeCodeEl.textContent = prizeCode;
+                prizeCodeEl.classList.remove('hidden');
+                prizeCodeEl.style.color = 'var(--success)';
+                prizeCodeEl.style.borderColor = 'var(--success)';
             } else {
-                title.textContent = 'Result';
-                text.textContent = 'Empty Space';
-                codeEl.classList.add('hidden');
+                prizeTitle.innerHTML = '';
+                prizeText.textContent = prizeName;
+                prizeText.classList.remove('prize-win');
+                prizeCodeEl.textContent = prizeCode;
+                prizeCodeEl.classList.remove('hidden');
+                prizeCodeEl.style.color = 'var(--warning)';
+                prizeCodeEl.style.borderColor = 'var(--warning)';
             }
-            
-            prizeContainer.classList.add('show');
         }
 
         function collectPrize() {
-            document.getElementById('prizeResult').classList.remove('show');
-            isDrawing = false;
-            loadStats();
-            loadHistory();
+            const prizeReveal = document.getElementById('prizeReveal');
+            prizeReveal.classList.remove('show');
+            
+            // 等待淡出后，重置莲花
+            setTimeout(() => {
+                resetLotusElement();
+                isDrawing = false;
+                loadStats();
+                loadHistory();
+            }, 500);
         }
         
-        // 模态框和辅助功能逻辑保持不变...
+        function copyWonCode() {
+            if (!wonInviteCode) return;
+            navigator.clipboard.writeText(wonInviteCode).then(() => {
+                const status = document.getElementById('drawStatus');
+                status.textContent = '邀请码已复制！';
+                status.style.color = 'var(--success)';
+                setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 2000);
+            }).catch(() => {
+                alert('复制失败，请手动复制: ' + wonInviteCode);
+            });
+        }
+        
+        function copyCode(code) {
+            navigator.clipboard.writeText(code).then(() => {
+                const status = document.getElementById('drawStatus');
+                status.textContent = '已复制到剪贴板！';
+                status.style.color = 'var(--success)';
+                setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 2000);
+            }).catch(() => {
+                alert('复制失败，请手动复制: ' + code);
+            });
+        }
+        
         async function showPrizesModal() {
-            document.getElementById('prizesModal').classList.remove('hidden');
-            document.getElementById('prizesContent').innerHTML = 'Loading...';
+            const modal = document.getElementById('prizesModal');
+            const content = document.getElementById('prizesContent');
+            modal.classList.remove('hidden');
+            content.innerHTML = '<p style="color: var(--muted); text-align: center;">加载中...</p>';
+            
+            // SVG 图标
+            const sparkleIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path><path d="M5 19l.5 1.5L7 21l-1.5.5L5 23l-.5-1.5L3 21l1.5-.5L5 19z"></path><path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13z"></path></svg>';
+            const giftIcon = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="vertical-align: -2px; margin-right: 4px;"><rect x="3" y="8" width="18" height="4" rx="1"></rect><path d="M12 8v13"></path><path d="M19 12v7a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-7"></path><path d="M7.5 8a2.5 2.5 0 0 1 0-5A4.8 8 0 0 1 12 8a4.8 8 0 0 1 4.5-5 2.5 2.5 0 0 1 0 5"></path></svg>';
+            
             try {
-                const res = await fetch('/api/lottery/history', { headers: { 'Authorization': `Bearer ${jwtToken}` } });
-                const data = await res.json();
-                const prizes = (data.records || []).filter(r => r.prizeCode);
-                document.getElementById('prizesContent').innerHTML = prizes.length ? prizes.map(r => `
-                    <div class="prize-item" style="padding:1rem; margin-bottom:0.5rem;">
-                        <div style="color:var(--primary); font-weight:bold;">${r.prizeType === 'team_invite' ? 'Team Invite' : r.prizeName}</div>
-                        <div class="prize-item-code" style="padding:0.5rem; margin-top:0.5rem; font-family:'Lato',monospace;">${r.prizeCode}</div>
-                    </div>`).join('') : '<p style="text-align:center; color:#ccc">Empty</p>';
-            } catch(e) {}
+                const res = await fetch('/api/lottery/history', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const prizes = (data.records || []).filter(r => r.prizeCode);
+                    if (prizes.length === 0) {
+                        content.innerHTML = '<p style="color: var(--muted); text-align: center; padding: 2rem 0;">暂无中奖记录</p>';
+                        return;
+                    }
+                    content.innerHTML = prizes.map(r => {
+                        const isTeam = r.prizeType === 'team_invite';
+                        const icon = isTeam ? sparkleIcon : giftIcon;
+                        const label = isTeam ? 'Team 邀请码' : (r.prizeName || '兑换码');
+                        return `
+                            <div class="prize-item">
+                                <div class="prize-item-header">
+                                    <span class="prize-item-type ${isTeam ? 'team' : 'redeem'}">${icon}${label}</span>
+                                </div>
+                                <div class="prize-item-code" onclick="copyCode('${r.prizeCode}')" title="点击复制">${r.prizeCode}</div>
+                                <div class="prize-item-time">${new Date(r.createdAt).toLocaleString('zh-CN')}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            } catch (err) {
+                content.innerHTML = '<p style="color: var(--danger); text-align: center;">加载失败</p>';
+            }
         }
-        function closePrizesModal(e) { if(!e || e.target === e.currentTarget) document.getElementById('prizesModal').classList.add('hidden'); }
-        function showRulesModal() { document.getElementById('rulesModal').classList.remove('hidden'); }
-        function closeRulesModal(e) { if(!e || e.target === e.currentTarget) document.getElementById('rulesModal').classList.add('hidden'); }
         
-        // 支付逻辑保持不变...
+        function closePrizesModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('prizesModal').classList.add('hidden');
+        }
+        
+        function showRulesModal() {
+            document.getElementById('rulesModal').classList.remove('hidden');
+        }
+        
+        function closeRulesModal(event) {
+            if (event && event.target !== event.currentTarget) return;
+            document.getElementById('rulesModal').classList.add('hidden');
+        }
+        
+        async function exportCodes() {
+            try {
+                const res = await fetch('/api/lottery/history', {
+                    headers: { 'Authorization': `Bearer ${jwtToken}` }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    const prizes = (data.records || []).filter(r => r.prizeCode);
+                    if (prizes.length === 0) {
+                        alert('暂无可导出的奖品');
+                        return;
+                    }
+                    const text = prizes.map(r => r.prizeCode).join('\n');
+                    
+                    // 复制到剪贴板
+                    navigator.clipboard.writeText(text).then(() => {
+                        const status = document.getElementById('drawStatus');
+                        status.textContent = '已导出到剪贴板！';
+                        status.style.color = 'var(--success)';
+                        setTimeout(() => { status.textContent = ''; status.style.color = ''; }, 2000);
+                    }).catch(() => {
+                        // 降级：下载文件
+                        const blob = new Blob([text], { type: 'text/plain' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'prizes.txt';
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    });
+                }
+            } catch (err) {
+                alert('导出失败');
+            }
+        }
+
         async function buyChances() {
+            if (pendingOrder) {
+                document.getElementById('drawStatus').textContent = '请先处理待支付订单';
+                return;
+            }
+            
+            const status = document.getElementById('drawStatus');
+            status.textContent = '正在创建订单...';
+            
             try {
                 const res = await fetch('/api/lottery/buy', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${jwtToken}`, 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
                     body: JSON.stringify({ quantity: 1 })
                 });
                 const data = await res.json();
-                if(res.ok) submitPayForm(data.payGateway, data.payParams);
-            } catch(e) {}
+                
+                if (!res.ok) {
+                    status.textContent = data.error || '创建订单失败';
+                    return;
+                }
+                
+                status.textContent = '正在跳转支付...';
+                submitPayForm(data.payGateway, data.payParams);
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+            }
         }
-        
-        // 辅助函数
+
+        async function continuePay() {
+            if (!pendingOrder) return;
+            
+            const status = document.getElementById('drawStatus');
+            status.textContent = '正在创建支付...';
+            
+            // 重新获取支付参数
+            try {
+                const res = await fetch('/api/lottery/buy', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ quantity: pendingOrder.quantity, orderId: pendingOrder.orderId })
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    if (data.error && data.error.includes('待支付')) {
+                        // 简化处理逻辑用于示例
+                        status.textContent = '请取消订单后重新购买';
+                        return;
+                    }
+                    status.textContent = data.error || '支付失败';
+                    return;
+                }
+                
+                status.textContent = '正在跳转支付...';
+                submitPayForm(data.payGateway, data.payParams);
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+            }
+        }
+
+        async function cancelOrder() {
+            if (!pendingOrder) return;
+            
+            if (!confirm('确定要取消这个订单吗？')) return;
+            
+            const status = document.getElementById('drawStatus');
+            status.textContent = '正在取消...';
+            
+            try {
+                const res = await fetch('/api/lottery/cancel-order', {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${jwtToken}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ orderId: pendingOrder.orderId })
+                });
+                const data = await res.json();
+                
+                if (!res.ok) {
+                    status.textContent = data.error || '取消失败';
+                    return;
+                }
+                
+                status.textContent = '订单已取消';
+                pendingOrder = null;
+                loadStats();
+            } catch (err) {
+                status.textContent = '网络错误，请重试';
+            }
+        }
+
         function submitPayForm(gateway, params) {
             const form = document.createElement('form');
             form.method = 'POST';
             form.action = gateway;
             form.style.display = 'none';
-            for (const [k, v] of Object.entries(params)) {
+            for (const [key, value] of Object.entries(params)) {
                 const input = document.createElement('input');
-                input.type = 'hidden'; type='hidden'; input.name = k; input.value = v; form.appendChild(input);
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value;
+                form.appendChild(input);
             }
             document.body.appendChild(form);
             form.submit();
         }
 
-        // 侧边栏加载
+        // 检查购买订单支付结果
+        async function checkBuyOrderResult() {
+            const params = new URLSearchParams(window.location.search);
+            const buyOrder = params.get('buy_order');
+            
+            if (buyOrder) {
+                history.replaceState({}, '', '/lottery.html');
+                
+                const status = document.getElementById('drawStatus');
+                status.textContent = '正在确认支付...';
+                
+                let attempts = 0;
+                const maxAttempts = 20;
+                
+                const pollResult = async () => {
+                    try {
+                        const res = await fetch(`/api/lottery/check-order?orderId=${buyOrder}`, {
+                            headers: { 'Authorization': `Bearer ${jwtToken}` }
+                        });
+                        if (res.ok) {
+                            const data = await res.json();
+                            if (data.status === 'paid') {
+                                status.textContent = `购买成功！获得 ${data.quantity} 次抽奖机会`;
+                                setTimeout(() => {
+                                    status.textContent = '';
+                                    loadStats();
+                                }, 2000);
+                                return;
+                            } else if (data.status === 'pending' && attempts < maxAttempts) {
+                                attempts++;
+                                status.textContent = `等待支付确认... (${attempts}/${maxAttempts})`;
+                                setTimeout(pollResult, 500);
+                                return;
+                            } else if (data.status === 'cancelled') {
+                                status.textContent = '订单已取消';
+                                loadStats();
+                                return;
+                            }
+                        }
+                        status.textContent = '支付确认超时，请刷新页面';
+                        loadStats();
+                    } catch (err) {
+                        status.textContent = '查询失败，请刷新页面';
+                    }
+                };
+                
+                pollResult();
+            }
+        }
+
+        // 加载在线用户
         async function loadOnlineUsers() {
             try {
                 const res = await fetch('/api/online-users');
-                const data = await res.json();
-                document.getElementById('onlineCount').textContent = data.count || 0;
-                document.getElementById('onlineList').innerHTML = (data.users||[]).map(u => `
-                    <div class="sidebar-item" style="display:flex; align-items:center; gap:8px;">
-                        <img src="${u.avatar}" style="width:20px; height:20px; border-radius:50%;">
-                        <span class="sidebar-name">${u.name||u.username}</span>
-                        <div class="online-dot" style="width:6px; height:6px; border-radius:50%; margin-left:auto;"></div>
-                    </div>`).join('') || '<p class="sidebar-empty" style="color:#ccc; text-align:center;">Void</p>';
-                document.getElementById('onlineSidebar').classList.remove('hidden');
-            } catch(e){}
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('onlineCount').textContent = data.count || 0;
+                    const list = document.getElementById('onlineList');
+                    if (data.users && data.users.length > 0) {
+                        list.innerHTML = data.users.map(u => `
+                            <div class="sidebar-item">
+                                <img class="sidebar-avatar" src="${u.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%2300f3ff%22/></svg>'}" alt="">
+                                <span class="sidebar-name">${u.name || u.username}</span>
+                                <span class="online-dot"></span>
+                            </div>
+                        `).join('');
+                    } else {
+                        list.innerHTML = '<p class="sidebar-empty">暂无</p>';
+                    }
+                    document.getElementById('onlineSidebar').classList.remove('hidden');
+                }
+            } catch (err) {}
         }
         
+        // 加载中奖用户
         async function loadWinners() {
-             try {
+            try {
                 const res = await fetch('/api/lottery/winners');
-                const data = await res.json();
-                document.getElementById('winnersCount').textContent = data.count || 0;
-                 document.getElementById('winnersList').innerHTML = (data.winners||[]).map(u => `
-                    <div class="sidebar-item" style="display:flex; align-items:center; gap:8px;">
-                        <img src="${u.avatar}" style="width:20px; height:20px; border-radius:50%;">
-                        <span class="sidebar-name">${u.name||u.username}</span>
-                    </div>`).join('') || '<p class="sidebar-empty" style="color:#ccc; text-align:center;">Silence</p>';
-                document.getElementById('winnersSidebar').classList.remove('hidden');
-            } catch(e){}
+                if (res.ok) {
+                    const data = await res.json();
+                    document.getElementById('winnersCount').textContent = data.count || 0;
+                    const list = document.getElementById('winnersList');
+                    if (data.winners && data.winners.length > 0) {
+                        list.innerHTML = data.winners.map(w => `
+                            <div class="sidebar-item">
+                                <img class="sidebar-avatar" src="${w.avatar || 'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><circle cx=%2250%22 cy=%2250%22 r=%2250%22 fill=%22%23f59e0b%22/></svg>'}" alt="">
+                                <span class="sidebar-name">${w.name || w.username}</span>
+                                <span class="winner-badge"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2"><path d="M12 3l1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3z"></path><path d="M5 19l.5 1.5L7 21l-1.5.5L5 23l-.5-1.5L3 21l1.5-.5L5 19z"></path><path d="M19 13l.5 1.5L21 15l-1.5.5L19 17l-.5-1.5L17 15l1.5-.5L19 13z"></path></svg></span>
+                            </div>
+                        `).join('');
+                    } else {
+                        list.innerHTML = '<p class="sidebar-empty">暂无</p>';
+                    }
+                    document.getElementById('winnersSidebar').classList.remove('hidden');
+                }
+            } catch (err) {}
+        }
+        
+        // 心跳保持在线
+        function startHeartbeat() {
+            setInterval(async () => {
+                try {
+                    await fetch('/api/heartbeat', { headers: { 'Authorization': `Bearer ${jwtToken}` } });
+                } catch {}
+            }, 30000);
         }
 
         // 初始化
         (async () => {
-            if (await checkLogin()) {
+            initLotus(); // 初始化花瓣
+            const loggedIn = await checkLogin();
+            if (loggedIn) {
                 document.getElementById('mainContent').classList.remove('hidden');
                 renderUser();
                 await loadStats();
                 loadHistory();
+                checkBuyOrderResult();
+                
                 loadOnlineUsers();
                 loadWinners();
+                startHeartbeat();
                 
+                setInterval(loadOnlineUsers, 10000);
+                setInterval(loadWinners, 30000);
                 setInterval(loadStats, 4000);
             }
         })();
