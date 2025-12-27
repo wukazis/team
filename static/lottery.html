@@ -246,6 +246,26 @@
         .winner-badge svg { animation: twinkle 1.5s ease-in-out infinite; }
         @keyframes twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(0.8); } }
         .sidebar-empty { color: var(--muted); font-size: 0.8rem; text-align: center; padding: 0.5rem 0; }
+        
+        /* 鼠标互动粒子效果 */
+        .cursor-particle {
+            position: fixed;
+            pointer-events: none;
+            border-radius: 50%;
+            z-index: 9999;
+            mix-blend-mode: screen;
+        }
+        .cursor-glow {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 1;
+            background: radial-gradient(circle, rgba(0, 243, 255, 0.08) 0%, transparent 70%);
+            transform: translate(-50%, -50%);
+            transition: opacity 0.3s;
+        }
         .online-sidebar { right: 20px; top: 120px; }
         .winners-sidebar { right: 20px; top: 420px; }
         .prizes-sidebar { left: 20px; top: 120px; }
@@ -278,6 +298,8 @@
 </style>
 </head>
 <body>
+    <!-- 鼠标光晕效果 -->
+    <div class="cursor-glow" id="cursorGlow"></div>
     
     <!-- 奖品概率侧边栏 -->
     <div class="sidebar prizes-sidebar">
@@ -528,6 +550,90 @@
     </div>
 
     <script>
+        // ============ 鼠标互动粒子效果 ============
+        const cursorGlow = document.getElementById('cursorGlow');
+        const particles = [];
+        const colors = ['#00f3ff', '#ff0055', '#8b5cf6', '#22c55e'];
+        let mouseX = 0, mouseY = 0;
+        let lastParticleTime = 0;
+        
+        function createParticle(x, y) {
+            const particle = document.createElement('div');
+            particle.className = 'cursor-particle';
+            const size = Math.random() * 8 + 4;
+            const color = colors[Math.floor(Math.random() * colors.length)];
+            particle.style.cssText = `
+                left: ${x}px;
+                top: ${y}px;
+                width: ${size}px;
+                height: ${size}px;
+                background: ${color};
+                box-shadow: 0 0 ${size * 2}px ${color}, 0 0 ${size * 4}px ${color};
+                opacity: 1;
+            `;
+            document.body.appendChild(particle);
+            
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 30 + 20;
+            const vx = Math.cos(angle) * speed;
+            const vy = Math.sin(angle) * speed;
+            const life = Math.random() * 600 + 400;
+            
+            particles.push({ el: particle, x, y, vx, vy, life, maxLife: life, size });
+        }
+        
+        function updateParticles() {
+            for (let i = particles.length - 1; i >= 0; i--) {
+                const p = particles[i];
+                p.life -= 16;
+                p.x += p.vx * 0.02;
+                p.y += p.vy * 0.02;
+                p.vy += 0.5; // 轻微重力
+                
+                const progress = p.life / p.maxLife;
+                p.el.style.left = p.x + 'px';
+                p.el.style.top = p.y + 'px';
+                p.el.style.opacity = progress;
+                p.el.style.transform = `scale(${progress})`;
+                
+                if (p.life <= 0) {
+                    p.el.remove();
+                    particles.splice(i, 1);
+                }
+            }
+            requestAnimationFrame(updateParticles);
+        }
+        updateParticles();
+        
+        document.addEventListener('mousemove', (e) => {
+            mouseX = e.clientX;
+            mouseY = e.clientY;
+            
+            // 更新光晕位置
+            cursorGlow.style.left = mouseX + 'px';
+            cursorGlow.style.top = mouseY + 'px';
+            cursorGlow.style.opacity = '1';
+            
+            // 限制粒子生成频率
+            const now = Date.now();
+            if (now - lastParticleTime > 50) {
+                createParticle(mouseX, mouseY);
+                lastParticleTime = now;
+            }
+        });
+        
+        document.addEventListener('mouseleave', () => {
+            cursorGlow.style.opacity = '0';
+        });
+        
+        // 点击时爆发更多粒子
+        document.addEventListener('click', (e) => {
+            for (let i = 0; i < 8; i++) {
+                setTimeout(() => createParticle(e.clientX, e.clientY), i * 20);
+            }
+        });
+        // ============ 鼠标互动效果结束 ============
+
         let jwtToken = localStorage.getItem('token') || '';
         let currentUser = null;
         let isDrawing = false;
